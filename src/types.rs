@@ -2,8 +2,8 @@ use std::{collections::HashMap, string::FromUtf8Error};
 
 use base64::DecodeError;
 use miniz_oxide::inflate::DecompressError;
+use semver::Version;
 use serde::{Deserialize, Serialize};
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum InputEventKind {
@@ -27,6 +27,24 @@ impl From<bool> for InputEventKind {
         match value {
             false => Self::Press,
             true => Self::Release,
+        }
+    }
+}
+
+impl From<InputEventKind> for u8 {
+    fn from(value: InputEventKind) -> Self {
+        match value {
+            InputEventKind::Press => 0,
+            InputEventKind::Release => 1,
+        }
+    }
+}
+
+impl From<InputEventKind> for bool {
+    fn from(value: InputEventKind) -> Self {
+        match value {
+            InputEventKind::Press => false,
+            InputEventKind::Release => true,
         }
     }
 }
@@ -84,6 +102,35 @@ impl TryFrom<u8> for InputEventKey {
             19 => Ok(LeftZangi),
             20 => Ok(RightZangi),
             _ => Err(()),
+        }
+    }
+}
+
+impl From<InputEventKey> for u8 {
+    fn from(value: InputEventKey) -> Self {
+        use InputEventKey::*;
+
+        match value {
+            MoveLeft => 1,
+            MoveRight => 2,
+            RotateRight => 3,
+            RotateLeft => 4,
+            Rotate180 => 5,
+            HardDrop => 6,
+            SoftDrop => 7,
+            Hold => 8,
+            Function1 => 9,
+            Function2 => 10,
+            InstantLeft => 11,
+            InstantRight => 12,
+            SonicDrop => 13,
+            Down1 => 14,
+            Down4 => 15,
+            Down10 => 16,
+            LeftDrop => 17,
+            RightDrop => 18,
+            LeftZangi => 19,
+            RightZangi => 20,
         }
     }
 }
@@ -213,13 +260,13 @@ pub enum ReplayParseError {
     /// See [FromUtf8Error] for more information.
     MetadataNotUtf8(FromUtf8Error),
 
-    /// The metadata could not be serialized into the [GameReplayMetadata] struct,
+    /// The metadata could not be deserialized into the [GameReplayMetadata] struct,
     /// possibly due to missing values.
     ///
     /// See [`serde_json`'s Error type][serde_json::Error] for more information.
-    MetadataSerializeError(serde_json::Error),
+    MetadataDeserializeError(serde_json::Error),
 
-    /// The mode in which to parse the input could not be inferred from the version string.
+    /// The mode in which to parse the inputs could not be inferred from the version string.
     ///
     /// Contains a [`String`] containing the version string.
     ///
@@ -254,6 +301,28 @@ impl From<FromUtf8Error> for ReplayParseError {
 
 impl From<serde_json::Error> for ReplayParseError {
     fn from(value: serde_json::Error) -> Self {
+        Self::MetadataDeserializeError(value)
+    }
+}
+
+/// An error from creating the replay data.
+#[derive(Debug)]
+pub enum ReplayCreateError {
+    /// The mode in which to serialize the inputs could not be inferred from the version string.
+    ///
+    /// Contains a [`String`] containing the version string.
+    ///
+    /// To fix this error, consider passing in the input parse mode explicitly.
+    UnknownInputParseMode(String),
+
+    /// The metadata could not be serialized into JSON.
+    ///
+    /// See [`serde_json`'s Error type][serde_json::Error] for more information.
+    MetadataSerializeError(serde_json::Error),
+}
+
+impl From<serde_json::Error> for ReplayCreateError {
+    fn from(value: serde_json::Error) -> Self {
         Self::MetadataSerializeError(value)
     }
 }
@@ -268,15 +337,62 @@ pub enum InputParseMode {
     /// Relative timing.
     ///
     /// Replays made before version 0.17.22 of the game (i.e., 0.17.21 and before it)
-    /// use relative timing for its inputs. That is, the duration in each key-duration
-    /// pair are relative to the frame of the previous input. For example, if you press
-    /// two keys at the exact same frame, the first input has a duration of 0 while the second
-    /// input has a duration of 0.
+    /// use relative timing for its inputs. That is, the time in each key-time
+    /// pair are relative to the frame of the previous input.
+    ///
+    /// For example, if you press two keys at the exact same frame, the first input
+    /// has a time of the current frame number, while the second input has a time of 0.
     Relative,
     /// Absolute timing.
     ///
     /// Replays made after version 0.17.21 of the game (i.e., 0.17.22 and onwards)
-    /// use absolute timing for its inputs. That is, the duration in each key-duration
+    /// use absolute timing for its inputs. That is, the time in each key-time
     /// pair are relative to the beginning of the replay (i.e., frame zero).
+    ///
+    /// For example, if you press two keys at the exact same frame, the first input
+    /// has a time of the current frame number, as well as the second input.
     Absolute,
+}
+
+impl InputParseMode {
+    /// The first version where absolute timing is used.
+    pub const ABSOLUTE_TIMING_START: Version = Version::new(0, 17, 22);
+
+    /// Tries to infer the input parse mode based on the game version.
+    ///
+    /// If parsing the version fails, it will return `None`.
+    pub fn try_infer_from_version(version: &str) -> Option<InputParseMode> {
+        let filtered_version: String = version
+            .chars()
+            .filter(|c| c.is_numeric() || *c == '.')
+            .collect();
+
+        let version = Version::parse(&filtered_version);
+
+        if version.ok()? < Self::ABSOLUTE_TIMING_START {
+            Some(InputParseMode::Relative)
+        } else {
+            Some(InputParseMode::Absolute)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_inferred_mode() {
+        use InputParseMode::*;
+        let cases = [
+            ("Techmino is fun!", None),
+            ("Alpha v0.15.1", Some(Relative)),
+            ("V0.16.2", Some(Relative)),
+            ("0.17.22", Some(Absolute)),
+        ];
+
+        for (input, expected) in cases {
+            assert_eq!(InputParseMode::try_infer_from_version(input), expected);
+        }
+    }
 }

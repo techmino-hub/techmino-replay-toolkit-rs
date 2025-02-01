@@ -1,4 +1,3 @@
-use base64::{engine::general_purpose::STANDARD as b64, Engine};
 use std::io;
 
 fn main() {
@@ -22,16 +21,9 @@ fn main() {
             .read_line(&mut input)
             .expect("Failed to read from stdin");
 
-        println!("{:?}", techmino_replay_toolkit::parse_base64(&input.trim(), None));
-
-        // let res = b64
-        //     .decode(input.trim())
-        //     .and_then(|it| Ok(miniz_oxide::inflate::decompress_to_vec_zlib(&it)));
-
-        // match res {
-        //     Ok(Ok(d)) => println!("{d:?}"),
-        //     Ok(Err(e)) => println!("Decompression error! {e:?}"),
-        //     Err(e) => println!("Base64 error! {e:?}"),
-        // }
+        println!(
+            "{:?}",
+            techmino_replay_toolkit::GameReplayData::try_from_base64(&input.trim(), None)
+        );
     }
 }
