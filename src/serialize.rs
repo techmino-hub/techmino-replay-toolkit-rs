@@ -3,69 +3,132 @@ use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use miniz_oxide::deflate::compress_to_vec_zlib as compress;
 
-// TODO: Restructure, add tests
+// TODO: Add tests
 
-pub fn create_replay_raw_bytes(
-    replay_data: GameReplayData,
-    input_mode: Option<InputParseMode>,
-) -> Result<Vec<u8>, ReplayCreateError> {
-    let input_mode = match input_mode
-        .or_else(|| InputParseMode::try_infer_from_version(&replay_data.metadata.version))
-    {
-        Some(mode) => mode,
-        None => {
-            return Err(ReplayCreateError::UnknownInputParseMode(
-                replay_data.metadata.version,
-            ))
-        }
-    };
+impl GameReplayData {
 
-    let json = serde_json::to_string(&replay_data.metadata)?;
-
-    let mut buffer = Vec::from(json.as_bytes());
-
-    let mut inputs = replay_data.inputs;
-
-    inputs.sort_by_key(|e| e.frame);
-
-    let mut bytes = Vec::with_capacity(inputs.len() * 2);
-
-    let mut prev_time = 0;
-    for input in inputs {
-        let key = u8::from(input.key) | (u8::from(input.kind) << 5);
-
-        let time = match input_mode {
-            InputParseMode::Relative => input.frame - prev_time,
-            InputParseMode::Absolute => input.frame,
-        };
-
-        prev_time = input.frame;
-
-        bytes.push(key as u64);
-        bytes.push(time);
+    /// Sort the inputs so that they are sorted by time.
+    /// 
+    /// This can be necessary sometimes as serializing the replay (e.g., into base64)
+    /// requires that the inputs are sorted for the algorithm to work properly.
+    pub fn sort_inputs(&mut self) {
+        self.inputs.sort_by_key(|i| i.frame);
     }
 
-    append_vlqs(&mut buffer, &bytes);
+    /// Serialize into a raw, uncompressed byte array.
+    /// 
+    /// This function serializes the GameReplayData into a raw, uncompressed byte array.
+    /// 
+    /// This will not be playable by the game as the game automatically compresses and decompresses the data.  
+    /// For serializing the data into the `.rep` file format used by the game's saved replays, use
+    /// [`serialize_to_compressed`][GameReplayData::serialize_to_compressed] instead.  
+    /// For serializing the data into a copiable text/base64 format, use
+    /// [`serialize_to_base64`][GameReplayData::serialize_to_base64] instead.
+    /// 
+    /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.  
+    /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
+    /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
+    pub fn serialize_to_raw(&self, input_mode: Option<InputParseMode>) -> Result<Vec<u8>, ReplaySerializeError> {
+        let input_mode = match input_mode
+            .or_else(|| InputParseMode::try_infer_from_version(&self.metadata.version))
+        {
+            Some(mode) => mode,
+            None => {
+                return Err(ReplaySerializeError::UnknownInputParseMode(
+                    self.metadata.version.clone(),
+                ))
+            }
+        };
 
-    Ok(buffer)
+        let json = serde_json::to_string(&self.metadata)?;
+
+        let mut buffer = Vec::from(json.as_bytes());
+
+        let inputs = &self.inputs;
+
+        if let Some(u) = get_first_unsorted(&inputs) {
+            return Err(u);
+        }
+
+        let mut bytes = Vec::with_capacity(inputs.len() * 2);
+
+        let mut prev_time = 0;
+        for input in inputs {
+            let key = u8::from(input.key) | (u8::from(input.kind) << 5);
+
+            let time = match input_mode {
+                InputParseMode::Relative => input.frame - prev_time,
+                InputParseMode::Absolute => input.frame,
+            };
+
+            prev_time = input.frame;
+
+            bytes.push(key as u64);
+            bytes.push(time);
+        }
+
+        append_vlqs(&mut buffer, &bytes);
+
+        Ok(buffer)
+    }
+    
+    /// Serialize into a compressed byte array used by the game.
+    /// 
+    /// This data format is used by the game in the form of `.rep` files that are placed in
+    /// the `replays/` directory of the game's save directory.  
+    /// For serializing the data into a copiable text/base64 format, use
+    /// [`serialize_to_base64`][GameReplayData::serialize_to_base64] instead.  
+    /// FOr serializing the data into a raw, uncompressed byte array form, use
+    /// [`serialize_to_raw`][GameReplayData::serialize_to_raw] instead.
+    /// 
+    /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.  
+    /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
+    /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
+    pub fn serialize_to_compressed(
+        &self,
+        input_mode: Option<InputParseMode>,
+    ) -> Result<Vec<u8>, ReplaySerializeError> {
+        let raw_bytes = self.serialize_to_raw(input_mode)?;
+    
+        Ok(compress(&raw_bytes, 10))
+    }
+    
+    /// Serialize into a copiable text-based base64 format.
+    /// 
+    /// This data format is used by the game for importing/exporting replays.
+    /// For serializing the data into the `.rep` file format used by the game's saved replays, use
+    /// [`serialize_to_compressed`][GameReplayData::serialize_to_compressed] instead.  
+    /// FOr serializing the data into a raw, uncompressed byte array form, use
+    /// [`serialize_to_raw`][GameReplayData::serialize_to_raw] instead.
+    /// 
+    /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.  
+    /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
+    /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
+    pub fn serialize_to_base64(
+        &self,
+        input_mode: Option<InputParseMode>,
+    ) -> Result<String, ReplaySerializeError> {
+        let bytes = self.serialize_to_compressed(input_mode)?;
+    
+        Ok(B64.encode(&bytes))
+    }
 }
 
-pub fn create_replay_compressed_bytes(
-    replay_data: GameReplayData,
-    input_mode: Option<InputParseMode>,
-) -> Result<Vec<u8>, ReplayCreateError> {
-    let raw_bytes = create_replay_raw_bytes(replay_data, input_mode)?;
+fn get_first_unsorted(inputs: &[GameInputEvent]) -> Option<ReplaySerializeError> {
+    for (index, window) in inputs.windows(2).enumerate() {
+        let prev = window[0];
+        let cur = window[1];
 
-    Ok(compress(&raw_bytes, 10))
-}
+        if cur.frame < prev.frame {
+            return Some(ReplaySerializeError::UnsortedInput {
+                first_unsorted_index: index + 1,
+                prev_time: prev.frame,
+                unsorted_time: cur.frame
+            });
+        }
+    }
 
-pub fn create_replay_base64_string(
-    replay_data: GameReplayData,
-    input_mode: Option<InputParseMode>,
-) -> Result<String, ReplayCreateError> {
-    let bytes = create_replay_compressed_bytes(replay_data, input_mode)?;
-
-    Ok(B64.encode(&bytes))
+    None
 }
 
 fn _create_vlqs(values: &[u64]) -> Vec<u8> {

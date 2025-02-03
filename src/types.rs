@@ -305,9 +305,9 @@ impl From<serde_json::Error> for ReplayParseError {
     }
 }
 
-/// An error from creating the replay data.
+/// An error from serializing the replay data, e.g. to base64.
 #[derive(Debug)]
-pub enum ReplayCreateError {
+pub enum ReplaySerializeError {
     /// The mode in which to serialize the inputs could not be inferred from the version string.
     ///
     /// Contains a [`String`] containing the version string.
@@ -315,13 +315,26 @@ pub enum ReplayCreateError {
     /// To fix this error, consider passing in the input parse mode explicitly.
     UnknownInputParseMode(String),
 
+    /// The input [`Vec`] isn't sorted.
+    /// 
+    /// The serializer expects the input [`Vec`] to be sorted, or the game may parse the inputs
+    /// in a strange way.
+    /// 
+    /// To fix this error, consider calling [`sort_inputs`][GameReplayData::sort_inputs] on the
+    /// [`GameReplayData`] before serializing it.
+    UnsortedInput {
+        first_unsorted_index: usize,
+        prev_time: u64,
+        unsorted_time: u64,
+    },
+
     /// The metadata could not be serialized into JSON.
     ///
     /// See [`serde_json`'s Error type][serde_json::Error] for more information.
     MetadataSerializeError(serde_json::Error),
 }
 
-impl From<serde_json::Error> for ReplayCreateError {
+impl From<serde_json::Error> for ReplaySerializeError {
     fn from(value: serde_json::Error) -> Self {
         Self::MetadataSerializeError(value)
     }
