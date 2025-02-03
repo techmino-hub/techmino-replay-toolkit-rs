@@ -5,9 +5,13 @@ use miniz_oxide::inflate::DecompressError;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
+/// Represents the type of input event this is.  
+/// That is, whether or not this is a button press event, or a button release event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum InputEventKind {
+    /// A certain button is being pressed in the event.
     Press = 0,
+    /// A certain button is being released in the event.
     Release = 1,
 }
 
@@ -49,7 +53,9 @@ impl From<InputEventKind> for bool {
     }
 }
 
+/// Represents the key/button of the input event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub enum InputEventKey {
     MoveLeft = 1,
     MoveRight = 2,
@@ -135,63 +141,86 @@ impl From<InputEventKey> for u8 {
     }
 }
 
-/// A single input event in the game.
-///
-/// `frame`: A number representing the frame this event occured in.
-/// `kind`: The kind of input event this represents (pressed/released).
-/// `key`: Which key is being pressed/released.
+/// A struct representing a single input event in the game.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct GameInputEvent {
+    /// A number representing the frame this event occurred in.
+    /// 
+    /// Note that the game starts at frame 180, and the frames before that
+    /// happen during the game start countdown. Nevertheless,
+    /// the game still records inputs before the countdown finishes.
     pub frame: u64,
+    /// The kind of input event this represents.  
+    /// That is - whether or not this is a key press event or a key release event.
     pub kind: InputEventKind,
+    /// The key that is being pressed or released.
+    /// 
+    /// See [`InputEventKey`] for more details.
     pub key: InputEventKey,
 }
 
+/// A struct representing all the data contained within the game replay.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct GameReplayData {
+    /// A list of game input events that happened during the replay.
     pub inputs: Vec<GameInputEvent>,
+    /// Metadata contained within the replay data.
     pub metadata: GameReplayMetadata,
 }
 
+/// A struct representing the settings of the player who made the replay.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerSettings {
-    pub shake_fx: Option<u64>,
-    pub splash_fx: Option<u64>,
-    pub das: Option<u64>,
-    pub high_cam: Option<bool>,
-    pub smooth: Option<bool>,
-    pub warn: Option<bool>,
-    pub dropcut: Option<u64>,
-    pub ghost: Option<f64>,
+    #[serde(rename = "atkFX")]
     pub atk_fx: Option<u64>,
-    pub next_pos: Option<bool>,
-    pub block: Option<bool>,
-    pub text: Option<bool>,
-    pub ihs: Option<bool>,
-    pub face: Option<Vec<u64>>,
-    pub score: Option<bool>,
-    pub irs: Option<bool>,
-    pub center: Option<u64>,
-    pub sdarr: Option<u64>,
-    pub move_fx: Option<u64>,
-    pub drop_fx: Option<u64>,
-    pub ims: Option<bool>,
-    pub lock_fx: Option<u64>,
-    pub arr: Option<u64>,
-    pub swap: Option<bool>,
-    pub bag_line: Option<bool>,
-    pub skin: Option<Vec<u64>>,
-    pub grid: Option<f64>,
-    pub dascut: Option<u64>,
-    pub sddas: Option<u64>,
-    pub rs: Option<String>,
+    #[serde(rename = "clearFX")]
     pub clear_fx: Option<u64>,
+    #[serde(rename = "dropFX")]
+    pub drop_fx: Option<u64>,
+    #[serde(rename = "lockFX")]
+    pub lock_fx: Option<u64>,
+    #[serde(rename = "moveFX")]
+    pub move_fx: Option<u64>,
+    #[serde(rename = "shakeFX")]
+    pub shake_fx: Option<u64>,
+    #[serde(rename = "splashFX")]
+    pub splash_fx: Option<u64>,
+
+    pub das: Option<u64>,
+    pub arr: Option<u64>,
+    pub sddas: Option<u64>,
+    pub sdarr: Option<u64>,
+    pub dascut: Option<u64>,
+    pub dropcut: Option<u64>,
+
+    pub irs: Option<bool>,
+    pub ihs: Option<bool>,
+    pub ims: Option<bool>,
+    #[serde(rename = "RS")]
+    pub rs: Option<String>,
+
+    pub bag_line: Option<bool>,
+    pub block: Option<bool>,
+    pub center: Option<u64>,
+    pub face: Option<Vec<u64>>,
+    pub ghost: Option<f64>,
+    pub grid: Option<f64>,
+    pub high_cam: Option<bool>,
+    pub next_pos: Option<bool>,
+    pub score: Option<bool>,
+    pub skin: Option<Vec<u64>>,
+    pub smooth: Option<bool>,
+    pub swap: Option<bool>,
+    pub text: Option<bool>,
+    pub warn: Option<bool>,
+    
     /// Additional settings that may not be standard.
     #[serde(flatten)]
     pub nonstandard: HashMap<String, serde_json::Value>,
 }
 
+/// A struct representing the metadata stored within the replay.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GameReplayMetadata {
@@ -222,6 +251,12 @@ pub struct GameReplayMetadata {
     /// A list of mods applied to the run.
     ///
     /// It's in the format of [mod, value], where mod is the mod ID and value is the value given to the mod.
+    /// 
+    /// Note: the original metadata JSON has calls this value `mod`, but since it's misleading (not plural)
+    /// and is a special keyword in Rust, this has been renamed to `mods` in the struct.  
+    /// This probably means nothing to you, since all the serialization and deserialization will
+    /// convert between the two forms automatically.
+    #[serde(rename = "mod")]
     pub mods: Option<Vec<(u64, serde_json::Value)>>,
 
     /// The name of the mode that was played.
@@ -275,8 +310,11 @@ pub enum ReplayParseError {
 
     /// The input data was malformed and could not be casted into the proper enum types.
     MalformedInputData {
+        /// The first input data index in which the input data is malformed.
         position: u64,
+        /// The "frame"/time value of the input data point.
         frame: u64,
+        /// The "kind" value of the input data point.
         kind: u64,
     },
 }
@@ -323,8 +361,11 @@ pub enum ReplaySerializeError {
     /// To fix this error, consider calling [`sort_inputs`][GameReplayData::sort_inputs] on the
     /// [`GameReplayData`] before serializing it.
     UnsortedInput {
+        /// The first data point index in which the array isn't sorted.
         first_unsorted_index: usize,
+        /// The frame number of the previous data point.
         prev_time: u64,
+        /// The frame number of the first data point which caused the array to not be sorted.
         unsorted_time: u64,
     },
 
