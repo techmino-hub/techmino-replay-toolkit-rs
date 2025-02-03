@@ -66,7 +66,8 @@ impl GameReplayData {
             bytes.push(key as u64);
             bytes.push(time);
         }
-
+        
+        buffer.push(10);
         append_vlqs(&mut buffer, &bytes);
 
         Ok(buffer)
@@ -159,9 +160,7 @@ fn _create_vlqs(values: &[u64]) -> Vec<u8> {
 fn append_vlqs(buffer: &mut Vec<u8>, values: &[u64]) {
     // Estimation: most values need around 2 bytes
     buffer.reserve(values.len() * 2 + 1);
-
-    buffer.push(10);
-
+    
     // u64 is up to 9 VLQ bytes
     let mut vlq = Vec::with_capacity(9);
     for &value in values {
