@@ -15,12 +15,5 @@ mod serialize;
 mod types;
 pub use types::*;
 
-
 #[cfg(test)]
-mod test {
-    #[test]
-    fn test_serialize_deserialize_noop() {
-        // TODO: Create testcases with known replays
-        // TODO: Use RON to store replay data to compare
-    }
-}
+mod tests;

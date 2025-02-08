@@ -168,52 +168,159 @@ pub struct GameReplayData {
     pub metadata: GameReplayMetadata,
 }
 
+// TODO: Find more version info for these entries
 /// A struct representing the settings of the player who made the replay.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerSettings {
+    /// The attack FX slider in the video settings.
+    /// 
+    /// Normal values: integer from 0 to 5
     #[serde(rename = "atkFX")]
     pub atk_fx: Option<u64>,
+    /// The clear FX slider in the video settings.
+    /// 
+    /// Normal values: integer from 0 to 5
     #[serde(rename = "clearFX")]
     pub clear_fx: Option<u64>,
+    /// The drop FX slider in the video settings.
+    /// 
+    /// Normal values: integer from 0 to 5
     #[serde(rename = "dropFX")]
     pub drop_fx: Option<u64>,
+    /// The lock FX slider in the video settings.
+    /// 
+    /// Normal values: integer from 0 to 5
     #[serde(rename = "lockFX")]
     pub lock_fx: Option<u64>,
+    /// The move FX slider in the video settings.
+    /// 
+    /// Normal values: integer from 0 to 5
     #[serde(rename = "moveFX")]
     pub move_fx: Option<u64>,
+    /// The field sway slider in the video settings.
+    /// 
+    /// Normal values: integer from 0 to 5
     #[serde(rename = "shakeFX")]
     pub shake_fx: Option<u64>,
+    /// The splash FX slider in the video settings.
+    /// 
+    /// Normal values: integer from 0 to 5
     #[serde(rename = "splashFX")]
     pub splash_fx: Option<u64>,
 
+    /// The DAS (delayed auto-shift) slider in the control settings.
+    /// 
+    /// Normal values: integer from 0 to 20, measured in frames  
+    /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
     pub das: Option<u64>,
+    /// The ARR (auto-repeat rate) slider in the control settings.
+    /// 
+    /// Normal values: integer from 0 to 15, measured in frames  
+    /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
     pub arr: Option<u64>,
+    /// The soft-drop DAS (delayed auto-shift) slider in the control settings.
+    /// 
+    /// Normal values: integer from 0 to 10, measured in frames  
+    /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
     pub sddas: Option<u64>,
+    /// The soft-drop ARR (auto-repeat rate) slider in the control settings.
+    /// 
+    /// Normal values: integer from 0 to 4, measured in frames  
+    /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
     pub sdarr: Option<u64>,
+    /// The DAS (delayed auto-shift) cut slider in the control settings.
+    /// 
+    /// Normal values: integer from 0 to 20, measured in frames  
+    /// Learn more about DAS: <https://tetris.wiki/DAS>  
     pub dascut: Option<u64>,
+    /// The IRS (initial rotation system) cut slider in the control settings.
+    /// 
+    /// Normal values: integer from 0 to 20, measured in frames  
+    /// Learn more about IRS: <https://tetris.wiki/IRS>  
+    /// Version info: This is only available on game versions >=0.17.22
+    pub irscut: Option<u64>,
+    /// The auto-lock cut slider in the control settings.
+    /// 
+    /// Normal values: integer from 0 to 10, measured in frames
     pub dropcut: Option<u64>,
 
+    /// The IRS (initial rotation system) checkbox in the control settings.
+    /// 
+    /// Learn more about IRS: <https://tetris.wiki/IRS>
     pub irs: Option<bool>,
+    /// The IHS (initial hold system) checkbox in the control settings.
+    /// 
+    /// Learn more about IHS: <https://tetris.wiki/IHS>
     pub ihs: Option<bool>,
+    /// The IMS (initial movement system) checkbox in the control settings.
+    /// 
+    /// Analogous to [IRS][<https://tetris.wiki/IRS>] and [IHS][<https://tetris.wiki/IHS>],
+    /// but for movement instead of rotating and holding, respectively.
     pub ims: Option<bool>,
+    /// The rotation system used in the replay.
+    /// 
+    /// Normal values (as of January 2025):
+    /// - `TRS`
+    /// - [`SRS`][<https://tetris.wiki/SRS>]
+    /// - `SRS_plus`
+    /// - `SRS_X`
+    /// - `BiRS`
+    /// - [`ARS_Z`][<https://tetris.wiki/ARS>]
+    /// - [`DRS_weak`][<https://tetris.wiki/DTET_Rotation_System>]
+    /// - [`ASC`][<https://tetris.wiki/Ascension>]
+    /// - `ASC_plus`
+    /// - [`C2`][<https://tetris.wiki/Cultris_II>]
+    /// - `C2_sym`
+    /// - [`N64`][<https://tetris.wiki/The_New_Tetris>]
+    /// - `N64_plus`
+    /// - [`Classic`][<https://tetris.wiki/Nintendo_Rotation_System>]
+    /// - `Classic_plus`
+    /// - `None`
+    /// - `None_plus`
     #[serde(rename = "RS")]
     pub rs: Option<String>,
 
+    /// The bag separator option in the video settings.
     pub bag_line: Option<bool>,
+    /// The "draw active piece" option in the video settings.
     pub block: Option<bool>,
-    pub center: Option<u64>,
+    /// The rotation center opacity option in the video settings.
+    pub center: Option<f64>,
+    /// The starting orientations of all the pieces.
+    /// 
+    /// Normally contains 29 elements: 7 tetrominoes, 18 pentominoes, 2 trominoes, 1 domino, and 1 monomino, in that order.
     pub face: Option<Vec<u64>>,
+    /// The ghost piece opacity option in the video settings.
     pub ghost: Option<f64>,
+    /// The grid opacity option in the video settings.
     pub grid: Option<f64>,
+    /// The screen scrolling option in the video settings.
     pub high_cam: Option<bool>,
+    /// The spawn preview option in the video settings.
     pub next_pos: Option<bool>,
+    /// The "score pop-ups" option in the video settings.
     pub score: Option<bool>,
+    /// The colors of all the pieces.
+    /// 
+    /// Normally contains 29 elements: 7 tetrominoes, 18 pentominoes, 2 trominoes, 1 domino, and 1 monomino, in that order.
     pub skin: Option<Vec<u64>>,
+    /// THe smooth falling option option in the video settings.
     pub smooth: Option<bool>,
+    // TODO: Investigate what this does
+    // ...seems like I somehow got it at Jul 11 2024
+    // https://github.com/techmino-hub/techmino-replay-parser/commit/36b4ab33acb451c3a76ef951ef58ae308d711c50
     pub swap: Option<bool>,
+    /// The line clear popups option in the video settings.
     pub text: Option<bool>,
+    /// The danger alerts option in the video settings.
     pub warn: Option<bool>,
+
+    /// The "Frame skip" option in the video settings.
+    /// 
+    /// This option was removed in version 0.17.2 of the game.
+    #[serde(rename = "FTLock")]
+    pub ft_lock: Option<bool>,
     
     /// Additional settings that may not be standard.
     #[serde(flatten)]
@@ -416,18 +523,49 @@ impl InputParseMode {
     ///
     /// If parsing the version fails, it will return `None`.
     pub fn try_infer_from_version(version: &str) -> Option<InputParseMode> {
-        let filtered_version: String = version
+        let lower = version.to_ascii_lowercase();
+        let lower = lower
+            .trim_start_matches('v')
+            .trim_start_matches("alpha")
+            .trim_start();
+
+        if lower.contains("wtf") {
+            // Matches Techmino WTF mod from April 2024
+            // https://github.com/MelloBoo44/Techmino-WTF
+            return Some(InputParseMode::Relative);
+        }
+
+        if lower.trim_start().starts_with("unofficial expansion") {
+            // Matches Techmino Unofficial Expansion mod from August 2023
+            // https://github.com/Another-Soul/Techmino-Unofficial-Expansion
+            return Some(InputParseMode::Relative);
+        }
+
+        // Snapshots use @ as version@commit delimiter
+        let lower = match lower.find('@') {
+            Some(idx) => &lower[..idx],
+            None => lower,
+        };
+
+        // Electra's mods have multiple elements to them
+        let lower = lower.split(' ').next().unwrap_or_default();
+
+        let filtered_version: String = lower
             .chars()
             .filter(|c| c.is_numeric() || *c == '.')
             .collect();
 
         let version = Version::parse(&filtered_version);
 
-        if version.ok()? < Self::ABSOLUTE_TIMING_START {
-            Some(InputParseMode::Relative)
-        } else {
-            Some(InputParseMode::Absolute)
+        if let Ok(v) = version {
+            if v < Self::ABSOLUTE_TIMING_START {
+                return Some(InputParseMode::Relative);
+            } else {
+                return Some(InputParseMode::Absolute);
+            }
         }
+
+        return None;
     }
 }
 
@@ -443,6 +581,23 @@ mod tests {
             ("Alpha v0.15.1", Some(Relative)),
             ("V0.16.2", Some(Relative)),
             ("0.17.22", Some(Absolute)),
+            ("v0.17.6@26fc", Some(Relative)),
+            ("v 1.2.3", Some(Absolute)),
+
+            // https://github.com/MelloBoo44/Techmino-WTF/blob/main/version.lua
+            ("WTF", Some(Relative)),
+
+            // https://github.com/Another-Soul/Techmino-Unofficial-Expansion/blob/main/version.lua
+            ("Unofficial Expansion v0.2.1", Some(Relative)),
+
+            // https://github.com/electraminer/Techmino/blob/king_of_stackers/version.lua
+            ("V0.17.22 IRSv1.1 PASSTHROUGHFIXv1.0 KOSv1.2beta TE:Cv1.0", Some(Absolute)),
+
+            // https://github.com/electraminer/Techmino/blob/irs/version.lua
+            ("V0.17.22 + IRSv1.1.1", Some(Absolute)),
+
+            // https://github.com/electraminer/Techmino/blob/king_of_cheesers/version.lua
+            ("V0.17.22 IRSv1.1 PASSTHROUGHFIXv1.0 KOCv0.1beta TE:Cv1.0", Some(Absolute)),
         ];
 
         for (input, expected) in cases {

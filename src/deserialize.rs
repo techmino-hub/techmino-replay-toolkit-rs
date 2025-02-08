@@ -96,8 +96,6 @@ fn parse_input_slice(
 ) -> Result<Vec<GameInputEvent>, ReplayParseError> {
     let values = extract_vlqs(input_slice);
 
-    println!("Input slice values: {values:?}");
-
     let mut events = Vec::with_capacity(values.len() / 2);
 
     let mut prev_timestamp = 0;
