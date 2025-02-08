@@ -237,4 +237,39 @@ mod tests {
             assert_eq!(vec, expected);
         }
     }
+
+    #[test]
+    fn test_input_slice_parse() {
+        use crate::deserialize::parse_input_slice;
+
+        struct InputSliceParseTestcase {
+            raw: Vec<u8>,
+            expect_pass: bool,
+        }
+
+        let cases = [
+            InputSliceParseTestcase {
+                raw: vec![2, 1, 9, 1, 3, 1],
+                expect_pass: false,
+            },
+        ];
+
+        for InputSliceParseTestcase { raw, expect_pass } in cases {
+            let inputs = parse_input_slice(&raw, InputParseMode::Absolute)
+                .unwrap();
+            let data = GameReplayData {
+                inputs,
+                ..Default::default()
+            };
+
+            let reserialized =
+                data.serialize_to_raw(Some(InputParseMode::Absolute));
+
+            if expect_pass {
+                reserialized.unwrap();
+            } else {
+                reserialized.unwrap_err();
+            }
+        }
+    }
 }

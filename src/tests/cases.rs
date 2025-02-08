@@ -16,8 +16,10 @@ pub struct TestCase {
     pub data: Option<GameReplayData>
 }
 
+pub const TESTCASE_PATH: &str = "./src/tests/cases";
+
 pub fn get_test_cases() -> HashMap<String, TestCase> {
-    let files: Vec<_> = std::fs::read_dir("./src/tests/cases").unwrap().flatten().collect();
+    let files: Vec<_> = std::fs::read_dir(TESTCASE_PATH).unwrap().flatten().collect();
 
     let mut map: HashMap<String, TestCase> = HashMap::new();
 

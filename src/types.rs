@@ -1,4 +1,4 @@
-use std::{collections::HashMap, string::FromUtf8Error};
+use std::{collections::{HashMap, HashSet}, string::FromUtf8Error};
 
 use base64::DecodeError;
 use miniz_oxide::inflate::DecompressError;
@@ -566,6 +566,25 @@ impl InputParseMode {
         }
 
         return None;
+    }
+
+    /// Tries to infer the input parse mode based on the input slice.
+    /// 
+    /// Returns [`None`] if the input parse mode could not be inferred.
+    pub fn try_infer_from_input_data(input_slice: &[u64]) -> Option<InputParseMode> {
+        // Absolute mode: expects increasing frame times
+        let mut prev_time = 0;
+        for &time in input_slice.iter().step_by(2) {
+            if time < prev_time {
+                // Definitely not absolute!
+                return Some(InputParseMode::Relative);
+            }
+
+            prev_time = time;
+        }
+
+        // It's not really possible to "disprove" relative mode, so we're still unsure
+        None
     }
 }
 

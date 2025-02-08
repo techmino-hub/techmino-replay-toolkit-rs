@@ -90,7 +90,7 @@ impl TryFrom<&[u8]> for GameReplayMetadata {
     }
 }
 
-fn parse_input_slice(
+pub(crate) fn parse_input_slice(
     input_slice: &[u8],
     parse_mode: InputParseMode,
 ) -> Result<Vec<GameInputEvent>, ReplayParseError> {
@@ -124,7 +124,7 @@ fn parse_input_slice(
     Ok(events)
 }
 
-fn extract_vlqs(vlqs: &[u8]) -> Vec<u64> {
+pub(crate) fn extract_vlqs(vlqs: &[u8]) -> Vec<u64> {
     let mut numbers = Vec::with_capacity(vlqs.len());
 
     let mut cur_num: u64 = 0;
