@@ -1,4 +1,4 @@
-use crate::types::*;
+use crate::types::{GameReplayData, InputParseMode, ReplaySerializeError, GameInputEvent};
 use alloc::string::String;
 use alloc::vec::Vec;
 use base64::engine::general_purpose::STANDARD as B64;
@@ -18,15 +18,15 @@ impl GameReplayData {
 
     /// Serialize into a raw, uncompressed byte array.
     ///
-    /// This function serializes the GameReplayData into a raw, uncompressed byte array.
+    /// This function serializes the `GameReplayData` into a raw, uncompressed byte array.
     ///
-    /// This will not be playable by the game as the game automatically compresses and decompresses the data.  
+    /// This will not be playable by the game as the game automatically compresses and decompresses the data.\
     /// For serializing the data into the `.rep` file format used by the game's saved replays, use
-    /// [`serialize_to_compressed`][GameReplayData::serialize_to_compressed] instead.  
+    /// [`serialize_to_compressed`][GameReplayData::serialize_to_compressed] instead.\
     /// For serializing the data into a copiable text/base64 format, use
     /// [`serialize_to_base64`][GameReplayData::serialize_to_base64] instead.
     ///
-    /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.  
+    /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.\
     /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
     /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
     pub fn serialize_to_raw(
@@ -67,7 +67,7 @@ impl GameReplayData {
 
             prev_time = input.frame;
 
-            bytes.push(key as u64);
+            bytes.push(u64::from(key));
             bytes.push(time);
         }
 
@@ -80,13 +80,13 @@ impl GameReplayData {
     /// Serialize into a compressed byte array used by the game.
     ///
     /// This data format is used by the game in the form of `.rep` files that are placed in
-    /// the `replays/` directory of the game's save directory.  
+    /// the `replays/` directory of the game's save directory.\
     /// For serializing the data into a copiable text/base64 format, use
-    /// [`serialize_to_base64`][GameReplayData::serialize_to_base64] instead.  
-    /// FOr serializing the data into a raw, uncompressed byte array form, use
+    /// [`serialize_to_base64`][GameReplayData::serialize_to_base64] instead.\
+    /// `FOr` serializing the data into a raw, uncompressed byte array form, use
     /// [`serialize_to_raw`][GameReplayData::serialize_to_raw] instead.
     ///
-    /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.  
+    /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.\
     /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
     /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
     pub fn serialize_to_compressed(
@@ -102,11 +102,11 @@ impl GameReplayData {
     ///
     /// This data format is used by the game for importing/exporting replays.
     /// For serializing the data into the `.rep` file format used by the game's saved replays, use
-    /// [`serialize_to_compressed`][GameReplayData::serialize_to_compressed] instead.  
-    /// FOr serializing the data into a raw, uncompressed byte array form, use
+    /// [`serialize_to_compressed`][GameReplayData::serialize_to_compressed] instead.\
+    /// `FOr` serializing the data into a raw, uncompressed byte array form, use
     /// [`serialize_to_raw`][GameReplayData::serialize_to_raw] instead.
     ///
-    /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.  
+    /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.\
     /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
     /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
     pub fn serialize_to_base64(

@@ -168,7 +168,7 @@ pub struct GameInputEvent {
     /// happen during the game start countdown. Nevertheless,
     /// the game still records inputs before the countdown finishes.
     pub frame: u64,
-    /// The kind of input event this represents.  
+    /// The kind of input event this represents.\
     /// That is - whether or not this is a key press event or a key release event.
     pub kind: InputEventKind,
     /// The key that is being pressed or released.
@@ -229,33 +229,33 @@ pub struct PlayerSettings {
 
     /// The DAS (delayed auto-shift) slider in the control settings.
     ///
-    /// Normal values: integer from 0 to 20, measured in frames  
+    /// Normal values: integer from 0 to 20, measured in frames\
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
     pub das: Option<u64>,
     /// The ARR (auto-repeat rate) slider in the control settings.
     ///
-    /// Normal values: integer from 0 to 15, measured in frames  
+    /// Normal values: integer from 0 to 15, measured in frames\
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
     pub arr: Option<u64>,
     /// The soft-drop DAS (delayed auto-shift) slider in the control settings.
     ///
-    /// Normal values: integer from 0 to 10, measured in frames  
+    /// Normal values: integer from 0 to 10, measured in frames\
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
     pub sddas: Option<u64>,
     /// The soft-drop ARR (auto-repeat rate) slider in the control settings.
     ///
-    /// Normal values: integer from 0 to 4, measured in frames  
+    /// Normal values: integer from 0 to 4, measured in frames\
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
     pub sdarr: Option<u64>,
     /// The DAS (delayed auto-shift) cut slider in the control settings.
     ///
-    /// Normal values: integer from 0 to 20, measured in frames  
+    /// Normal values: integer from 0 to 20, measured in frames\
     /// Learn more about DAS: <https://tetris.wiki/DAS>  
     pub dascut: Option<u64>,
     /// The IRS (initial rotation system) cut slider in the control settings.
     ///
-    /// Normal values: integer from 0 to 20, measured in frames  
-    /// Learn more about IRS: <https://tetris.wiki/IRS>  
+    /// Normal values: integer from 0 to 20, measured in frames\
+    /// Learn more about IRS: <https://tetris.wiki/IRS>\
     /// Version info: This is only available on game versions >=0.17.22
     pub irscut: Option<u64>,
     /// The auto-lock cut slider in the control settings.
@@ -352,8 +352,8 @@ pub struct GameReplayMetadata {
     /// Whether or not the replay is marked as a TAS.
     pub tas_used: Option<bool>,
 
-    /// The 'private' field of the replay, used to store mode-specific data.  
-    /// Its contents differ based on the mode played.  
+    /// The 'private' field of the replay, used to store mode-specific data.\
+    /// Its contents differ based on the mode played.\
     /// Currently, only the `custom_clear` and `custom_puzzle` modes are known to
     /// store any data here.
     pub private: Option<serde_json::Value>,
@@ -378,7 +378,7 @@ pub struct GameReplayMetadata {
     /// It's in the format of [mod, value], where mod is the mod ID and value is the value given to the mod.
     ///
     /// Note: the original metadata JSON has calls this value `mod`, but since it's misleading (not plural)
-    /// and is a special keyword in Rust, this has been renamed to `mods` in the struct.  
+    /// and is a special keyword in Rust, this has been renamed to `mods` in the struct.\
     /// This probably means nothing to you, since all the serialization and deserialization will
     /// convert between the two forms automatically.
     #[serde(rename = "mod")]
@@ -417,10 +417,10 @@ pub enum ReplayParseError {
 
     /// The metadata was found to not be valid UTF-8.
     ///
-    /// See [FromUtf8Error] for more information.
+    /// See [`FromUtf8Error`] for more information.
     MetadataNotUtf8(FromUtf8Error),
 
-    /// The metadata could not be deserialized into the [GameReplayMetadata] struct,
+    /// The metadata could not be deserialized into the [`GameReplayMetadata`] struct,
     /// possibly due to missing values.
     ///
     /// See [`serde_json`'s Error type][serde_json::Error] for more information.
@@ -509,7 +509,7 @@ impl From<serde_json::Error> for ReplaySerializeError {
 /// Determines how to parse the inputs of the replay.
 ///
 /// Replays made before version 0.17.22 of the game (i.e., 0.17.21 and before it)
-/// use relative timing for its inputs.  
+/// use relative timing for its inputs.\
 /// However, starting from version 0.17.22 of the game, absolute timing is used.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum InputParseMode {

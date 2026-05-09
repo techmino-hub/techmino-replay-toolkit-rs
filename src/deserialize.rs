@@ -15,9 +15,9 @@ impl GameReplayData {
     /// For parsing a replay from the contents of a `.rep` file in the game's `replays` directory,
     /// see [`parse_compressed_bytes`] instead.
     ///
-    /// `parse_mode` is an optional argument used to specify how you want the inputs to be parsed.  
+    /// `parse_mode` is an optional argument used to specify how you want the inputs to be parsed.\
     /// This is useful for preventing errors from occurring if this function fails to recognize
-    /// the game version to automatically infer its parse mode.  
+    /// the game version to automatically infer its parse mode.\
     /// For more information, see [`InputParseMode`].
     pub fn try_from_base64(
         string: &str,
@@ -34,7 +34,7 @@ impl GameReplayData {
     ///
     /// For parsing a replay from a base64 string, see [`parse_base64`] instead.
     ///
-    /// `parse_mode` is an optional argument used to specify how you want the inputs to be parsed.  
+    /// `parse_mode` is an optional argument used to specify how you want the inputs to be parsed.\
     /// This is useful for preventing errors from occurring if this function fails to recognize
     /// the game version to automatically infer its parse mode.
     /// For more information, see [`InputParseMode`].
@@ -50,8 +50,8 @@ impl GameReplayData {
     /// Parses a raw, uncompressed byte array into a game replay.
     ///
     /// Usually, Techmino compresses the replay using `zlib` before saving it, either as a
-    /// base64 string, or a `.rep` file in the game's `replays` directory.  
-    /// In which case, this is not what you are looking for.  
+    /// base64 string, or a `.rep` file in the game's `replays` directory.\
+    /// In which case, this is not what you are looking for.\
     /// See [`parse_base64`] and [`parse_compressed_bytes`] instead.
     ///
     /// This function is only useful if you managed to get the replay in the uncompressed form,
@@ -113,7 +113,7 @@ pub(crate) fn parse_input_slice(
         };
 
         let kind = InputEventKind::from(key > 0b0010_0000);
-        let key = InputEventKey::try_from(key as u8 & 0b0001_1111).map_err(|_| {
+        let key = InputEventKey::try_from(key as u8 & 0b0001_1111).map_err(|()| {
             ReplayParseError::MalformedInputData {
                 frame,
                 position: position as u64 * 2,
