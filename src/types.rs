@@ -128,7 +128,11 @@ impl TryFrom<u8> for InputEventKey {
 
 impl From<InputEventKey> for u8 {
     fn from(value: InputEventKey) -> Self {
-        use InputEventKey::*;
+        use InputEventKey::{
+            Down1, Down10, Down4, Function1, Function2, HardDrop, Hold, InstantLeft, InstantRight,
+            LeftDrop, LeftZangi, MoveLeft, MoveRight, RightDrop, RightZangi, Rotate180, RotateLeft,
+            RotateRight, SoftDrop, SonicDrop,
+        };
 
         match value {
             MoveLeft => 1,
@@ -319,7 +323,7 @@ pub struct PlayerSettings {
     ///
     /// Normally contains 29 elements: 7 tetrominoes, 18 pentominoes, 2 trominoes, 1 domino, and 1 monomino, in that order.
     pub skin: Option<Vec<u64>>,
-    /// THe smooth falling option option in the video settings.
+    /// The smooth falling option option in the video settings.
     pub smooth: Option<bool>,
     // TODO: Investigate what this does
     // ...seems like I somehow got it at Jul 11 2024

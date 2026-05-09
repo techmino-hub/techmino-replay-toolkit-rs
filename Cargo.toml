@@ -7,20 +7,24 @@ repository = "https://github.com/techmino-hub/techmino-replay-toolkit-rs"
 license = "GPL-3.0-or-later"
 
 [lints.clippy]
-all = { level = "deny" }
+all = { level = "deny", priority = -1 }
 pedantic = { level = "warn" }
-# alloc_instead_of_core = { level = "warn" }
-# std_instead_of_alloc = { level = "warn" }
-# std_instead_of_core = { level = "warn" }
+alloc_instead_of_core = { level = "warn" }
+std_instead_of_alloc = { level = "warn" }
+std_instead_of_core = { level = "warn" }
 
 [features]
 default = ["std"]
-std = []
+std = ["serde/std"]
 alloc = []
 
 [dependencies]
 base64 = { version = "0.22.1", default-features = false, features = ["alloc"] }
-hashbrown = { version = "0.17.1", default-features = false }
+hashbrown = { version = "0.17.1", default-features = false, features = [
+    "alloc",
+    "default-hasher",
+    "serde",
+] }
 miniz_oxide = { version = "0.9.1", default-features = false, features = [
     "alloc",
     "serde",
