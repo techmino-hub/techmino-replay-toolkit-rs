@@ -1,8 +1,13 @@
+use alloc::string::String;
+use alloc::vec::Vec;
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use miniz_oxide::inflate;
 
-use crate::types::*;
+use crate::types::{
+    GameInputEvent, GameReplayData, GameReplayMetadata, InputEventKey, InputEventKind,
+    InputParseMode, ReplayParseError,
+};
 
 impl GameReplayData {
     /// Parses a base64 string into a game replay.
@@ -20,7 +25,7 @@ impl GameReplayData {
     ) -> Result<GameReplayData, ReplayParseError> {
         let data = B64.decode(string)?;
 
-        Ok(Self::try_from_compressed(&data, parse_mode)?)
+        Self::try_from_compressed(&data, parse_mode)
     }
 
     /// Parses a compressed byte array into a game replay.
@@ -39,7 +44,7 @@ impl GameReplayData {
     ) -> Result<GameReplayData, ReplayParseError> {
         let data = inflate::decompress_to_vec_zlib(data)?;
 
-        Ok(Self::try_from_raw(&data, parse_mode)?)
+        Self::try_from_raw(&data, parse_mode)
     }
 
     /// Parses a raw, uncompressed byte array into a game replay.
@@ -107,8 +112,8 @@ pub(crate) fn parse_input_slice(
             InputParseMode::Absolute => time,
         };
 
-        let kind = InputEventKind::from(key > 0b100000);
-        let key = InputEventKey::try_from(key as u8 & 0b011111).map_err(|_| {
+        let kind = InputEventKind::from(key > 0b0010_0000);
+        let key = InputEventKey::try_from(key as u8 & 0b0001_1111).map_err(|_| {
             ReplayParseError::MalformedInputData {
                 frame,
                 position: position as u64 * 2,
@@ -118,7 +123,7 @@ pub(crate) fn parse_input_slice(
 
         prev_timestamp = frame;
 
-        events.push(GameInputEvent { frame, key, kind });
+        events.push(GameInputEvent { frame, kind, key });
     }
 
     Ok(events)
@@ -128,10 +133,10 @@ pub(crate) fn extract_vlqs(vlqs: &[u8]) -> Vec<u64> {
     let mut numbers = Vec::with_capacity(vlqs.len());
 
     let mut cur_num: u64 = 0;
-    for &vlq in vlqs.iter() {
+    for &vlq in vlqs {
         let value = vlq & 0x7F;
         cur_num <<= 7;
-        cur_num |= value as u64;
+        cur_num |= u64::from(value);
 
         let msb = vlq >= 0x80;
         if !msb {
@@ -146,6 +151,7 @@ pub(crate) fn extract_vlqs(vlqs: &[u8]) -> Vec<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
 
     #[test]
     fn test_vlq_extraction() {
@@ -158,12 +164,12 @@ mod tests {
             (vec![0xC0, 0x00], vec![0x2000]),
             (vec![0xFF, 0x7F], vec![0x3FFF]),
             (vec![0x81, 0x80, 0x00], vec![0x4000]),
-            (vec![0xFF, 0xFF, 0x7F], vec![0x1FFFFF]),
+            (vec![0xFF, 0xFF, 0x7F], vec![0x001F_FFFF]),
             (
                 vec![0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0x7F],
-                vec![0x1FFFFF, 0x1FFFFF],
+                vec![0x001F_FFFF, 0x001F_FFFF],
             ),
-            (vec![0x81, 0x80, 0x80, 0x00], vec![0x200000]),
+            (vec![0x81, 0x80, 0x80, 0x00], vec![0x0020_0000]),
             (vec![0x01, 0x01, 0x01], vec![1, 1, 1]),
             (vec![0x8F, 0x00], vec![1920]),
         ];

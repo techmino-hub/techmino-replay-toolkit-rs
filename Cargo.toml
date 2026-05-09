@@ -6,12 +6,35 @@ description = "A serializer and deserializer for Techmino replays"
 repository = "https://github.com/techmino-hub/techmino-replay-toolkit-rs"
 license = "GPL-3.0-or-later"
 
+[lints.clippy]
+all = { level = "deny" }
+pedantic = { level = "warn" }
+# alloc_instead_of_core = { level = "warn" }
+# std_instead_of_alloc = { level = "warn" }
+# std_instead_of_core = { level = "warn" }
+
+[features]
+default = ["std"]
+std = []
+alloc = []
+
 [dependencies]
-base64 = "0.22.1"
-miniz_oxide = "0.8.0"
-semver = "1.0.25"
-serde = { version = "1.0.214", features = ["derive"] }
-serde_json = "1.0.132"
+base64 = { version = "0.22.1", default-features = false, features = ["alloc"] }
+hashbrown = { version = "0.17.1", default-features = false }
+miniz_oxide = { version = "0.9.1", default-features = false, features = [
+    "alloc",
+    "serde",
+    "simd",
+    "with-alloc",
+] }
+semver = { version = "1.0.25", default-features = false, features = ["serde"] }
+serde = { version = "1.0.214", features = [
+    "alloc",
+    "derive",
+], default-features = false }
+serde_json = { version = "1.0.132", default-features = false, features = [
+    "alloc",
+] }
 
 [dev-dependencies]
-ron = "0.8.1"
+ron = "0.12.1"

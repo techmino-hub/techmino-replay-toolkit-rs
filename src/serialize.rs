@@ -1,4 +1,6 @@
 use crate::types::*;
+use alloc::string::String;
+use alloc::vec::Vec;
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use miniz_oxide::deflate::compress_to_vec_zlib as compress;
@@ -6,9 +8,8 @@ use miniz_oxide::deflate::compress_to_vec_zlib as compress;
 // TODO: Add tests
 
 impl GameReplayData {
-
     /// Sort the inputs so that they are sorted by time.
-    /// 
+    ///
     /// This can be necessary sometimes as serializing the replay (e.g., into base64)
     /// requires that the inputs are sorted for the algorithm to work properly.
     pub fn sort_inputs(&mut self) {
@@ -16,19 +17,22 @@ impl GameReplayData {
     }
 
     /// Serialize into a raw, uncompressed byte array.
-    /// 
+    ///
     /// This function serializes the GameReplayData into a raw, uncompressed byte array.
-    /// 
+    ///
     /// This will not be playable by the game as the game automatically compresses and decompresses the data.  
     /// For serializing the data into the `.rep` file format used by the game's saved replays, use
     /// [`serialize_to_compressed`][GameReplayData::serialize_to_compressed] instead.  
     /// For serializing the data into a copiable text/base64 format, use
     /// [`serialize_to_base64`][GameReplayData::serialize_to_base64] instead.
-    /// 
+    ///
     /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.  
     /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
     /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
-    pub fn serialize_to_raw(&self, input_mode: Option<InputParseMode>) -> Result<Vec<u8>, ReplaySerializeError> {
+    pub fn serialize_to_raw(
+        &self,
+        input_mode: Option<InputParseMode>,
+    ) -> Result<Vec<u8>, ReplaySerializeError> {
         let input_mode = match input_mode
             .or_else(|| InputParseMode::try_infer_from_version(&self.metadata.version))
         {
@@ -46,7 +50,7 @@ impl GameReplayData {
 
         let inputs = &self.inputs;
 
-        if let Some(u) = get_first_unsorted(&inputs) {
+        if let Some(u) = get_first_unsorted(inputs) {
             return Err(u);
         }
 
@@ -66,22 +70,22 @@ impl GameReplayData {
             bytes.push(key as u64);
             bytes.push(time);
         }
-        
+
         buffer.push(10);
         append_vlqs(&mut buffer, &bytes);
 
         Ok(buffer)
     }
-    
+
     /// Serialize into a compressed byte array used by the game.
-    /// 
+    ///
     /// This data format is used by the game in the form of `.rep` files that are placed in
     /// the `replays/` directory of the game's save directory.  
     /// For serializing the data into a copiable text/base64 format, use
     /// [`serialize_to_base64`][GameReplayData::serialize_to_base64] instead.  
     /// FOr serializing the data into a raw, uncompressed byte array form, use
     /// [`serialize_to_raw`][GameReplayData::serialize_to_raw] instead.
-    /// 
+    ///
     /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.  
     /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
     /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
@@ -90,18 +94,18 @@ impl GameReplayData {
         input_mode: Option<InputParseMode>,
     ) -> Result<Vec<u8>, ReplaySerializeError> {
         let raw_bytes = self.serialize_to_raw(input_mode)?;
-    
+
         Ok(compress(&raw_bytes, 10))
     }
-    
+
     /// Serialize into a copiable text-based base64 format.
-    /// 
+    ///
     /// This data format is used by the game for importing/exporting replays.
     /// For serializing the data into the `.rep` file format used by the game's saved replays, use
     /// [`serialize_to_compressed`][GameReplayData::serialize_to_compressed] instead.  
     /// FOr serializing the data into a raw, uncompressed byte array form, use
     /// [`serialize_to_raw`][GameReplayData::serialize_to_raw] instead.
-    /// 
+    ///
     /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.  
     /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
     /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
@@ -110,7 +114,7 @@ impl GameReplayData {
         input_mode: Option<InputParseMode>,
     ) -> Result<String, ReplaySerializeError> {
         let bytes = self.serialize_to_compressed(input_mode)?;
-    
+
         Ok(B64.encode(&bytes))
     }
 }
@@ -124,7 +128,7 @@ fn get_first_unsorted(inputs: &[GameInputEvent]) -> Option<ReplaySerializeError>
             return Some(ReplaySerializeError::UnsortedInput {
                 first_unsorted_index: index + 1,
                 prev_time: prev.frame,
-                unsorted_time: cur.frame
+                unsorted_time: cur.frame,
             });
         }
     }
@@ -160,7 +164,7 @@ fn _create_vlqs(values: &[u64]) -> Vec<u8> {
 fn append_vlqs(buffer: &mut Vec<u8>, values: &[u64]) {
     // Estimation: most values need around 2 bytes
     buffer.reserve(values.len() * 2 + 1);
-    
+
     // u64 is up to 9 VLQ bytes
     let mut vlq = Vec::with_capacity(9);
     for &value in values {
@@ -184,6 +188,8 @@ fn append_vlqs(buffer: &mut Vec<u8>, values: &[u64]) {
 mod tests {
     use super::*;
 
+    use alloc::vec;
+
     #[test]
     fn test_vlq_creation() {
         // Mostly sourced from https://en.wikipedia.org/wiki/Variable-length_quantity#Examples
@@ -195,12 +201,12 @@ mod tests {
             (vec![0xC0, 0x00], vec![0x2000]),
             (vec![0xFF, 0x7F], vec![0x3FFF]),
             (vec![0x81, 0x80, 0x00], vec![0x4000]),
-            (vec![0xFF, 0xFF, 0x7F], vec![0x1FFFFF]),
+            (vec![0xFF, 0xFF, 0x7F], vec![0x001F_FFFF]),
             (
                 vec![0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0x7F],
-                vec![0x1FFFFF, 0x1FFFFF],
+                vec![0x001F_FFFF, 0x001F_FFFF],
             ),
-            (vec![0x81, 0x80, 0x80, 0x00], vec![0x200000]),
+            (vec![0x81, 0x80, 0x80, 0x00], vec![0x0020_0000]),
             (vec![0x01, 0x01, 0x01], vec![1, 1, 1]),
             (vec![0x8F, 0x00], vec![1920]),
         ];
@@ -221,12 +227,12 @@ mod tests {
             (vec![0xC0, 0x00], vec![0x2000]),
             (vec![0xFF, 0x7F], vec![0x3FFF]),
             (vec![0x81, 0x80, 0x00], vec![0x4000]),
-            (vec![0xFF, 0xFF, 0x7F], vec![0x1FFFFF]),
+            (vec![0xFF, 0xFF, 0x7F], vec![0x001F_FFFF]),
             (
                 vec![0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0x7F],
-                vec![0x1FFFFF, 0x1FFFFF],
+                vec![0x001F_FFFF, 0x001F_FFFF],
             ),
-            (vec![0x81, 0x80, 0x80, 0x00], vec![0x200000]),
+            (vec![0x81, 0x80, 0x80, 0x00], vec![0x0020_0000]),
             (vec![0x01, 0x01, 0x01], vec![1, 1, 1]),
             (vec![0x8F, 0x00], vec![1920]),
         ];
@@ -247,23 +253,19 @@ mod tests {
             expect_pass: bool,
         }
 
-        let cases = [
-            InputSliceParseTestcase {
-                raw: vec![2, 1, 9, 1, 3, 1],
-                expect_pass: false,
-            },
-        ];
+        let cases = [InputSliceParseTestcase {
+            raw: vec![2, 1, 9, 1, 3, 1],
+            expect_pass: false,
+        }];
 
         for InputSliceParseTestcase { raw, expect_pass } in cases {
-            let inputs = parse_input_slice(&raw, InputParseMode::Absolute)
-                .unwrap();
+            let inputs = parse_input_slice(&raw, InputParseMode::Absolute).unwrap();
             let data = GameReplayData {
                 inputs,
                 ..Default::default()
             };
 
-            let reserialized =
-                data.serialize_to_raw(Some(InputParseMode::Absolute));
+            let reserialized = data.serialize_to_raw(Some(InputParseMode::Absolute));
 
             if expect_pass {
                 reserialized.unwrap();

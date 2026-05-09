@@ -1,11 +1,20 @@
-use std::{collections::{HashMap, HashSet}, string::FromUtf8Error};
+use alloc::{
+    string::{FromUtf8Error, String},
+    vec::Vec,
+};
+
+#[cfg(feature = "std")]
+use std::collections::HashMap;
+
+#[cfg(feature = "alloc")]
+use hashbrown::HashMap;
 
 use base64::DecodeError;
 use miniz_oxide::inflate::DecompressError;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
-/// Represents the type of input event this is.  
+/// Represents the type of input event this is.\
 /// That is, whether or not this is a button press event, or a button release event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum InputEventKind {
@@ -28,9 +37,10 @@ impl TryFrom<u8> for InputEventKind {
 
 impl From<bool> for InputEventKind {
     fn from(value: bool) -> Self {
-        match value {
-            false => Self::Press,
-            true => Self::Release,
+        if value {
+            Self::Release
+        } else {
+            Self::Press
         }
     }
 }
@@ -84,7 +94,11 @@ pub enum InputEventKey {
 impl TryFrom<u8> for InputEventKey {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        use InputEventKey::*;
+        use InputEventKey::{
+            Down1, Down10, Down4, Function1, Function2, HardDrop, Hold, InstantLeft, InstantRight,
+            LeftDrop, LeftZangi, MoveLeft, MoveRight, RightDrop, RightZangi, Rotate180, RotateLeft,
+            RotateRight, SoftDrop, SonicDrop,
+        };
 
         match value {
             1 => Ok(MoveLeft),
@@ -145,7 +159,7 @@ impl From<InputEventKey> for u8 {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct GameInputEvent {
     /// A number representing the frame this event occurred in.
-    /// 
+    ///
     /// Note that the game starts at frame 180, and the frames before that
     /// happen during the game start countdown. Nevertheless,
     /// the game still records inputs before the countdown finishes.
@@ -154,7 +168,7 @@ pub struct GameInputEvent {
     /// That is - whether or not this is a key press event or a key release event.
     pub kind: InputEventKind,
     /// The key that is being pressed or released.
-    /// 
+    ///
     /// See [`InputEventKey`] for more details.
     pub key: InputEventKey,
 }
@@ -174,92 +188,92 @@ pub struct GameReplayData {
 #[serde(rename_all = "camelCase")]
 pub struct PlayerSettings {
     /// The attack FX slider in the video settings.
-    /// 
+    ///
     /// Normal values: integer from 0 to 5
     #[serde(rename = "atkFX")]
     pub atk_fx: Option<u64>,
     /// The clear FX slider in the video settings.
-    /// 
+    ///
     /// Normal values: integer from 0 to 5
     #[serde(rename = "clearFX")]
     pub clear_fx: Option<u64>,
     /// The drop FX slider in the video settings.
-    /// 
+    ///
     /// Normal values: integer from 0 to 5
     #[serde(rename = "dropFX")]
     pub drop_fx: Option<u64>,
     /// The lock FX slider in the video settings.
-    /// 
+    ///
     /// Normal values: integer from 0 to 5
     #[serde(rename = "lockFX")]
     pub lock_fx: Option<u64>,
     /// The move FX slider in the video settings.
-    /// 
+    ///
     /// Normal values: integer from 0 to 5
     #[serde(rename = "moveFX")]
     pub move_fx: Option<u64>,
     /// The field sway slider in the video settings.
-    /// 
+    ///
     /// Normal values: integer from 0 to 5
     #[serde(rename = "shakeFX")]
     pub shake_fx: Option<u64>,
     /// The splash FX slider in the video settings.
-    /// 
+    ///
     /// Normal values: integer from 0 to 5
     #[serde(rename = "splashFX")]
     pub splash_fx: Option<u64>,
 
     /// The DAS (delayed auto-shift) slider in the control settings.
-    /// 
+    ///
     /// Normal values: integer from 0 to 20, measured in frames  
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
     pub das: Option<u64>,
     /// The ARR (auto-repeat rate) slider in the control settings.
-    /// 
+    ///
     /// Normal values: integer from 0 to 15, measured in frames  
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
     pub arr: Option<u64>,
     /// The soft-drop DAS (delayed auto-shift) slider in the control settings.
-    /// 
+    ///
     /// Normal values: integer from 0 to 10, measured in frames  
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
     pub sddas: Option<u64>,
     /// The soft-drop ARR (auto-repeat rate) slider in the control settings.
-    /// 
+    ///
     /// Normal values: integer from 0 to 4, measured in frames  
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
     pub sdarr: Option<u64>,
     /// The DAS (delayed auto-shift) cut slider in the control settings.
-    /// 
+    ///
     /// Normal values: integer from 0 to 20, measured in frames  
     /// Learn more about DAS: <https://tetris.wiki/DAS>  
     pub dascut: Option<u64>,
     /// The IRS (initial rotation system) cut slider in the control settings.
-    /// 
+    ///
     /// Normal values: integer from 0 to 20, measured in frames  
     /// Learn more about IRS: <https://tetris.wiki/IRS>  
     /// Version info: This is only available on game versions >=0.17.22
     pub irscut: Option<u64>,
     /// The auto-lock cut slider in the control settings.
-    /// 
+    ///
     /// Normal values: integer from 0 to 10, measured in frames
     pub dropcut: Option<u64>,
 
     /// The IRS (initial rotation system) checkbox in the control settings.
-    /// 
+    ///
     /// Learn more about IRS: <https://tetris.wiki/IRS>
     pub irs: Option<bool>,
     /// The IHS (initial hold system) checkbox in the control settings.
-    /// 
+    ///
     /// Learn more about IHS: <https://tetris.wiki/IHS>
     pub ihs: Option<bool>,
     /// The IMS (initial movement system) checkbox in the control settings.
-    /// 
+    ///
     /// Analogous to [IRS][<https://tetris.wiki/IRS>] and [IHS][<https://tetris.wiki/IHS>],
     /// but for movement instead of rotating and holding, respectively.
     pub ims: Option<bool>,
     /// The rotation system used in the replay.
-    /// 
+    ///
     /// Normal values (as of January 2025):
     /// - `TRS`
     /// - [`SRS`][<https://tetris.wiki/SRS>]
@@ -288,7 +302,7 @@ pub struct PlayerSettings {
     /// The rotation center opacity option in the video settings.
     pub center: Option<f64>,
     /// The starting orientations of all the pieces.
-    /// 
+    ///
     /// Normally contains 29 elements: 7 tetrominoes, 18 pentominoes, 2 trominoes, 1 domino, and 1 monomino, in that order.
     pub face: Option<Vec<u64>>,
     /// The ghost piece opacity option in the video settings.
@@ -302,7 +316,7 @@ pub struct PlayerSettings {
     /// The "score pop-ups" option in the video settings.
     pub score: Option<bool>,
     /// The colors of all the pieces.
-    /// 
+    ///
     /// Normally contains 29 elements: 7 tetrominoes, 18 pentominoes, 2 trominoes, 1 domino, and 1 monomino, in that order.
     pub skin: Option<Vec<u64>>,
     /// THe smooth falling option option in the video settings.
@@ -317,11 +331,11 @@ pub struct PlayerSettings {
     pub warn: Option<bool>,
 
     /// The "Frame skip" option in the video settings.
-    /// 
+    ///
     /// This option was removed in version 0.17.2 of the game.
     #[serde(rename = "FTLock")]
     pub ft_lock: Option<bool>,
-    
+
     /// Additional settings that may not be standard.
     #[serde(flatten)]
     pub nonstandard: HashMap<String, serde_json::Value>,
@@ -358,7 +372,7 @@ pub struct GameReplayMetadata {
     /// A list of mods applied to the run.
     ///
     /// It's in the format of [mod, value], where mod is the mod ID and value is the value given to the mod.
-    /// 
+    ///
     /// Note: the original metadata JSON has calls this value `mod`, but since it's misleading (not plural)
     /// and is a special keyword in Rust, this has been renamed to `mods` in the struct.  
     /// This probably means nothing to you, since all the serialization and deserialization will
@@ -384,12 +398,12 @@ pub struct GameReplayMetadata {
 pub enum ReplayParseError {
     /// An error occurred when zlib tried to decompress the replay data.
     ///
-    /// See [DecompressError] for more information.
+    /// See [`DecompressError`] for more information.
     ZlibDecompressError(DecompressError),
 
     /// An error occurred while parsing the base64 string.
     ///
-    /// See [DecodeError] for more information.
+    /// See [`DecodeError`] for more information.
     Base64DecodeError(DecodeError),
 
     /// The separator between the replay metadata and the input data was not found.
@@ -461,10 +475,10 @@ pub enum ReplaySerializeError {
     UnknownInputParseMode(String),
 
     /// The input [`Vec`] isn't sorted.
-    /// 
+    ///
     /// The serializer expects the input [`Vec`] to be sorted, or the game may parse the inputs
     /// in a strange way.
-    /// 
+    ///
     /// To fix this error, consider calling [`sort_inputs`][GameReplayData::sort_inputs] on the
     /// [`GameReplayData`] before serializing it.
     UnsortedInput {
@@ -522,6 +536,7 @@ impl InputParseMode {
     /// Tries to infer the input parse mode based on the game version.
     ///
     /// If parsing the version fails, it will return `None`.
+    #[must_use]
     pub fn try_infer_from_version(version: &str) -> Option<InputParseMode> {
         let lower = version.to_ascii_lowercase();
         let lower = lower
@@ -560,17 +575,17 @@ impl InputParseMode {
         if let Ok(v) = version {
             if v < Self::ABSOLUTE_TIMING_START {
                 return Some(InputParseMode::Relative);
-            } else {
-                return Some(InputParseMode::Absolute);
             }
+            return Some(InputParseMode::Absolute);
         }
 
-        return None;
+        None
     }
 
     /// Tries to infer the input parse mode based on the input slice.
-    /// 
+    ///
     /// Returns [`None`] if the input parse mode could not be inferred.
+    #[must_use]
     pub fn try_infer_from_input_data(input_slice: &[u64]) -> Option<InputParseMode> {
         // Absolute mode: expects increasing frame times
         let mut prev_time = 0;
@@ -602,21 +617,22 @@ mod tests {
             ("0.17.22", Some(Absolute)),
             ("v0.17.6@26fc", Some(Relative)),
             ("v 1.2.3", Some(Absolute)),
-
             // https://github.com/MelloBoo44/Techmino-WTF/blob/main/version.lua
             ("WTF", Some(Relative)),
-
             // https://github.com/Another-Soul/Techmino-Unofficial-Expansion/blob/main/version.lua
             ("Unofficial Expansion v0.2.1", Some(Relative)),
-
             // https://github.com/electraminer/Techmino/blob/king_of_stackers/version.lua
-            ("V0.17.22 IRSv1.1 PASSTHROUGHFIXv1.0 KOSv1.2beta TE:Cv1.0", Some(Absolute)),
-
+            (
+                "V0.17.22 IRSv1.1 PASSTHROUGHFIXv1.0 KOSv1.2beta TE:Cv1.0",
+                Some(Absolute),
+            ),
             // https://github.com/electraminer/Techmino/blob/irs/version.lua
             ("V0.17.22 + IRSv1.1.1", Some(Absolute)),
-
             // https://github.com/electraminer/Techmino/blob/king_of_cheesers/version.lua
-            ("V0.17.22 IRSv1.1 PASSTHROUGHFIXv1.0 KOCv0.1beta TE:Cv1.0", Some(Absolute)),
+            (
+                "V0.17.22 IRSv1.1 PASSTHROUGHFIXv1.0 KOCv0.1beta TE:Cv1.0",
+                Some(Absolute),
+            ),
         ];
 
         for (input, expected) in cases {

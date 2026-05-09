@@ -23,7 +23,7 @@ fn main() {
 
         println!(
             "{:?}",
-            techmino_replay_toolkit::GameReplayData::try_from_base64(&input.trim(), None)
+            techmino_replay_toolkit::GameReplayData::try_from_base64(input.trim(), None)
         );
     }
 }
