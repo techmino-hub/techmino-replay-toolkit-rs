@@ -13,12 +13,9 @@ fn test_serialize_deserialize_noop() {
     let cases = get_test_cases();
 
     for (key, val) in cases {
-        let data = match val.data {
-            Some(d) => d,
-            None => {
-                println!("Skipping testcase '{key}' (it has no deserialized data form)");
-                continue;
-            }
+        let Some(data) = val.data else {
+            println!("Skipping testcase '{key}' (it has no deserialized data form)");
+            continue;
         };
 
         println!("Testing for testcase {key}");
@@ -42,12 +39,9 @@ fn test_deserialize_serialize_noop() {
     let cases = get_test_cases();
 
     for (key, val) in cases {
-        let serialized = match val.serialized {
-            Some(r) => r,
-            None => {
-                println!("Skipping testcase '{key}' (it has no serialized data form)");
-                continue;
-            }
+        let Some(serialized) = val.serialized else {
+            println!("Skipping testcase '{key}' (it has no serialized data form)");
+            continue;
         };
 
         println!("Testing for testcase {key}");
@@ -139,7 +133,7 @@ fn regenerate_cases() {
         let file_path = &format!("{root}/{key}.ron", root = cases::TESTCASE_PATH);
 
         match fs::write(file_path, ron) {
-            Ok(_) => {
+            Ok(()) => {
                 println!("Successfully written RON to {file_path}");
             }
             Err(e) => {

@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 /// Represents the type of input event this is.\
 /// That is, whether or not this is a button press event, or a button release event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[repr(u8)]
 pub enum InputEventKind {
     /// A certain button is being pressed in the event.
     Press = 0,
@@ -66,6 +67,7 @@ impl From<InputEventKind> for bool {
 /// Represents the key/button of the input event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[allow(missing_docs)]
+#[repr(u8)]
 pub enum InputEventKey {
     MoveLeft = 1,
     MoveRight = 2,
@@ -159,23 +161,91 @@ impl From<InputEventKey> for u8 {
     }
 }
 
-/// A struct representing a single input event in the game.
+/// A packed struct representing a single input event in the game.
+///
+/// # Layout
+/// The bitwise layout of this struct is currently unstable.
+///
+/// However, here's how it currently looks like:
+/// ```text
+/// 0bA00BBBBB_00CCCCCC_CCCCCCCC_CCCCCCCC_CCCCCCCC_CCCCCCCC_CCCCCCCC_CCCCCCCC
+/// ```
+/// where:
+/// - `0`: Currently unused.
+/// - `A`: The [`InputEventKind`] (1 bit)
+/// - `B`: The [`InputEventKey`] (5 bits, extendable up to 7, maybe 9)
+/// - `C`: The frame number when this event occurred, from the start of the countdown.
+///   Note that the countdown ends at frame 180, at which point the game begins.
+///   Nevertheless, inputs before that point are still recorded.
+///   Note that since the original game uses Lua, which uses floats, it wouldn't
+///   handle integers above 2^53 properly, which is why this one was given 54 bits.
+///   Also see [`Self::MAX_FRAME`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct GameInputEvent {
+#[repr(transparent)]
+pub struct GameInputEvent(i64);
+
+impl GameInputEvent {
+    /// The final frame number where events can be reliably played back by the game.
+    const MAX_FRAME: u64 = 1 << 53;
+
+    /// Create a new packed [`GameInputEvent`].
+    ///
+    /// # Errors
+    /// For this to work, `frame` must be at most [`Self::MAX_FRAME`].
+    /// This will return an error if this condition is not met.
+    pub fn new(
+        kind: InputEventKind,
+        key: InputEventKey,
+        frame: u64,
+    ) -> Result<Self, GameInputEventError> {
+        if frame > Self::MAX_FRAME {
+            return Err(GameInputEventError);
+        }
+
+        let kind = u8::from(kind);
+        let kind = i64::from(kind);
+
+        let key = u8::from(key);
+        let key = i64::from(key);
+
+        let res: i64 = kind << 63 | key << 56 | frame.cast_signed();
+        Ok(Self(res))
+    }
+
     /// A number representing the frame this event occurred in.
     ///
     /// Note that the game starts at frame 180, and the frames before that
     /// happen during the game start countdown. Nevertheless,
     /// the game still records inputs before the countdown finishes.
-    pub frame: u64,
+    #[must_use]
+    pub fn frame(self) -> u64 {
+        self.0.cast_unsigned() & 0x003F_FFFF_FFFF_FFFF
+    }
+
     /// The kind of input event this represents.\
     /// That is - whether or not this is a key press event or a key release event.
-    pub kind: InputEventKind,
+    #[must_use]
+    pub fn kind(self) -> InputEventKind {
+        InputEventKind::from(self.0 < 0)
+    }
+
     /// The key that is being pressed or released.
-    ///
-    /// See [`InputEventKey`] for more details.
-    pub key: InputEventKey,
+    #[must_use]
+    #[expect(
+        clippy::missing_panics_doc,
+        reason = "This function should never panic\
+        unless the programmer of this library made a mistake"
+    )]
+    pub fn key(self) -> InputEventKey {
+        let shifted = (self.0.cast_unsigned() >> 56) as u8;
+        let masked = shifted & 0x1F;
+        InputEventKey::try_from(masked).expect("bitwise operation mistake!")
+    }
 }
+
+/// The error type for when the game input event couldn't be created.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GameInputEventError;
 
 /// A struct representing all the data contained within the game replay.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
@@ -325,10 +395,6 @@ pub struct PlayerSettings {
     pub skin: Option<Vec<u64>>,
     /// The smooth falling option option in the video settings.
     pub smooth: Option<bool>,
-    // TODO: Investigate what this does
-    // ...seems like I somehow got it at Jul 11 2024
-    // https://github.com/techmino-hub/techmino-replay-parser/commit/36b4ab33acb451c3a76ef951ef58ae308d711c50
-    pub swap: Option<bool>,
     /// The line clear popups option in the video settings.
     pub text: Option<bool>,
     /// The danger alerts option in the video settings.
@@ -642,5 +708,10 @@ mod tests {
         for (input, expected) in cases {
             assert_eq!(InputParseMode::try_infer_from_version(input), expected);
         }
+    }
+
+    #[test]
+    fn test_event_roundtrip() {
+        // todo!();
     }
 }

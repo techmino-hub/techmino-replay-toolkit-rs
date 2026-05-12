@@ -1,55 +1,15 @@
 GameReplayData(
     inputs: [
-        GameInputEvent(
-            frame: 62,
-            kind: Press,
-            key: HardDrop,
-        ),
-        GameInputEvent(
-            frame: 62,
-            kind: Release,
-            key: HardDrop,
-        ),
-        GameInputEvent(
-            frame: 86,
-            kind: Press,
-            key: MoveRight,
-        ),
-        GameInputEvent(
-            frame: 86,
-            kind: Release,
-            key: MoveRight,
-        ),
-        GameInputEvent(
-            frame: 99,
-            kind: Press,
-            key: SoftDrop,
-        ),
-        GameInputEvent(
-            frame: 99,
-            kind: Release,
-            key: SoftDrop,
-        ),
-        GameInputEvent(
-            frame: 128,
-            kind: Press,
-            key: MoveLeft,
-        ),
-        GameInputEvent(
-            frame: 128,
-            kind: Release,
-            key: MoveLeft,
-        ),
-        GameInputEvent(
-            frame: 180,
-            kind: Press,
-            key: RotateRight,
-        ),
-        GameInputEvent(
-            frame: 180,
-            kind: Release,
-            key: RotateRight,
-        ),
+        GameInputEvent(432345564227567678),
+        GameInputEvent(-8791026472627208130),
+        GameInputEvent(144115188075855958),
+        GameInputEvent(-9079256848778919850),
+        GameInputEvent(504403158265495651),
+        GameInputEvent(-8718968878589280157),
+        GameInputEvent(72057594037928064),
+        GameInputEvent(-9151314442816847744),
+        GameInputEvent(216172782113783988),
+        GameInputEvent(-9007199254740991820),
     ],
     metadata: {
         "tasUsed": Some(true),
@@ -150,7 +110,6 @@ GameReplayData(
                 8,
             ]),
             "smooth": Some(true),
-            "swap": None,
             "text": Some(true),
             "warn": Some(true),
             "FTLock": None,

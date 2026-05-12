@@ -1,4 +1,4 @@
-use crate::types::{GameReplayData, InputParseMode, ReplaySerializeError, GameInputEvent};
+use crate::types::{GameInputEvent, GameReplayData, InputParseMode, ReplaySerializeError};
 use alloc::string::String;
 use alloc::vec::Vec;
 use base64::engine::general_purpose::STANDARD as B64;
@@ -13,7 +13,7 @@ impl GameReplayData {
     /// This can be necessary sometimes as serializing the replay (e.g., into base64)
     /// requires that the inputs are sorted for the algorithm to work properly.
     pub fn sort_inputs(&mut self) {
-        self.inputs.sort_by_key(|i| i.frame);
+        self.inputs.sort_by_key(|i| i.frame());
     }
 
     /// Serialize into a raw, uncompressed byte array.
@@ -29,19 +29,20 @@ impl GameReplayData {
     /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.\
     /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
     /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
+    ///
+    /// # Errors
+    /// For more information, refer to [`ReplaySerializeError`]
     pub fn serialize_to_raw(
         &self,
         input_mode: Option<InputParseMode>,
     ) -> Result<Vec<u8>, ReplaySerializeError> {
-        let input_mode = match input_mode
-            .or_else(|| InputParseMode::try_infer_from_version(&self.metadata.version))
-        {
-            Some(mode) => mode,
-            None => {
-                return Err(ReplaySerializeError::UnknownInputParseMode(
-                    self.metadata.version.clone(),
-                ))
-            }
+        let input_mode =
+            input_mode.or_else(|| InputParseMode::try_infer_from_version(&self.metadata.version));
+
+        let Some(input_mode) = input_mode else {
+            return Err(ReplaySerializeError::UnknownInputParseMode(
+                self.metadata.version.clone(),
+            ));
         };
 
         let json = serde_json::to_string(&self.metadata)?;
@@ -58,14 +59,14 @@ impl GameReplayData {
 
         let mut prev_time = 0;
         for input in inputs {
-            let key = u8::from(input.key) | (u8::from(input.kind) << 5);
+            let key = u8::from(input.key()) | (u8::from(input.kind()) << 5);
 
             let time = match input_mode {
-                InputParseMode::Relative => input.frame - prev_time,
-                InputParseMode::Absolute => input.frame,
+                InputParseMode::Relative => input.frame() - prev_time,
+                InputParseMode::Absolute => input.frame(),
             };
 
-            prev_time = input.frame;
+            prev_time = input.frame();
 
             bytes.push(u64::from(key));
             bytes.push(time);
@@ -89,6 +90,9 @@ impl GameReplayData {
     /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.\
     /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
     /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
+    ///
+    /// # Errors
+    /// For more information, refer to [`ReplaySerializeError`]
     pub fn serialize_to_compressed(
         &self,
         input_mode: Option<InputParseMode>,
@@ -109,6 +113,9 @@ impl GameReplayData {
     /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.\
     /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
     /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
+    ///
+    /// # Errors
+    /// For more information, refer to [`ReplaySerializeError`]
     pub fn serialize_to_base64(
         &self,
         input_mode: Option<InputParseMode>,
@@ -124,41 +131,16 @@ fn get_first_unsorted(inputs: &[GameInputEvent]) -> Option<ReplaySerializeError>
         let prev = window[0];
         let cur = window[1];
 
-        if cur.frame < prev.frame {
+        if cur.frame() < prev.frame() {
             return Some(ReplaySerializeError::UnsortedInput {
                 first_unsorted_index: index + 1,
-                prev_time: prev.frame,
-                unsorted_time: cur.frame,
+                prev_time: prev.frame(),
+                unsorted_time: cur.frame(),
             });
         }
     }
 
     None
-}
-
-fn _create_vlqs(values: &[u64]) -> Vec<u8> {
-    // Estimation: most values need around 2 bytes
-    let mut vlqs = Vec::with_capacity(values.len() * 2);
-
-    // u64 is up to 9 VLQ bytes
-    let mut vlq = Vec::with_capacity(9);
-    for &value in values {
-        vlq.clear();
-        let mut value = value;
-
-        vlq.push((value & 0x7F) as u8);
-        value >>= 7;
-
-        while value > 0 {
-            vlq.push(((value & 0x7F) | 0x80) as u8);
-            value >>= 7;
-        }
-
-        vlq.reverse();
-        vlqs.append(&mut vlq);
-    }
-
-    vlqs
 }
 
 fn append_vlqs(buffer: &mut Vec<u8>, values: &[u64]) {
@@ -175,6 +157,10 @@ fn append_vlqs(buffer: &mut Vec<u8>, values: &[u64]) {
         value >>= 7;
 
         while value > 0 {
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "This is already masked and should never truncate"
+            )]
             vlq.push(((value & 0x7F) | 0x80) as u8);
             value >>= 7;
         }
@@ -189,6 +175,35 @@ mod tests {
     use super::*;
 
     use alloc::vec;
+
+    fn create_vlqs(values: &[u64]) -> Vec<u8> {
+        // Estimation: most values need around 2 bytes
+        let mut vlqs = Vec::with_capacity(values.len() * 2);
+
+        // u64 is up to 9 VLQ bytes
+        let mut vlq = Vec::with_capacity(9);
+        for &value in values {
+            vlq.clear();
+            let mut value = value;
+
+            vlq.push((value & 0x7F) as u8);
+            value >>= 7;
+
+            while value > 0 {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "This is already masked and should never truncate"
+                )]
+                vlq.push(((value & 0x7F) | 0x80) as u8);
+                value >>= 7;
+            }
+
+            vlq.reverse();
+            vlqs.append(&mut vlq);
+        }
+
+        vlqs
+    }
 
     #[test]
     fn test_vlq_creation() {
@@ -212,7 +227,7 @@ mod tests {
         ];
 
         for (expected, values) in cases {
-            assert_eq!(_create_vlqs(&values), expected);
+            assert_eq!(create_vlqs(&values), expected);
         }
     }
 

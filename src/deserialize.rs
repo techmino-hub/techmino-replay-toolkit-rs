@@ -19,6 +19,9 @@ impl GameReplayData {
     /// This is useful for preventing errors from occurring if this function fails to recognize
     /// the game version to automatically infer its parse mode.\
     /// For more information, see [`InputParseMode`].
+    ///
+    /// # Errors
+    /// For more information on possible errors, look at the [`ReplayParseError`] struct.
     pub fn try_from_base64(
         string: &str,
         parse_mode: Option<InputParseMode>,
@@ -38,6 +41,9 @@ impl GameReplayData {
     /// This is useful for preventing errors from occurring if this function fails to recognize
     /// the game version to automatically infer its parse mode.
     /// For more information, see [`InputParseMode`].
+    ///
+    /// # Errors
+    /// For more information on possible errors, look at the [`ReplayParseError`] struct.
     pub fn try_from_compressed(
         data: &[u8],
         parse_mode: Option<InputParseMode>,
@@ -56,13 +62,15 @@ impl GameReplayData {
     ///
     /// This function is only useful if you managed to get the replay in the uncompressed form,
     /// which doesn't usually seem to be the case.
+    ///
+    /// # Errors
+    /// For more information on possible errors, look at the [`ReplayParseError`] struct.
     pub fn try_from_raw(
         data: &[u8],
         parse_mode: Option<InputParseMode>,
     ) -> Result<GameReplayData, ReplayParseError> {
-        let first_newline = match data.iter().position(|&el| el == 10) {
-            Some(loc) => loc,
-            None => return Err(ReplayParseError::MetadataSeparatorNotFound),
+        let Some(first_newline) = data.iter().position(|&el| el == b'\n') else {
+            return Err(ReplayParseError::MetadataSeparatorNotFound);
         };
 
         let (metadata_slice, input_slice) = data.split_at(first_newline);
@@ -71,11 +79,10 @@ impl GameReplayData {
 
         let metadata = GameReplayMetadata::try_from(metadata_slice)?;
 
-        let parse_mode = match parse_mode
-            .or_else(|| InputParseMode::try_infer_from_version(&metadata.version))
-        {
-            Some(mode) => mode,
-            None => return Err(ReplayParseError::UnknownInputParseMode(metadata.version)),
+        let Some(parse_mode) =
+            parse_mode.or_else(|| InputParseMode::try_infer_from_version(&metadata.version))
+        else {
+            return Err(ReplayParseError::UnknownInputParseMode(metadata.version));
         };
 
         Ok(GameReplayData {
@@ -112,18 +119,34 @@ pub(crate) fn parse_input_slice(
             InputParseMode::Absolute => time,
         };
 
+        let Ok(key) = u8::try_from(key) else {
+            return Err(ReplayParseError::MalformedInputData {
+                position: position as u64 * 2,
+                frame,
+                kind: key,
+            });
+        };
+
         let kind = InputEventKind::from(key > 0b0010_0000);
-        let key = InputEventKey::try_from(key as u8 & 0b0001_1111).map_err(|()| {
-            ReplayParseError::MalformedInputData {
+        let Ok(key) = InputEventKey::try_from(key & 0b0001_1111) else {
+            return Err(ReplayParseError::MalformedInputData {
                 frame,
                 position: position as u64 * 2,
-                kind: key,
-            }
-        })?;
+                kind: u64::from(key),
+            });
+        };
+
+        let Ok(event) = GameInputEvent::new(kind, key, frame) else {
+            return Err(ReplayParseError::MalformedInputData {
+                frame,
+                position: position as u64 * 2,
+                kind: u64::from(u8::from(key)),
+            });
+        };
 
         prev_timestamp = frame;
 
-        events.push(GameInputEvent { frame, kind, key });
+        events.push(event);
     }
 
     Ok(events)

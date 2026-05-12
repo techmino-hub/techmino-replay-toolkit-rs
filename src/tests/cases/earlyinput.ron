@@ -1,15 +1,7 @@
 GameReplayData(
     inputs: [
-        GameInputEvent(
-            frame: 1,
-            kind: Press,
-            key: MoveLeft,
-        ),
-        GameInputEvent(
-            frame: 179,
-            kind: Release,
-            key: MoveLeft,
-        ),
+        GameInputEvent(72057594037927937),
+        GameInputEvent(-9151314442816847693),
     ],
     metadata: {
         "tasUsed": Some(true),
@@ -110,7 +102,6 @@ GameReplayData(
                 8,
             ]),
             "smooth": Some(true),
-            "swap": None,
             "text": Some(true),
             "warn": Some(true),
             "FTLock": None,
