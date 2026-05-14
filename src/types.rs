@@ -66,6 +66,7 @@ impl From<InputEventKind> for bool {
 
 /// Represents the key/button of the input event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "strum", derive(strum::EnumIter))]
 #[allow(missing_docs)]
 #[repr(u8)]
 pub enum InputEventKey {
@@ -675,6 +676,9 @@ impl InputParseMode {
 
 #[cfg(test)]
 mod tests {
+    use fastrand::Rng;
+    use strum::IntoEnumIterator;
+
     use super::*;
 
     #[test]
@@ -710,8 +714,38 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "strum")]
     #[test]
     fn test_event_roundtrip() {
-        // todo!();
+        const ROUNDS: usize = 10_000_000;
+
+        let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
+
+        for i in 0..ROUNDS {
+            let kind: InputEventKind = rng.bool().into();
+            let key = rng.choice(InputEventKey::iter()).unwrap();
+            let frame = rng.u64(0..=GameInputEvent::MAX_FRAME);
+
+            let Ok(event) = GameInputEvent::new(kind, key, frame) else {
+                panic!(
+                    "Failed to create GameInputEvent from args:
+                    Kind: {kind:?} = {kind_discriminant:?}
+                    Key: {key:?} = {key_discriminant:?}
+                    Frame: {frame} = {frame:x}",
+                    kind_discriminant = core::mem::discriminant(&kind),
+                    key_discriminant = core::mem::discriminant(&key),
+                );
+            };
+
+            let (rt_kind, rt_key, rt_frame) = (event.kind(), event.key(), event.frame());
+
+            assert_eq!(kind, rt_kind);
+            assert_eq!(key, rt_key);
+            assert_eq!(frame, rt_frame);
+
+            if i % 1_000_000 == 0 {
+                eprintln!("{i} of {ROUNDS}");
+            }
+        }
     }
 }

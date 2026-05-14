@@ -82,7 +82,7 @@ pub fn get_test_cases() -> HashMap<String, TestCase> {
                     );
                 }
             }
-            "ron" | "dat" | "res" => {
+            "ron" => {
                 let case = map.get_mut(name);
 
                 let contents = String::from_utf8(contents)

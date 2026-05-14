@@ -85,7 +85,7 @@ fn get_ron_config() -> PrettyConfig {
 
 #[test]
 #[ignore = "This test is only for regenerating test cases.\
-    Run with 'cargo test regenerate_cases -- --ignored'"]
+    Run with `cargo test regenerate_cases -- --ignored`"]
 fn regenerate_cases() {
     let cases = get_test_cases();
 

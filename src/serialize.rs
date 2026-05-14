@@ -47,7 +47,9 @@ impl GameReplayData {
 
         let json = serde_json::to_string(&self.metadata)?;
 
-        let mut buffer = Vec::from(json.as_bytes());
+        let mut bytes = Vec::with_capacity(json.len() + self.inputs.len() * 2);
+        bytes.extend_from_slice(json.as_bytes());
+        bytes.push(b'\n');
 
         let inputs = &self.inputs;
 
@@ -55,27 +57,30 @@ impl GameReplayData {
             return Err(u);
         }
 
-        let mut bytes = Vec::with_capacity(inputs.len() * 2);
+        let mut numbers = Vec::with_capacity(inputs.len() * 2);
 
         let mut prev_time = 0;
         for input in inputs {
-            let key = u8::from(input.key()) | (u8::from(input.kind()) << 5);
+            let key = input.key();
+            let kind = input.kind();
+            let frame = input.frame();
+
+            let key = u8::from(key) | (u8::from(kind) << 5);
 
             let time = match input_mode {
-                InputParseMode::Relative => input.frame() - prev_time,
-                InputParseMode::Absolute => input.frame(),
+                InputParseMode::Relative => frame - prev_time,
+                InputParseMode::Absolute => frame,
             };
 
-            prev_time = input.frame();
+            prev_time = frame;
 
-            bytes.push(u64::from(key));
-            bytes.push(time);
+            numbers.push(u64::from(key));
+            numbers.push(time);
         }
 
-        buffer.push(10);
-        append_vlqs(&mut buffer, &bytes);
+        append_vlqs(&mut bytes, &numbers);
 
-        Ok(buffer)
+        Ok(bytes)
     }
 
     /// Serialize into a compressed byte array used by the game.

@@ -75,6 +75,8 @@ impl GameReplayData {
 
         let (metadata_slice, input_slice) = data.split_at(first_newline);
 
+        // This will never panic becaause we already know that there is a
+        // separator
         let input_slice = &input_slice[1..];
 
         let metadata = GameReplayMetadata::try_from(metadata_slice)?;
