@@ -565,6 +565,12 @@ pub enum ReplaySerializeError {
     ///
     /// See [`serde_json`'s Error type][serde_json::Error] for more information.
     MetadataSerializeError(serde_json::Error),
+
+    /// There was an attempt to encode an oversized `u64` into the VLQ format.
+    VlqOverflow {
+        /// The `u64` value that couldn't be encoded into the VLQ format.
+        number: u64,
+    },
 }
 
 impl From<serde_json::Error> for ReplaySerializeError {

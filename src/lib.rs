@@ -22,6 +22,7 @@ extern crate alloc;
 mod deserialize;
 mod serialize;
 mod types;
+mod vlq;
 pub use types::*;
 
 #[cfg(test)]
