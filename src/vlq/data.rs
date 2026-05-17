@@ -175,35 +175,6 @@ mod tests {
     use super::*;
     use fastrand::Rng;
 
-    fn create_vlqs(values: &[u64]) -> Vec<u8> {
-        // Estimation: most values need around 2 bytes
-        let mut vlqs = Vec::with_capacity(values.len() * 2);
-
-        // u64 is up to 9 VLQ bytes
-        let mut vlq = Vec::with_capacity(9);
-        for &value in values {
-            vlq.clear();
-            let mut value = value;
-
-            vlq.push((value & 0x7F) as u8);
-            value >>= 7;
-
-            while value > 0 {
-                #[expect(
-                    clippy::cast_possible_truncation,
-                    reason = "This is already masked and should never truncate"
-                )]
-                vlq.push(((value & 0x7F) | 0x80) as u8);
-                value >>= 7;
-            }
-
-            vlq.reverse();
-            vlqs.append(&mut vlq);
-        }
-
-        vlqs
-    }
-
     #[test]
     fn test_vlq_creation() {
         // Mostly sourced from https://en.wikipedia.org/wiki/Variable-length_quantity#Examples

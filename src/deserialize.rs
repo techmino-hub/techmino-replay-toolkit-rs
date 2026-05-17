@@ -4,9 +4,10 @@ use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use miniz_oxide::inflate;
 
-use crate::types::{
-    GameInputEvent, GameReplayData, GameReplayMetadata, InputEventKey, InputEventKind,
-    InputParseMode, ReplayParseError,
+use crate::{
+    action::{InputActionKey, InputActionKind},
+    types::{GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplayParseError},
+    vlq::{VlqData, VlqReader},
 };
 
 impl GameReplayData {
@@ -108,99 +109,117 @@ pub(crate) fn parse_input_slice(
     input_slice: &[u8],
     parse_mode: InputParseMode,
 ) -> Result<Vec<GameInputEvent>, ReplayParseError> {
-    let values = extract_vlqs(input_slice);
+    todo!();
+    // let mut events = Vec::with_capacity(input_slice.len());
 
-    let mut events = Vec::with_capacity(values.len() / 2);
+    // let mut prev_timestamp = 0;
+    // for (position, chunk) in values.chunks_exact(2).enumerate() {
+    //     let (time, key) = (chunk[0], chunk[1]);
 
-    let mut prev_timestamp = 0;
-    for (position, chunk) in values.chunks_exact(2).enumerate() {
-        let (time, key) = (chunk[0], chunk[1]);
+    //     let frame = match parse_mode {
+    //         InputParseMode::Relative => time + prev_timestamp,
+    //         InputParseMode::Absolute => time,
+    //     };
 
-        let frame = match parse_mode {
-            InputParseMode::Relative => time + prev_timestamp,
-            InputParseMode::Absolute => time,
-        };
+    //     let Ok(key) = u8::try_from(key) else {
+    //         return Err(ReplayParseError::MalformedInputData {
+    //             position: position as u64 * 2,
+    //             frame,
+    //             kind: key,
+    //         });
+    //     };
 
-        let Ok(key) = u8::try_from(key) else {
-            return Err(ReplayParseError::MalformedInputData {
-                position: position as u64 * 2,
-                frame,
-                kind: key,
-            });
-        };
+    //     let kind = InputEventKind::from(key > 0b0010_0000);
+    //     let Ok(key) = InputEventKey::try_from(key & 0b0001_1111) else {
+    //         return Err(ReplayParseError::MalformedInputData {
+    //             frame,
+    //             position: position as u64 * 2,
+    //             kind: u64::from(key),
+    //         });
+    //     };
 
-        let kind = InputEventKind::from(key > 0b0010_0000);
-        let Ok(key) = InputEventKey::try_from(key & 0b0001_1111) else {
-            return Err(ReplayParseError::MalformedInputData {
-                frame,
-                position: position as u64 * 2,
-                kind: u64::from(key),
-            });
-        };
+    //     let Ok(event) = GameInputEvent::new(kind, key, frame) else {
+    //         return Err(ReplayParseError::MalformedInputData {
+    //             frame,
+    //             position: position as u64 * 2,
+    //             kind: u64::from(u8::from(key)),
+    //         });
+    //     };
 
-        let Ok(event) = GameInputEvent::new(kind, key, frame) else {
-            return Err(ReplayParseError::MalformedInputData {
-                frame,
-                position: position as u64 * 2,
-                kind: u64::from(u8::from(key)),
-            });
-        };
+    //     prev_timestamp = frame;
 
-        prev_timestamp = frame;
+    //     events.push(event);
+    // }
 
-        events.push(event);
-    }
-
-    Ok(events)
+    // Ok(events)
 }
 
-pub(crate) fn extract_vlqs(vlqs: &[u8]) -> Vec<u64> {
-    let mut numbers = Vec::with_capacity(vlqs.len());
+pub(crate) fn parse_input_iter<I>(
+    mut input_iter: I,
+    parse_mode: InputParseMode,
+) -> Result<Vec<GameInputEvent>, ReplayParseError>
+where
+    I: Iterator<Item = u8>,
+{
+    loop {
+        // It goes frame first then key.
+        let mut reader = VlqReader::new(input_iter);
 
-    let mut cur_num: u64 = 0;
-    for &vlq in vlqs {
-        let value = vlq & 0x7F;
-        cur_num <<= 7;
-        cur_num |= u64::from(value);
+        let frame_vlq = reader.next();
 
-        let msb = vlq >= 0x80;
-        if !msb {
-            numbers.push(cur_num);
-            cur_num = 0;
-        }
+        input_iter = reader.into_inner();
     }
 
-    numbers
+    todo!();
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use alloc::vec;
+//: hmmm should i really output once even though i know it's an iterator
+//: i don't think so
 
-    #[test]
-    fn test_vlq_extraction() {
-        // Mostly sourced from https://en.wikipedia.org/wiki/Variable-length_quantity#Examples
-        let cases = [
-            (vec![0x00], vec![0x00]),
-            (vec![0x01], vec![0x01]),
-            (vec![0x7F], vec![0x7F]),
-            (vec![0x81, 0x00], vec![0x80]),
-            (vec![0xC0, 0x00], vec![0x2000]),
-            (vec![0xFF, 0x7F], vec![0x3FFF]),
-            (vec![0x81, 0x80, 0x00], vec![0x4000]),
-            (vec![0xFF, 0xFF, 0x7F], vec![0x001F_FFFF]),
-            (
-                vec![0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0x7F],
-                vec![0x001F_FFFF, 0x001F_FFFF],
-            ),
-            (vec![0x81, 0x80, 0x80, 0x00], vec![0x0020_0000]),
-            (vec![0x01, 0x01, 0x01], vec![1, 1, 1]),
-            (vec![0x8F, 0x00], vec![1920]),
-        ];
+/// Gets the raw frame-key input pairs, with no relative/absolute
+/// processing.
+///
+/// Use [`parse_input_iter`] for the version with that kind of processing.
+fn get_raw_input_pairs<I>(mut input_iter: I) -> RawInputPairsIter<I>
+where
+    I: Iterator<Item = u8>,
+{
+    todo!();
+}
 
-        for (input, expected) in cases {
-            assert_eq!(extract_vlqs(&input), expected);
-        }
+struct RawInputPairsIter<I: Iterator<Item = u8>>(Option<I>);
+
+impl<I> Iterator for RawInputPairsIter<I>
+where
+    I: Iterator<Item = u8>,
+{
+    type Item = (VlqData, (InputActionKey, InputActionKind));
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut reader = VlqReader::new(self.0.take()?);
+
+        let frame = reader.next()?.unwrap(); // FIXME: error handling
+
+        let mut iter = reader.into_inner();
+
+        let keycode = iter.next()?;
+
+        todo!();
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let Some(ref iter) = self.0 else {
+            return (0, Some(0));
+        };
+
+        let bytes_hint = iter.size_hint();
+
+        // Min case: Each frame is 8 bytes, so each event is 9 bytes
+        let min = bytes_hint.0 / 9;
+
+        // Max case: Each frame is 1 byte, so each event is 2 bytes
+        let max = bytes_hint.1.map(|max| max / 2);
+
+        (min, max)
     }
 }

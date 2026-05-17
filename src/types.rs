@@ -1,3 +1,5 @@
+//! General types and structs to represent metadata and other trivial data.
+
 use alloc::{
     string::{FromUtf8Error, String},
     vec::Vec,
@@ -14,153 +16,7 @@ use miniz_oxide::inflate::DecompressError;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
-/// Represents the type of input event this is.\
-/// That is, whether or not this is a button press event, or a button release event.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum InputEventKind {
-    /// A certain button is being pressed in the event.
-    Press = 0,
-    /// A certain button is being released in the event.
-    Release = 1,
-}
-
-impl TryFrom<u8> for InputEventKind {
-    type Error = ();
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::Press),
-            1 => Ok(Self::Release),
-            _ => Err(()),
-        }
-    }
-}
-
-impl From<bool> for InputEventKind {
-    fn from(value: bool) -> Self {
-        if value {
-            Self::Release
-        } else {
-            Self::Press
-        }
-    }
-}
-
-impl From<InputEventKind> for u8 {
-    fn from(value: InputEventKind) -> Self {
-        match value {
-            InputEventKind::Press => 0,
-            InputEventKind::Release => 1,
-        }
-    }
-}
-
-impl From<InputEventKind> for bool {
-    fn from(value: InputEventKind) -> Self {
-        match value {
-            InputEventKind::Press => false,
-            InputEventKind::Release => true,
-        }
-    }
-}
-
-/// Represents the key/button of the input event.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "strum", derive(strum::EnumIter))]
-#[allow(missing_docs)]
-#[repr(u8)]
-pub enum InputEventKey {
-    MoveLeft = 1,
-    MoveRight = 2,
-    RotateRight = 3,
-    RotateLeft = 4,
-    Rotate180 = 5,
-    HardDrop = 6,
-    SoftDrop = 7,
-    Hold = 8,
-
-    Function1 = 9,
-    Function2 = 10,
-
-    InstantLeft = 11,
-    InstantRight = 12,
-    SonicDrop = 13,
-    Down1 = 14,
-    Down4 = 15,
-    Down10 = 16,
-    LeftDrop = 17,
-    RightDrop = 18,
-    LeftZangi = 19,
-    RightZangi = 20,
-}
-
-impl TryFrom<u8> for InputEventKey {
-    type Error = ();
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        use InputEventKey::{
-            Down1, Down10, Down4, Function1, Function2, HardDrop, Hold, InstantLeft, InstantRight,
-            LeftDrop, LeftZangi, MoveLeft, MoveRight, RightDrop, RightZangi, Rotate180, RotateLeft,
-            RotateRight, SoftDrop, SonicDrop,
-        };
-
-        match value {
-            1 => Ok(MoveLeft),
-            2 => Ok(MoveRight),
-            3 => Ok(RotateRight),
-            4 => Ok(RotateLeft),
-            5 => Ok(Rotate180),
-            6 => Ok(HardDrop),
-            7 => Ok(SoftDrop),
-            8 => Ok(Hold),
-            9 => Ok(Function1),
-            10 => Ok(Function2),
-            11 => Ok(InstantLeft),
-            12 => Ok(InstantRight),
-            13 => Ok(SonicDrop),
-            14 => Ok(Down1),
-            15 => Ok(Down4),
-            16 => Ok(Down10),
-            17 => Ok(LeftDrop),
-            18 => Ok(RightDrop),
-            19 => Ok(LeftZangi),
-            20 => Ok(RightZangi),
-            _ => Err(()),
-        }
-    }
-}
-
-impl From<InputEventKey> for u8 {
-    fn from(value: InputEventKey) -> Self {
-        use InputEventKey::{
-            Down1, Down10, Down4, Function1, Function2, HardDrop, Hold, InstantLeft, InstantRight,
-            LeftDrop, LeftZangi, MoveLeft, MoveRight, RightDrop, RightZangi, Rotate180, RotateLeft,
-            RotateRight, SoftDrop, SonicDrop,
-        };
-
-        match value {
-            MoveLeft => 1,
-            MoveRight => 2,
-            RotateRight => 3,
-            RotateLeft => 4,
-            Rotate180 => 5,
-            HardDrop => 6,
-            SoftDrop => 7,
-            Hold => 8,
-            Function1 => 9,
-            Function2 => 10,
-            InstantLeft => 11,
-            InstantRight => 12,
-            SonicDrop => 13,
-            Down1 => 14,
-            Down4 => 15,
-            Down10 => 16,
-            LeftDrop => 17,
-            RightDrop => 18,
-            LeftZangi => 19,
-            RightZangi => 20,
-        }
-    }
-}
+use crate::{InputActionKey, InputActionKind};
 
 /// A packed struct representing a single input event in the game.
 ///
@@ -195,8 +51,8 @@ impl GameInputEvent {
     /// For this to work, `frame` must be at most [`Self::MAX_FRAME`].
     /// This will return an error if this condition is not met.
     pub fn new(
-        kind: InputEventKind,
-        key: InputEventKey,
+        kind: InputActionKind,
+        key: InputActionKey,
         frame: u64,
     ) -> Result<Self, GameInputEventError> {
         if frame > Self::MAX_FRAME {
@@ -226,8 +82,8 @@ impl GameInputEvent {
     /// The kind of input event this represents.\
     /// That is - whether or not this is a key press event or a key release event.
     #[must_use]
-    pub fn kind(self) -> InputEventKind {
-        InputEventKind::from(self.0 < 0)
+    pub fn kind(self) -> InputActionKind {
+        InputActionKind::from(self.0 < 0)
     }
 
     /// The key that is being pressed or released.
@@ -237,10 +93,10 @@ impl GameInputEvent {
         reason = "This function should never panic\
         unless the programmer of this library made a mistake"
     )]
-    pub fn key(self) -> InputEventKey {
+    pub fn key(self) -> InputActionKey {
         let shifted = (self.0.cast_unsigned() >> 56) as u8;
         let masked = shifted & 0x1F;
-        InputEventKey::try_from(masked).expect("bitwise operation mistake!")
+        InputActionKey::try_from(masked).expect("bitwise operation mistake!")
     }
 }
 
@@ -728,8 +584,8 @@ mod tests {
         let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
 
         for i in 0..ROUNDS {
-            let kind: InputEventKind = rng.bool().into();
-            let key = rng.choice(InputEventKey::iter()).unwrap();
+            let kind: InputActionKind = rng.bool().into();
+            let key = rng.choice(InputActionKey::iter()).unwrap();
             let frame = rng.u64(0..=GameInputEvent::MAX_FRAME);
 
             let Ok(event) = GameInputEvent::new(kind, key, frame) else {
