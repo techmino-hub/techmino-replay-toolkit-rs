@@ -1,7 +1,4 @@
-use core::{
-    iter::{Copied, FusedIterator},
-    num::NonZeroU8,
-};
+use core::num::NonZeroU8;
 
 /// A struct representing VLQ-encoded data.
 ///
@@ -80,8 +77,39 @@ impl VlqData {
         Ok(Self { len, bytes })
     }
 
+    /// Converts a len and bytes into a `VlqData`.
+    ///
+    /// # Unchecked Operation
+    /// For this operation to be valid, it must be true that:
+    /// - `len` <= [`Self::MAX_BYTES`]
+    /// - `bytes[..len]` is a valid VLQ, which means:
+    ///     - `bytes[len - 1] < 0x80`
+    ///     - Every byte in `..len - 1`, if any, fulfills >= 0x80
+    ///
+    /// Failing these constraints is a logic error.
+    pub(crate) const fn from_raw_parts(
+        len: NonZeroU8,
+        bytes: [u8; Self::MAX_BYTES as usize],
+    ) -> Self {
+        debug_assert!(len.get() <= Self::MAX_BYTES);
+
+        if cfg!(debug_assertions) {
+            let mut idx = 0u8;
+
+            while idx < len.get() {
+                let msb = bytes[idx as usize] >= 0x80;
+
+                debug_assert!(msb == (idx < len.get() - 1));
+
+                idx += 1;
+            }
+        }
+
+        Self { len, bytes }
+    }
+
     #[must_use]
-    const fn value(&self) -> u64 {
+    pub const fn value(&self) -> u64 {
         let mut value = 0u64;
 
         let mut idx = 0;
@@ -99,24 +127,24 @@ impl VlqData {
     }
 
     /// Get an iterator into the VLQ-encoded bytes.
-    fn iter(&self) -> impl Iterator<Item = u8> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = u8> + '_ {
         self.as_slice().iter().copied()
     }
 
     /// Get the VLQ-encoded bytes as a slice.
     #[must_use]
-    fn as_slice(&self) -> &[u8] {
+    pub fn as_slice(&self) -> &[u8] {
         self.bytes.get(..self.len.get() as usize).unwrap()
     }
 
     /// Get an iterator of VLQ-encoded bytes.
-    fn multi_iter(vlqs: &[Self]) -> impl Iterator<Item = u8> + '_ {
+    pub fn multi_iter(vlqs: &[Self]) -> impl Iterator<Item = u8> + '_ {
         vlqs.iter().flat_map(VlqData::iter)
     }
 
     /// Get a [`Vec`] of VLQ-encoded bytes.
     #[must_use]
-    fn multi_to_vec(vlqs: &[Self]) -> Vec<u8> {
+    pub fn multi_to_vec(vlqs: &[Self]) -> Vec<u8> {
         VlqData::multi_iter(vlqs).collect()
     }
 }
@@ -134,97 +162,18 @@ impl<'v> From<&'v VlqData> for &'v [u8] {
     }
 }
 
-/// From a byte iterator, read it and get some [`VlqData`] instances.
-pub(crate) struct VlqReader<I: Iterator<Item = u8>>(I);
-
-impl<I: Iterator<Item = u8>> VlqReader<I> {
-    /// Creates a new `VlqReader` which reads from an iterator.
-    #[must_use]
-    pub(crate) fn new(iterator: I) -> Self {
-        Self(iterator)
-    }
-
-    /// Gives back the iterator at the current state.
-    pub(crate) fn into_inner(self) -> I {
-        self.0
-    }
-}
-
-impl<'v> VlqReader<Copied<core::slice::Iter<'v, u8>>> {
-    /// Creates a new `VlqReader` from a slice.
-    #[must_use]
-    pub(crate) fn from_slice(slice: &'v [u8]) -> Self {
-        Self(slice.iter().copied())
-    }
-}
-
-impl<I> Iterator for VlqReader<I>
-where
-    I: Iterator<Item = u8>,
-{
-    type Item = Result<VlqData, VlqDecodeError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // Find end of vlq value
-        // .next() until we get one where msb is OFF
-        let mut buf = [0u8; VlqData::MAX_BYTES as usize];
-
-        let mut idx = 0u8;
-
-        while (idx as usize) < buf.len() {
-            let byte = self.0.next()?;
-            buf[idx as usize] = byte;
-            idx += 1;
-            if byte.cast_signed() >= 0 {
-                break;
-            }
-        }
-
-        if idx as usize == buf.len() && buf.last().unwrap().cast_signed() < 0 {
-            return Some(Err(VlqDecodeError { partial_vlq: buf }));
-        }
-
-        let data = VlqData {
-            bytes: buf,
-            len: NonZeroU8::new(idx).unwrap(),
-        };
-
-        Some(Ok(data))
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        // Minimum case: A single really large vlq value
-        let min = self.0.size_hint().0 / VlqData::MAX_BYTES as usize;
-        // Maximum case: A lot of single-byte "vlq"s
-        let max = self.0.size_hint().1;
-
-        (min, max)
-    }
-}
-
-impl<I> FusedIterator for VlqReader<I> where I: Iterator<Item = u8> + FusedIterator {}
-
 /// There was an attempt to encode an oversized `u64` into the VLQ format.
 #[derive(Debug)]
 pub struct VlqEncodeError {
     /// The `u64` value that couldn't be encoded into the VLQ format.
+    #[expect(dead_code, reason = "this is purely for diagnostic purposes")]
     number: u64,
-}
-
-/// There was an attempt to decode an oversized VLQ into a `u64`.
-#[derive(Debug)]
-pub struct VlqDecodeError {
-    /// Part of the VLQ byte array that couldn't be encoded into the `u64` format.
-    partial_vlq: [u8; VlqData::MAX_BYTES as usize],
 }
 
 #[cfg(test)]
 mod tests {
-    use fastrand::Rng;
-
-    use crate::{GameReplayData, InputParseMode};
-
     use super::*;
+    use fastrand::Rng;
 
     fn create_vlqs(values: &[u64]) -> Vec<u8> {
         // Estimation: most values need around 2 bytes
@@ -278,38 +227,6 @@ mod tests {
             assert_eq!(vlq.as_slice(), expected_vlqs.as_slice());
         }
     }
-
-    #[test]
-    fn test_vlq_extraction() {
-        // Mostly sourced from https://en.wikipedia.org/wiki/Variable-length_quantity#Examples
-        let cases = [
-            (vec![0x00], vec![0x00]),
-            (vec![0x01], vec![0x01]),
-            (vec![0x7F], vec![0x7F]),
-            (vec![0x81, 0x00], vec![0x80]),
-            (vec![0xC0, 0x00], vec![0x2000]),
-            (vec![0xFF, 0x7F], vec![0x3FFF]),
-            (vec![0x81, 0x80, 0x00], vec![0x4000]),
-            (vec![0xFF, 0xFF, 0x7F], vec![0x001F_FFFF]),
-            (
-                vec![0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0x7F],
-                vec![0x001F_FFFF, 0x001F_FFFF],
-            ),
-            (vec![0x81, 0x80, 0x80, 0x00], vec![0x0020_0000]),
-            (vec![0x01, 0x01, 0x01], vec![1, 1, 1]),
-            (vec![0x8F, 0x00], vec![1920]),
-        ];
-
-        for (input, expected) in cases {
-            let values: Box<[u64]> = VlqReader::from_slice(input.as_slice())
-                .map(Result::unwrap)
-                .map(|x| x.value())
-                .collect();
-
-            assert_eq!(&*values, expected.as_slice());
-        }
-    }
-
     #[test]
     fn test_vlq_roundtrip() {
         for i in 0..u64::from(u16::MAX) {
