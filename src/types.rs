@@ -16,9 +16,14 @@ use miniz_oxide::inflate::DecompressError;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
-use crate::{InputActionKey, InputActionKind};
+use crate::{InputAction, InputActionKey, InputActionKind};
 
 /// A packed struct representing a single input event in the game.
+///
+/// Conceptually, an input event consists of a frame number
+/// and an input action. The frame number tells when the input event
+/// occurred, and the input action tells what happened in that
+/// input event.
 ///
 /// # Layout
 /// The bitwise layout of this struct is currently unstable.
@@ -29,8 +34,8 @@ use crate::{InputActionKey, InputActionKind};
 /// ```
 /// where:
 /// - `0`: Currently unused.
-/// - `A`: The [`InputEventKind`] (1 bit)
-/// - `B`: The [`InputEventKey`] (5 bits, extendable up to 7, maybe 9)
+/// - `A`: The [`InputActionKind`] (1 bit)
+/// - `B`: The [`InputActionKey`] (5 bits, extendable up to 7, maybe 9)
 /// - `C`: The frame number when this event occurred, from the start of the countdown.
 ///   Note that the countdown ends at frame 180, at which point the game begins.
 ///   Nevertheless, inputs before that point are still recorded.
@@ -50,14 +55,12 @@ impl GameInputEvent {
     /// # Errors
     /// For this to work, `frame` must be at most [`Self::MAX_FRAME`].
     /// This will return an error if this condition is not met.
-    pub fn new(
-        kind: InputActionKind,
-        key: InputActionKey,
-        frame: u64,
-    ) -> Result<Self, GameInputEventError> {
+    pub fn new(frame: u64, action: InputAction) -> Result<Self, GameInputEventError> {
         if frame > Self::MAX_FRAME {
             return Err(GameInputEventError);
         }
+
+        let InputAction { kind, key } = action;
 
         let kind = u8::from(kind);
         let kind = i64::from(kind);
@@ -83,7 +86,11 @@ impl GameInputEvent {
     /// That is - whether or not this is a key press event or a key release event.
     #[must_use]
     pub fn kind(self) -> InputActionKind {
-        InputActionKind::from(self.0 < 0)
+        if self.0 < 0 {
+            InputActionKind::Release
+        } else {
+            InputActionKind::Press
+        }
     }
 
     /// The key that is being pressed or released.
@@ -91,12 +98,22 @@ impl GameInputEvent {
     #[expect(
         clippy::missing_panics_doc,
         reason = "This function should never panic\
-        unless the programmer of this library made a mistake"
+        unless the programmer of this library made a mistake\
+        or if an unsound transmutation was done"
     )]
     pub fn key(self) -> InputActionKey {
         let shifted = (self.0.cast_unsigned() >> 56) as u8;
         let masked = shifted & 0x1F;
-        InputActionKey::try_from(masked).expect("bitwise operation mistake!")
+        InputActionKey::try_from(masked).expect("invalid input action key")
+    }
+
+    /// Gets the action that happened in this event.
+    #[must_use]
+    pub fn action(self) -> InputAction {
+        InputAction {
+            key: self.key(),
+            kind: self.kind(),
+        }
     }
 }
 
@@ -586,9 +603,10 @@ mod tests {
         for i in 0..ROUNDS {
             let kind: InputActionKind = rng.bool().into();
             let key = rng.choice(InputActionKey::iter()).unwrap();
+            let action = InputAction { kind, key };
             let frame = rng.u64(0..=GameInputEvent::MAX_FRAME);
 
-            let Ok(event) = GameInputEvent::new(kind, key, frame) else {
+            let Ok(event) = GameInputEvent::new(frame, action) else {
                 panic!(
                     "Failed to create GameInputEvent from args:
                     Kind: {kind:?} = {kind_discriminant:?}

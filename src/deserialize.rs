@@ -5,9 +5,9 @@ use base64::Engine;
 use miniz_oxide::inflate;
 
 use crate::{
-    action::{InputActionKey, InputActionKind},
     types::{GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplayParseError},
-    vlq::{VlqData, VlqReader},
+    vlq::{VlqData, VlqDecodeError, VlqReader},
+    InputAction,
 };
 
 impl GameReplayData {
@@ -154,37 +154,15 @@ pub(crate) fn parse_input_slice(
     // Ok(events)
 }
 
-pub(crate) fn parse_input_iter<I>(
-    mut input_iter: I,
-    parse_mode: InputParseMode,
-) -> Result<Vec<GameInputEvent>, ReplayParseError>
-where
-    I: Iterator<Item = u8>,
-{
-    loop {
-        // It goes frame first then key.
-        let mut reader = VlqReader::new(input_iter);
-
-        let frame_vlq = reader.next();
-
-        input_iter = reader.into_inner();
-    }
-
-    todo!();
-}
-
-//: hmmm should i really output once even though i know it's an iterator
-//: i don't think so
-
 /// Gets the raw frame-key input pairs, with no relative/absolute
 /// processing.
 ///
 /// Use [`parse_input_iter`] for the version with that kind of processing.
-fn get_raw_input_pairs<I>(mut input_iter: I) -> RawInputPairsIter<I>
+fn get_raw_input_pairs<I>(byte_iter: I) -> RawInputPairsIter<I>
 where
     I: Iterator<Item = u8>,
 {
-    todo!();
+    RawInputPairsIter(Some(byte_iter))
 }
 
 struct RawInputPairsIter<I: Iterator<Item = u8>>(Option<I>);
@@ -193,18 +171,28 @@ impl<I> Iterator for RawInputPairsIter<I>
 where
     I: Iterator<Item = u8>,
 {
-    type Item = (VlqData, (InputActionKey, InputActionKind));
+    type Item = Result<(VlqData, InputAction), InvalidInputDataError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut reader = VlqReader::new(self.0.take()?);
 
-        let frame = reader.next()?.unwrap(); // FIXME: error handling
+        let frame = match reader.next()? {
+            Ok(v) => v,
+            Err(e) => return Some(Err(InvalidInputDataError::VlqDecodeError(e))),
+        };
 
         let mut iter = reader.into_inner();
 
-        let keycode = iter.next()?;
+        let actioncode = iter.next()?;
 
-        todo!();
+        let action = match InputAction::try_from(actioncode) {
+            Ok(a) => a,
+            Err(e) => return Some(Err(InvalidInputDataError::InvalidAction(e))),
+        };
+
+        self.0.replace(iter);
+
+        Some(Ok((frame, action)))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -221,5 +209,22 @@ where
         let max = bytes_hint.1.map(|max| max / 2);
 
         (min, max)
+    }
+}
+
+#[derive(Debug)]
+pub enum InvalidInputDataError {
+    VlqDecodeError(VlqDecodeError),
+    InvalidAction(<InputAction as TryFrom<u8>>::Error),
+}
+
+impl From<VlqDecodeError> for InvalidInputDataError {
+    fn from(value: VlqDecodeError) -> Self {
+        Self::VlqDecodeError(value)
+    }
+}
+impl From<<InputAction as TryFrom<u8>>::Error> for InvalidInputDataError {
+    fn from(value: <InputAction as TryFrom<u8>>::Error) -> Self {
+        Self::InvalidAction(value)
     }
 }

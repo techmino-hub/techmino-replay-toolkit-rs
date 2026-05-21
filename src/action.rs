@@ -5,8 +5,35 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Represents the type of input event this is.\
-/// That is, whether or not this is a button press event, or a button release event.
+/// Represents an action associated with a certain input event.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct InputAction {
+    /// Whether or not this is a press action or a release action.
+    pub kind: InputActionKind,
+    /// Represents the key/button that was acted upon at this time.
+    pub key: InputActionKey,
+}
+
+impl TryFrom<u8> for InputAction {
+    // TODO: Replace with actual error type
+    type Error = <InputActionKey as TryFrom<u8>>::Error;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        // TODO: investigate whether this should have been >=
+        let kind = if value > 0b0010_0000 {
+            InputActionKind::Release
+        } else {
+            InputActionKind::Press
+        };
+
+        let keycode = value & 0b0001_1111;
+        let key = InputActionKey::try_from(keycode)?;
+
+        Ok(Self { kind, key })
+    }
+}
+
+/// Whether this is a press action or a release action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum InputActionKind {
@@ -55,7 +82,7 @@ impl From<InputActionKind> for bool {
     }
 }
 
-/// Represents the key/button of the input event.
+/// Represents the key/button that was acted upon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "strum", derive(strum::EnumIter))]
 #[allow(missing_docs)]
@@ -86,6 +113,7 @@ pub enum InputActionKey {
 }
 
 impl TryFrom<u8> for InputActionKey {
+    // TODO: Replace with actual error
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         use InputActionKey::{
