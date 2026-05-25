@@ -43,7 +43,17 @@ where
         let mut idx = 0u8;
 
         while (idx as usize) < buf.len() {
-            let byte = self.0.next()?;
+            let byte = match self.0.next() {
+                Some(b) => b,
+                None => {
+                    if idx == 0 {
+                        return None;
+                    } else {
+                        return Some(Err(VlqDecodeError::UnexpectedEof {}));
+                    }
+                }
+            };
+
             buf[idx as usize] = byte;
             idx += 1;
             if byte.cast_signed() >= 0 {
@@ -52,7 +62,7 @@ where
         }
 
         if idx as usize == buf.len() && buf.last().unwrap().cast_signed() < 0 {
-            return Some(Err(VlqDecodeError { partial_vlq: buf }));
+            return Some(Err(VlqDecodeError::OversizedVlq { partial_vlq: buf }));
         }
 
         let data = VlqData::from_raw_parts(NonZeroU8::new(idx).unwrap(), buf);
@@ -72,11 +82,32 @@ where
 
 impl<I> FusedIterator for VlqReader<I> where I: Iterator<Item = u8> + FusedIterator {}
 
-/// There was an attempt to decode an oversized VLQ into a `u64`.
+/// A VLQ reader state machine that can take in arbitrary chunks
+/// of VLQ-encoded bytes.
+pub(crate) struct VlqReaderSM {
+    buf: [u8; (VlqData::MAX_BYTES - 1) as usize],
+    buf_len: u8,
+}
+
+impl VlqReaderSM {
+    pub(crate) fn new() -> Self {
+        Self {
+            buf: [0u8; _],
+            buf_len: 0,
+        }
+    }
+}
+
+/// Something went wrong trying to decode a VLQ.
 #[derive(Debug)]
-pub struct VlqDecodeError {
-    /// Part of the VLQ byte array that couldn't be encoded into the `u64` format.
-    partial_vlq: [u8; VlqData::MAX_BYTES as usize],
+pub enum VlqDecodeError {
+    /// There was an attempt to decode an oversized VLQ into a `u64`.
+    OversizedVlq {
+        /// Part of the VLQ byte array that couldn't be encoded into the `u64` format.
+        partial_vlq: [u8; VlqData::MAX_BYTES as usize],
+    },
+    /// The iterator finished unexpectedly.
+    UnexpectedEof {},
 }
 
 #[cfg(test)]

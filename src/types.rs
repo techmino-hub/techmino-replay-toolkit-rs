@@ -12,7 +12,10 @@ use std::collections::HashMap;
 use hashbrown::HashMap;
 
 use base64::DecodeError;
-use miniz_oxide::inflate::DecompressError;
+use miniz_oxide::{
+    inflate::{DecompressError, TINFLStatus},
+    MZError,
+};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
@@ -343,7 +346,11 @@ pub enum ReplayParseError {
     /// An error occurred when zlib tried to decompress the replay data.
     ///
     /// See [`DecompressError`] for more information.
-    ZlibDecompressError(DecompressError),
+    ZlibDecompressError {
+        status: TINFLStatus,
+        // TODO: After finishing state machine migration, remove this
+        mz_error: Option<MZError>,
+    },
 
     /// An error occurred while parsing the base64 string.
     ///
@@ -386,7 +393,10 @@ pub enum ReplayParseError {
 
 impl From<DecompressError> for ReplayParseError {
     fn from(value: DecompressError) -> Self {
-        ReplayParseError::ZlibDecompressError(value)
+        ReplayParseError::ZlibDecompressError {
+            status: value.status,
+            mz_error: None,
+        }
     }
 }
 
