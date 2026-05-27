@@ -308,16 +308,6 @@ impl ReplayDecoderState {
                     let mut inputs = Vec::new();
 
                     if let Some(vb) = vlq_bytes {
-                        inputs.push(
-                            GameInputEvent::new(
-                                0,
-                                InputAction {
-                                    kind: crate::InputActionKind::Press,
-                                    key: crate::InputActionKey::Down1,
-                                },
-                            )
-                            .unwrap(),
-                        );
                         todo!("feed bytes to vlq reader");
                     }
 
@@ -583,84 +573,20 @@ mod tests {
     use base64::Engine;
     use fastrand::Rng;
 
-    use crate::{deserialize::ReplayDecoderPreprocessor, format::ReplayBufferKind};
+    use crate::{
+        deserialize::ReplayDecoderPreprocessor,
+        format::ReplayBufferKind,
+        tests::{slightly_random_data, ByteFeeder},
+    };
 
     const PREPROCESSOR_TRIALS: usize = 1024;
-
-    const TEST_DATA_UNCOMPRESSED_LEN: usize = 16384;
-
-    /// At max, how many bits in a byte to turn on.
-    const TEST_DATA_BIT_PER_BYTE: usize = 2;
-
-    const TEST_CHUNK_MAX_SIZE: usize = 48;
-
-    /// Creates not-quite-random data.
-    fn create_data(rng: &mut Rng) -> [u8; TEST_DATA_UNCOMPRESSED_LEN] {
-        core::array::from_fn::<u8, TEST_DATA_UNCOMPRESSED_LEN, _>(|_| {
-            // For every byte, choose at most 3 random bits to turn on
-            let mut byte = 0;
-
-            for _ in 0..TEST_DATA_BIT_PER_BYTE {
-                let bit = rng.u8(..8);
-
-                let mask = 1u8 << bit;
-
-                byte |= mask;
-            }
-
-            byte
-        })
-    }
-
-    /// A struct to split an input data into randomly-sized chunks.
-    struct ByteFeeder<'a> {
-        /// The slice representing the yet-to-be-output data.
-        data: &'a [u8],
-    }
-
-    impl<'a> ByteFeeder<'a> {
-        /// Creates a new byte feeder.
-        fn new(data: &'a [u8]) -> Self {
-            Self { data }
-        }
-
-        /// Get a randomly-sized chunk of data.
-        fn bite(&mut self, rng: &mut Rng) -> &'a [u8] {
-            let chunk_size = rng.usize(1..=(TEST_CHUNK_MAX_SIZE.min(self.data.len())));
-            let (chunk, rest) = self.data.split_at(chunk_size);
-            self.data = rest;
-            chunk
-        }
-
-        /// Whether or not this is empty.
-        fn is_empty(&self) -> bool {
-            self.data.is_empty()
-        }
-    }
-
-    #[test]
-    fn internal_test_byte_feeder() {
-        let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
-
-        for _ in 0..1024 {
-            let init_data = create_data(&mut rng);
-            let mut feeder = ByteFeeder::new(init_data.as_slice());
-            let mut feeder_output = Vec::with_capacity(TEST_DATA_UNCOMPRESSED_LEN);
-
-            while !feeder.is_empty() {
-                feeder_output.extend_from_slice(feeder.bite(&mut rng));
-            }
-
-            assert_eq!(init_data.as_slice(), feeder_output.as_slice());
-        }
-    }
 
     #[test]
     fn preprocess_uncompressed() {
         let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
 
         for _ in 0..PREPROCESSOR_TRIALS {
-            let init_data = create_data(&mut rng);
+            let init_data = slightly_random_data(&mut rng);
             let mut feeder = ByteFeeder::new(init_data.as_slice());
             let mut result_data = Vec::new();
 
@@ -682,7 +608,7 @@ mod tests {
         let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
 
         for _ in 0..PREPROCESSOR_TRIALS {
-            let init_data = create_data(&mut rng);
+            let init_data = slightly_random_data(&mut rng);
 
             let compressed = miniz_oxide::deflate::compress_to_vec_zlib(init_data.as_slice(), 1);
 
@@ -707,7 +633,7 @@ mod tests {
         let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
 
         for _ in 0..PREPROCESSOR_TRIALS {
-            let init_data = create_data(&mut rng);
+            let init_data = slightly_random_data(&mut rng);
 
             let encoded = base64::engine::general_purpose::STANDARD.encode(init_data);
 
@@ -744,7 +670,7 @@ mod tests {
         let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
 
         for _ in 0..PREPROCESSOR_TRIALS {
-            let init_data = create_data(&mut rng);
+            let init_data = slightly_random_data(&mut rng);
 
             let compressed = miniz_oxide::deflate::compress_to_vec_zlib(init_data.as_slice(), 1);
             let encoded = base64::engine::general_purpose::STANDARD.encode(compressed);

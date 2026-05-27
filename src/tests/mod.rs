@@ -1,12 +1,98 @@
 mod cases;
 
 extern crate std;
+use core::ops::Deref;
 use std::{format, fs, println};
 
 use cases::*;
+use fastrand::Rng;
 use ron::ser::PrettyConfig;
 
-use crate::GameReplayData;
+use crate::{vlq::VlqData, GameReplayData};
+
+const TEST_DATA_UNCOMPRESSED_LEN: usize = 16384;
+const TEST_CHUNK_MAX_SIZE: usize = 48;
+
+/// Creates not-quite-random data.
+pub(crate) fn slightly_random_data(rng: &mut Rng) -> [u8; TEST_DATA_UNCOMPRESSED_LEN] {
+    /// At max, how many bits in a byte to turn on.
+    const TEST_DATA_BIT_PER_BYTE: usize = 2;
+
+    core::array::from_fn::<u8, TEST_DATA_UNCOMPRESSED_LEN, _>(|_| {
+        // For every byte, choose at most 3 random bits to turn on
+        let mut byte = 0;
+
+        for _ in 0..TEST_DATA_BIT_PER_BYTE {
+            let bit = rng.u8(..8);
+
+            let mask = 1u8 << bit;
+
+            byte |= mask;
+        }
+
+        byte
+    })
+}
+
+pub(crate) fn random_vlq(rng: &mut Rng) -> VlqData {
+    let max = match rng.u8(..4) {
+        0 => 2,
+        1 => const { u8::MAX as u64 },
+        2 => const { u16::MAX as u64 },
+        _ => VlqData::MAX_REPRESENTABLE,
+    };
+
+    let num = rng.u64(..=max);
+    VlqData::try_from(num).unwrap()
+}
+
+/// A struct to split an input data into randomly-sized chunks.
+pub(crate) struct ByteFeeder<'a> {
+    /// The slice representing the yet-to-be-output data.
+    data: &'a [u8],
+}
+
+impl<'a> ByteFeeder<'a> {
+    /// Creates a new byte feeder.
+    #[must_use]
+    pub(crate) const fn new(data: &'a [u8]) -> Self {
+        Self { data }
+    }
+
+    /// Get a randomly-sized chunk of data.
+    #[must_use]
+    pub(crate) fn bite(&mut self, rng: &mut Rng) -> &'a [u8] {
+        let chunk_size = rng.usize(1..=(TEST_CHUNK_MAX_SIZE.min(self.data.len())));
+        let (chunk, rest) = self.data.split_at(chunk_size);
+        self.data = rest;
+        chunk
+    }
+}
+
+impl<'a> Deref for ByteFeeder<'a> {
+    type Target = &'a [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+#[test]
+fn internal_test_byte_feeder() {
+    let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
+
+    for _ in 0..1024 {
+        let init_data = slightly_random_data(&mut rng);
+        let mut feeder = ByteFeeder::new(init_data.as_slice());
+        let mut feeder_output = Vec::with_capacity(TEST_DATA_UNCOMPRESSED_LEN);
+
+        while !feeder.is_empty() {
+            feeder_output.extend_from_slice(feeder.bite(&mut rng));
+        }
+
+        assert_eq!(init_data.as_slice(), feeder_output.as_slice());
+    }
+}
 
 #[test]
 fn test_serialize_deserialize_noop() {
