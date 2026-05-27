@@ -43,14 +43,11 @@ where
         let mut idx = 0u8;
 
         while (idx as usize) < buf.len() {
-            let byte = match self.0.next() {
-                Some(b) => b,
-                None => {
-                    if idx == 0 {
-                        return None;
-                    }
-                    return Some(Err(VlqDecodeError::UnexpectedEof {}));
+            let Some(byte) = self.0.next() else {
+                if idx == 0 {
+                    return None;
                 }
+                return Some(Err(VlqDecodeError::UnexpectedEof {}));
             };
 
             buf[idx as usize] = byte;
@@ -131,6 +128,8 @@ impl VlqReaderSM {
             }
         }
 
+        self.buf = buf[..(VlqData::MAX_BYTES - 1) as usize].try_into().unwrap();
+
         Ok(())
     }
 }
@@ -189,12 +188,11 @@ mod tests {
 
     #[test]
     fn test_vlq_extraction_sm() {
-        // TODO: Increase to a million
-        const VLQ_AMOUNT: usize = 10;
+        const VLQ_AMOUNT: usize = 1_000_000;
 
         let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
-        let input_vlqs: Box<[_]> = (0..VLQ_AMOUNT).map(|_| random_vlq(&mut rng)).collect();
-        let data: Box<[_]> = input_vlqs.iter().flat_map(VlqData::iter).collect();
+        let input_vlqs: Box<[VlqData]> = (0..VLQ_AMOUNT).map(|_| random_vlq(&mut rng)).collect();
+        let data: Box<[u8]> = VlqData::multi_iter(&input_vlqs).collect();
 
         let mut feeder = ByteFeeder::new(&data);
 
@@ -202,19 +200,10 @@ mod tests {
         let mut output_vlqs = Vec::with_capacity(input_vlqs.len());
 
         while !feeder.is_empty() {
-            sm.update_to_vec(&data, &mut output_vlqs)
+            sm.update_to_vec(feeder.bite(&mut rng), &mut output_vlqs)
                 .expect("sm shouldn't error");
-
-            while !feeder.is_empty() {
-                let _ = feeder.bite(&mut rng);
-                println!("{}", feeder.len());
-            }
-            // TODO: re-enable
-            // sm.update_to_vec(feeder.bite(&mut rng), &mut output_vlqs)
-            //     .expect("sm shouldn't error");
         }
 
         assert_eq!(*input_vlqs, *output_vlqs);
-        todo!("passed temp full buffer version, retry with feeding");
     }
 }

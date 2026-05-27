@@ -85,7 +85,7 @@ impl VlqData {
     /// Failing this constraint is a logic error.
     pub(crate) const fn from_raw(bytes: [u8; Self::MAX_BYTES as usize]) -> Self {
         debug_assert!(
-            u64::from_ne_bytes(bytes) & 0x8080_8080_8080_8080 != 0,
+            u64::from_ne_bytes(bytes) & 0x8080_8080_8080_8080 != 0x8080_8080_8080_8080,
             "invalid vlq: no ending byte found"
         );
 
