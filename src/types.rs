@@ -19,7 +19,7 @@ use miniz_oxide::{
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
-use crate::{InputAction, InputActionKey, InputActionKind};
+use crate::{vlq::VlqDecodeError, InputAction, InputActionKey, InputActionKind};
 
 /// A packed struct representing a single input event in the game.
 ///
@@ -380,14 +380,29 @@ pub enum ReplayParseError {
     /// To fix this error, consider passing in the input parse mode explicitly.
     UnknownInputParseMode(String),
 
+    /// The input data was malformed and could not be decoded from the VLQ stream.
+    MalformedVlqData {
+        /// The inner VLQ decoding error.
+        inner: VlqDecodeError,
+    },
+
     /// The input data was malformed and could not be casted into the proper enum types.
     MalformedInputData {
-        /// The first input data index in which the input data is malformed.
-        position: u64,
-        /// The "frame"/time value of the input data point.
+        /// The unprocessed frame of the associated input event.
+        ///
+        /// This is what's actually stored in the input data, and is
+        /// the same as `frame` if [`InputParseMode`] is
+        /// [`Absolute`][InputParseMode::Absolute].
+        raw_frame: u64,
+        /// The "frame"/time value of the associated input event.
+        ///
+        /// This is the same as `raw_frame` if [`InputParseMode`] is
+        /// [`Absolute`][InputParseMode::Absolute].
         frame: u64,
-        /// The "kind" value of the input data point.
-        kind: u64,
+        /// The action of the associated input event.
+        ///
+        /// See [`InputAction`] for more details.
+        action: u64,
     },
 }
 
@@ -415,6 +430,12 @@ impl From<FromUtf8Error> for ReplayParseError {
 impl From<serde_json::Error> for ReplayParseError {
     fn from(value: serde_json::Error) -> Self {
         Self::MetadataDeserializeError(value)
+    }
+}
+
+impl From<VlqDecodeError> for ReplayParseError {
+    fn from(value: VlqDecodeError) -> Self {
+        Self::MalformedVlqData { inner: value }
     }
 }
 

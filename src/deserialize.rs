@@ -1,19 +1,14 @@
-use std::{borrow::Cow, os::unix::process};
-
-use alloc::string::String;
-use alloc::vec::Vec;
-use base64::engine::general_purpose::STANDARD as B64;
-use base64::Engine;
-use miniz_oxide::{
-    inflate::{self, core::DecompressorOxide, stream::InflateState, TINFLStatus},
-    MZError,
-};
-
 use crate::{
     format::ReplayBufferKind,
     types::{GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplayParseError},
-    vlq::{VlqData, VlqDecodeError, VlqReader, VlqReaderSM},
+    vlq::VlqReaderSM,
     InputAction,
+};
+use alloc::{borrow::Cow, string::String, vec::Vec};
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use miniz_oxide::{
+    inflate::{self, stream::InflateState, TINFLStatus},
+    MZError,
 };
 
 impl GameReplayData {
@@ -112,8 +107,8 @@ impl TryFrom<&[u8]> for GameReplayMetadata {
 }
 
 pub(crate) fn parse_input_slice(
-    input_slice: &[u8],
-    parse_mode: InputParseMode,
+    _input_slice: &[u8],
+    _parse_mode: InputParseMode,
 ) -> Result<Vec<GameInputEvent>, ReplayParseError> {
     todo!();
     // let mut events = Vec::with_capacity(input_slice.len());
@@ -160,81 +155,6 @@ pub(crate) fn parse_input_slice(
     // Ok(events)
 }
 
-/// Gets the raw frame-key input pairs, with no relative/absolute
-/// processing.
-///
-/// Use [`parse_input_iter`] for the version with that kind of processing.
-fn get_raw_input_pairs<I>(byte_iter: I) -> RawInputPairsIter<I>
-where
-    I: Iterator<Item = u8>,
-{
-    RawInputPairsIter(Some(byte_iter))
-}
-
-struct RawInputPairsIter<I: Iterator<Item = u8>>(Option<I>);
-
-impl<I> Iterator for RawInputPairsIter<I>
-where
-    I: Iterator<Item = u8>,
-{
-    type Item = Result<(VlqData, InputAction), InvalidInputDataError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut reader = VlqReader::new(self.0.take()?);
-
-        let frame = match reader.next()? {
-            Ok(v) => v,
-            Err(e) => return Some(Err(InvalidInputDataError::VlqDecodeError(e))),
-        };
-
-        let mut iter = reader.into_inner();
-
-        let actioncode = iter.next()?;
-
-        let action = match InputAction::try_from(actioncode) {
-            Ok(a) => a,
-            Err(e) => return Some(Err(InvalidInputDataError::InvalidAction(e))),
-        };
-
-        self.0.replace(iter);
-
-        Some(Ok((frame, action)))
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let Some(ref iter) = self.0 else {
-            return (0, Some(0));
-        };
-
-        let bytes_hint = iter.size_hint();
-
-        // Min case: Each frame is 8 bytes, so each event is 9 bytes
-        let min = bytes_hint.0 / 9;
-
-        // Max case: Each frame is 1 byte, so each event is 2 bytes
-        let max = bytes_hint.1.map(|max| max / 2);
-
-        (min, max)
-    }
-}
-
-#[derive(Debug)]
-pub enum InvalidInputDataError {
-    VlqDecodeError(VlqDecodeError),
-    InvalidAction(<InputAction as TryFrom<u8>>::Error),
-}
-
-impl From<VlqDecodeError> for InvalidInputDataError {
-    fn from(value: VlqDecodeError) -> Self {
-        Self::VlqDecodeError(value)
-    }
-}
-impl From<<InputAction as TryFrom<u8>>::Error> for InvalidInputDataError {
-    fn from(value: <InputAction as TryFrom<u8>>::Error) -> Self {
-        Self::InvalidAction(value)
-    }
-}
-
 /// A decoder for Techmino replays.
 pub struct ReplayDecoder {
     state: ReplayDecoderState,
@@ -248,9 +168,7 @@ impl ReplayDecoder {
     /// For more information, see [`ReplayBufferKind`].
     pub fn new(kind: ReplayBufferKind) -> Self {
         Self {
-            state: ReplayDecoderState::WaitingForMetadata {
-                buf: Vec::with_capacity(4096),
-            },
+            state: ReplayDecoderState::WaitingForMetadata(MetadataDecoderState::new()),
             preprocessor: ReplayDecoderPreprocessor::new(kind),
         }
     }
@@ -279,13 +197,9 @@ impl ReplayDecoder {
 /// The state machine for the replay decoder.
 enum ReplayDecoderState {
     /// Waiting for the metadata section to finish.
-    WaitingForMetadata {
-        /// The current cumulative decompressed buffer while waiting for the
-        /// newline (`\n` = `0xA`) character to get produced.
-        buf: Vec<u8>,
-    },
+    WaitingForMetadata(MetadataDecoderState),
     /// Decoding inputs.
-    InputDecode { vlq_reader: VlqReaderSM },
+    InputDecode(InputDecoderState),
 }
 
 impl ReplayDecoderState {
@@ -294,37 +208,29 @@ impl ReplayDecoderState {
     /// **`bytes` is expected to be in uncompressed/raw format.**
     fn update(&mut self, bytes: &[u8]) -> Result<Decoded, ReplayParseError> {
         match self {
-            Self::WaitingForMetadata { buf } => {
-                let prev_buf_len = buf.len();
-                buf.extend_from_slice(bytes);
+            Self::WaitingForMetadata(metadata_decoder) => {
+                let res = metadata_decoder.update(bytes)?;
 
-                if let Some(newline_pos_in_input) = bytes.iter().position(|b| *b == b'\n') {
-                    let newline_pos_in_buf = newline_pos_in_input + prev_buf_len;
-
-                    let metadata = Self::finish_metadata(&buf[..newline_pos_in_buf])?;
-
-                    let vlq_bytes = buf.get(newline_pos_in_buf + 1..);
-                    let mut vlq_reader = VlqReaderSM::new();
-                    let mut inputs = Vec::new();
-
-                    if let Some(vb) = vlq_bytes {
-                        todo!("feed bytes to vlq reader");
-                    }
-
-                    *self = Self::InputDecode { vlq_reader };
-
+                let MetadataDecoderStatus::Done {
+                    metadata,
+                    unprocessed,
+                } = res
+                else {
                     return Ok(Decoded {
-                        metadata: Some(Box::new(metadata)),
-                        inputs,
+                        metadata: None,
+                        inputs: Vec::new(),
                     });
-                }
+                };
 
-                Ok(Decoded {
-                    metadata: None,
-                    inputs: Vec::new(),
-                })
+                let version = metadata.version;
+                let Some(parse_mode) = InputParseMode::try_infer_from_version(&version) else {
+                    return Err(ReplayParseError::UnknownInputParseMode(version));
+                };
+
+                let mut input_decoder = InputDecoderState::new(parse_mode);
+                todo!();
             }
-            Self::InputDecode { vlq_reader } => {
+            Self::InputDecode(_input_decoder) => {
                 todo!();
             }
         }
@@ -341,6 +247,173 @@ impl ReplayDecoderState {
         vlq_reader: &mut VlqReaderSM,
     ) -> Result<Vec<GameInputEvent>, ReplayParseError> {
         todo!();
+    }
+}
+
+struct MetadataDecoderState {
+    /// The current cumulative decompressed buffer while waiting for the
+    /// newline (`\n` = `0xA`) character to get produced.
+    buf: Vec<u8>,
+}
+
+impl MetadataDecoderState {
+    #[must_use]
+    fn new() -> Self {
+        Self {
+            buf: Vec::with_capacity(4096),
+        }
+    }
+
+    fn update<'a>(
+        &mut self,
+        bytes: &'a [u8],
+    ) -> Result<MetadataDecoderStatus<'a>, ReplayParseError> {
+        let prev_buf_len = self.buf.len();
+        self.buf.extend_from_slice(bytes);
+
+        if let Some(newline_pos_in_input) = bytes.iter().position(|b| *b == b'\n') {
+            let newline_pos_in_buf = newline_pos_in_input + prev_buf_len;
+
+            let metadata =
+                serde_json::from_slice::<GameReplayMetadata>(&self.buf[..newline_pos_in_buf])?;
+
+            let unprocessed = bytes
+                .get(newline_pos_in_input + 1..)
+                .unwrap_or(const { &[] });
+
+            return Ok(MetadataDecoderStatus::Done {
+                metadata: Box::new(metadata),
+                unprocessed,
+            });
+        }
+
+        Ok(MetadataDecoderStatus::NotDone)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum MetadataDecoderStatus<'a> {
+    /// Still needs more data.
+    NotDone,
+    /// The metadata is ready!
+    Done {
+        /// The game replay metadata.
+        metadata: Box<GameReplayMetadata>,
+        /// The leftover non-metadata slice.
+        /// This is usually a part of the input
+        /// data VLQ section.
+        unprocessed: &'a [u8],
+    },
+}
+
+impl MetadataDecoderStatus<'_> {
+    const fn is_not_done(&self) -> bool {
+        matches!(self, Self::NotDone)
+    }
+}
+
+struct InputDecoderState {
+    /// The VLQ reader state machine.
+    vlq_reader: VlqReaderSM,
+
+    /// The previous frame number that was processed.
+    ///
+    /// Used for [`InputParseMode::Relative`].
+    /// Also contains the time to pair to the next action, if `expecting_action`
+    /// is on.
+    prev_frame: u64,
+
+    /// If true, the `prev_time` variable has not been matched with a corresponding
+    /// action.
+    expecting_action: bool,
+
+    /// How to parse time VLQs.
+    parse_mode: InputParseMode,
+}
+
+impl InputDecoderState {
+    #[must_use]
+    fn new(parse_mode: InputParseMode) -> Self {
+        Self {
+            vlq_reader: VlqReaderSM::new(),
+            prev_frame: 0,
+            expecting_action: false,
+            parse_mode,
+        }
+    }
+
+    fn update(&mut self, vlq_bytes: &[u8]) -> Result<Vec<GameInputEvent>, ReplayParseError> {
+        // Assume each input event is 3 bytes in length on average (shorter than ~273 s)
+        let cap = vlq_bytes.len() / 3;
+
+        let mut vec = Vec::with_capacity(cap);
+
+        self.update_into_vec(vlq_bytes, &mut vec)?;
+
+        Ok(vec)
+    }
+
+    fn update_into_vec(
+        &mut self,
+        vlq_bytes: &[u8],
+        input_events: &mut Vec<GameInputEvent>,
+    ) -> Result<(), ReplayParseError> {
+        // Assume each VLQ takes up 2 bytes in length on average (shorter than ~273 s)
+        let cap = vlq_bytes.len() / 2;
+        let mut vlq_data_points = Vec::with_capacity(cap);
+
+        self.vlq_reader
+            .update_to_vec(vlq_bytes, &mut vlq_data_points)?;
+
+        let mut vlqs_iter = self
+            .expecting_action
+            .then_some(self.prev_frame)
+            .into_iter()
+            .chain(vlq_data_points.drain(..).map(|v| v.value()));
+
+        loop {
+            let Some(raw_frame) = vlqs_iter.next() else {
+                self.expecting_action = false;
+                return Ok(());
+            };
+
+            self.expecting_action = true;
+
+            let frame = match self.parse_mode {
+                InputParseMode::Absolute => raw_frame,
+                InputParseMode::Relative => self.prev_frame + raw_frame,
+            };
+
+            self.prev_frame = frame;
+
+            let Some(raw_action) = vlqs_iter.next() else {
+                return Ok(());
+            };
+
+            let action =
+                u8::try_from(raw_action).map_err(|_| ReplayParseError::MalformedInputData {
+                    raw_frame,
+                    frame,
+                    action: raw_action,
+                })?;
+            let action = InputAction::try_from(action).map_err(|()| {
+                ReplayParseError::MalformedInputData {
+                    raw_frame,
+                    frame,
+                    action: raw_action,
+                }
+            })?;
+
+            let event = GameInputEvent::new(frame, action).map_err(|_| {
+                ReplayParseError::MalformedInputData {
+                    raw_frame,
+                    frame,
+                    action: raw_action,
+                }
+            })?;
+
+            input_events.push(event);
+        }
     }
 }
 
