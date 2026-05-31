@@ -1,5 +1,7 @@
 use std::io;
 
+use techmino_replay_toolkit::{format::ReplayBufferKind, GameReplayData};
+
 fn main() {
     println!(
         "\
@@ -23,7 +25,7 @@ fn main() {
 
         println!(
             "{:?}",
-            techmino_replay_toolkit::GameReplayData::try_from_base64(input.trim(), None)
+            GameReplayData::parse_replay(input.trim().as_bytes(), ReplayBufferKind::Base64),
         );
     }
 }

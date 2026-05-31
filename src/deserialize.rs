@@ -5,93 +5,42 @@ use crate::{
     InputAction,
 };
 use alloc::{borrow::Cow, string::String, vec::Vec};
-use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use base64::Engine;
 use miniz_oxide::{
-    inflate::{self, stream::InflateState, TINFLStatus},
+    inflate::{stream::InflateState, TINFLStatus},
     MZError,
 };
 
 impl GameReplayData {
-    /// Parses a base64 string into a game replay.
-    ///
-    /// For parsing a replay from the contents of a `.rep` file in the game's `replays` directory,
-    /// see [`parse_compressed_bytes`] instead.
-    ///
-    /// `parse_mode` is an optional argument used to specify how you want the inputs to be parsed.\
-    /// This is useful for preventing errors from occurring if this function fails to recognize
-    /// the game version to automatically infer its parse mode.\
-    /// For more information, see [`InputParseMode`].
+    /// Converts an entire replay data into a replay data format.
     ///
     /// # Errors
-    /// For more information on possible errors, look at the [`ReplayParseError`] struct.
-    pub fn try_from_base64(
-        string: &str,
-        parse_mode: Option<InputParseMode>,
-    ) -> Result<GameReplayData, ReplayParseError> {
-        let data = B64.decode(string)?;
+    /// This function may error when the replay data is invalid or incomplete.
+    ///
+    /// If you have a partial replay or a replay data stream, you should manually
+    /// use [`ReplayDecoder`] and feed the data yourself.
+    pub fn parse_replay(
+        replay_data: &[u8],
+        kind: ReplayBufferKind,
+    ) -> Result<Self, ReplayParseError> {
+        let mut decoder = ReplayDecoder::new(kind);
 
-        Self::try_from_compressed(&data, parse_mode)
-    }
+        let decoded_data = decoder.update(replay_data)?;
 
-    /// Parses a compressed byte array into a game replay.
-    ///
-    /// The byte array can be in the form of the contents of a `.rep` file in the game's `replays` directory.
-    ///
-    /// For parsing a replay from a base64 string, see [`parse_base64`] instead.
-    ///
-    /// `parse_mode` is an optional argument used to specify how you want the inputs to be parsed.\
-    /// This is useful for preventing errors from occurring if this function fails to recognize
-    /// the game version to automatically infer its parse mode.
-    /// For more information, see [`InputParseMode`].
-    ///
-    /// # Errors
-    /// For more information on possible errors, look at the [`ReplayParseError`] struct.
-    pub fn try_from_compressed(
-        data: &[u8],
-        parse_mode: Option<InputParseMode>,
-    ) -> Result<GameReplayData, ReplayParseError> {
-        let data = inflate::decompress_to_vec_zlib(data)?;
+        if !decoder.is_finished() {
+            if matches!(decoder.state, ReplayDecoderState::WaitingForMetadata { .. }) {
+                return Err(ReplayParseError::MetadataSeparatorNotFound);
+            }
+            return Err(ReplayParseError::UnexpectedEnd);
+        }
 
-        Self::try_from_raw(&data, parse_mode)
-    }
-
-    /// Parses a raw, uncompressed byte array into a game replay.
-    ///
-    /// Usually, Techmino compresses the replay using `zlib` before saving it, either as a
-    /// base64 string, or a `.rep` file in the game's `replays` directory.\
-    /// In which case, this is not what you are looking for.\
-    /// See [`parse_base64`] and [`parse_compressed_bytes`] instead.
-    ///
-    /// This function is only useful if you managed to get the replay in the uncompressed form,
-    /// which doesn't usually seem to be the case.
-    ///
-    /// # Errors
-    /// For more information on possible errors, look at the [`ReplayParseError`] struct.
-    pub fn try_from_raw(
-        data: &[u8],
-        parse_mode: Option<InputParseMode>,
-    ) -> Result<GameReplayData, ReplayParseError> {
-        let Some(first_newline) = data.iter().position(|&el| el == b'\n') else {
-            return Err(ReplayParseError::MetadataSeparatorNotFound);
+        let Some(metadata) = decoded_data.metadata else {
+            return Err(ReplayParseError::UnexpectedEnd);
         };
 
-        let (metadata_slice, input_slice) = data.split_at(first_newline);
-
-        // This will never panic becaause we already know that there is a
-        // separator
-        let input_slice = &input_slice[1..];
-
-        let metadata = GameReplayMetadata::try_from(metadata_slice)?;
-
-        let Some(parse_mode) =
-            parse_mode.or_else(|| InputParseMode::try_infer_from_version(&metadata.version))
-        else {
-            return Err(ReplayParseError::UnknownInputParseMode(metadata.version));
-        };
-
-        Ok(GameReplayData {
-            inputs: parse_input_slice(input_slice, parse_mode)?,
-            metadata,
+        Ok(Self {
+            metadata: *metadata,
+            inputs: decoded_data.inputs,
         })
     }
 }
@@ -106,56 +55,12 @@ impl TryFrom<&[u8]> for GameReplayMetadata {
     }
 }
 
-pub(crate) fn parse_input_slice(
-    _input_slice: &[u8],
-    _parse_mode: InputParseMode,
-) -> Result<Vec<GameInputEvent>, ReplayParseError> {
-    todo!();
-    // let mut events = Vec::with_capacity(input_slice.len());
-
-    // let mut prev_timestamp = 0;
-    // for (position, chunk) in values.chunks_exact(2).enumerate() {
-    //     let (time, key) = (chunk[0], chunk[1]);
-
-    //     let frame = match parse_mode {
-    //         InputParseMode::Relative => time + prev_timestamp,
-    //         InputParseMode::Absolute => time,
-    //     };
-
-    //     let Ok(key) = u8::try_from(key) else {
-    //         return Err(ReplayParseError::MalformedInputData {
-    //             position: position as u64 * 2,
-    //             frame,
-    //             kind: key,
-    //         });
-    //     };
-
-    //     let kind = InputEventKind::from(key > 0b0010_0000);
-    //     let Ok(key) = InputEventKey::try_from(key & 0b0001_1111) else {
-    //         return Err(ReplayParseError::MalformedInputData {
-    //             frame,
-    //             position: position as u64 * 2,
-    //             kind: u64::from(key),
-    //         });
-    //     };
-
-    //     let Ok(event) = GameInputEvent::new(kind, key, frame) else {
-    //         return Err(ReplayParseError::MalformedInputData {
-    //             frame,
-    //             position: position as u64 * 2,
-    //             kind: u64::from(u8::from(key)),
-    //         });
-    //     };
-
-    //     prev_timestamp = frame;
-
-    //     events.push(event);
-    // }
-
-    // Ok(events)
-}
-
 /// A decoder for Techmino replays.
+///
+/// # Large Size
+/// This struct has a large size. To avoid stack overflow, you should
+/// [`Box`] this struct if you're using this a lot or over a long period
+/// of time.
 pub struct ReplayDecoder {
     state: ReplayDecoderState,
     preprocessor: ReplayDecoderPreprocessor,
@@ -190,7 +95,18 @@ impl ReplayDecoder {
             }
         };
 
-        self.state.update(bytes)
+        self.state.update(&uncompressed)
+    }
+
+    /// Returns true when this struct no longer has any partial data.
+    ///
+    /// This does NOT mean that the replay is guaranteed to have finished, this
+    /// ONLY means that it's fine if the replay finished at the current state.
+    ///
+    /// This function may return true even though there is more data to process.
+    /// But this function should return false if there isn't more data to process.
+    pub fn is_finished(&self) -> bool {
+        self.preprocessor.is_finished() && self.state.is_finished()
     }
 }
 
@@ -222,31 +138,43 @@ impl ReplayDecoderState {
                     });
                 };
 
-                let version = metadata.version;
-                let Some(parse_mode) = InputParseMode::try_infer_from_version(&version) else {
-                    return Err(ReplayParseError::UnknownInputParseMode(version));
+                let Some(parse_mode) = InputParseMode::try_infer_from_version(&metadata.version)
+                else {
+                    return Err(ReplayParseError::UnknownInputParseMode(metadata.version));
                 };
 
                 let mut input_decoder = InputDecoderState::new(parse_mode);
-                todo!();
+
+                let inputs = input_decoder.update(unprocessed)?;
+
+                *self = Self::InputDecode(input_decoder);
+
+                Ok(Decoded {
+                    metadata: Some(metadata),
+                    inputs,
+                })
             }
-            Self::InputDecode(_input_decoder) => {
-                todo!();
+            Self::InputDecode(input_decoder) => {
+                let inputs = input_decoder.update(bytes)?;
+
+                Ok(Decoded {
+                    metadata: None,
+                    inputs,
+                })
             }
         }
     }
 
-    /// Called when the end of metadata has been found.
+    /// Returns true when this struct no longer has any partial data.
     ///
-    /// **`bytes` is expected to be in uncompressed/raw format.**
-    fn finish_metadata(metadata: &[u8]) -> Result<GameReplayMetadata, ReplayParseError> {
-        Ok(serde_json::from_slice::<GameReplayMetadata>(metadata)?)
-    }
+    /// This does NOT mean that the replay is guaranteed to have finished, this
+    /// ONLY means that it's fine if the replay finished at the current state.
+    fn is_finished(&self) -> bool {
+        let Self::InputDecode(ref decoder) = self else {
+            return false;
+        };
 
-    fn decode_inputs(
-        vlq_reader: &mut VlqReaderSM,
-    ) -> Result<Vec<GameInputEvent>, ReplayParseError> {
-        todo!();
+        decoder.is_finished()
     }
 }
 
@@ -304,12 +232,6 @@ enum MetadataDecoderStatus<'a> {
         /// data VLQ section.
         unprocessed: &'a [u8],
     },
-}
-
-impl MetadataDecoderStatus<'_> {
-    const fn is_not_done(&self) -> bool {
-        matches!(self, Self::NotDone)
-    }
 }
 
 struct InputDecoderState {
@@ -377,14 +299,20 @@ impl InputDecoderState {
                 return Ok(());
             };
 
-            self.expecting_action = true;
+            let frame = if self.expecting_action {
+                self.prev_frame
+            } else {
+                self.expecting_action = true;
 
-            let frame = match self.parse_mode {
-                InputParseMode::Absolute => raw_frame,
-                InputParseMode::Relative => self.prev_frame + raw_frame,
+                let frame = match self.parse_mode {
+                    InputParseMode::Absolute => raw_frame,
+                    InputParseMode::Relative => self.prev_frame + raw_frame,
+                };
+
+                self.prev_frame = frame;
+
+                frame
             };
-
-            self.prev_frame = frame;
 
             let Some(raw_action) = vlqs_iter.next() else {
                 return Ok(());
@@ -412,8 +340,17 @@ impl InputDecoderState {
                 }
             })?;
 
+            self.expecting_action = false;
+
             input_events.push(event);
         }
+    }
+
+    /// Returns false if this struct has any leftover
+    /// partial data.
+    #[must_use]
+    fn is_finished(&self) -> bool {
+        self.vlq_reader.is_finished() && !self.expecting_action
     }
 }
 
@@ -610,6 +547,20 @@ impl ReplayDecoderPreprocessor {
 
         Ok(compressed)
     }
+
+    /// Returns false if this struct has some leftover
+    /// partial data.
+    fn is_finished(&self) -> bool {
+        match self {
+            Self::Uncompressed => true,
+            Self::Compressed { decompressor } => decompressor.last_status() == TINFLStatus::Done,
+            Self::Base64 {
+                b64_buffer: _,
+                b64_buffer_len,
+                decompressor,
+            } => decompressor.last_status() == TINFLStatus::Done && *b64_buffer_len == 0,
+        }
+    }
 }
 
 /// Something is wrong with the format of the given replay data.
@@ -632,9 +583,10 @@ enum FormatError {
 /// Not cumulative; if you want a full replay, you have to build it yourself.
 #[must_use = "the newly-decoded data is in the `Decoded` struct"]
 pub struct Decoded {
-    /// Whether or not the metadata finished getting decoded in this update call.
+    /// The metadata, if it was decoded in this update call.
     ///
-    /// The metadata will only ever be returned once!
+    /// The metadata will only ever be returned once! Every decode return
+    /// after the first `Some(...)` will result in `None`.
     metadata: Option<Box<GameReplayMetadata>>,
 
     /// The inputs decoded in this update call.
@@ -643,14 +595,17 @@ pub struct Decoded {
 
 #[cfg(test)]
 mod tests {
-    use base64::Engine;
-    use fastrand::Rng;
-
+    use super::*;
     use crate::{
+        action::{InputAction, InputActionKey, InputActionKind},
         deserialize::ReplayDecoderPreprocessor,
         format::ReplayBufferKind,
         tests::{slightly_random_data, ByteFeeder},
+        vlq::VlqData,
+        GameInputEvent, InputParseMode,
     };
+    use base64::Engine;
+    use fastrand::Rng;
 
     const PREPROCESSOR_TRIALS: usize = 1024;
 
@@ -761,6 +716,135 @@ mod tests {
             }
 
             assert_eq!(init_data.as_slice(), result_data.as_slice());
+        }
+    }
+
+    /// Tests using only the input data of the earlyinput replay, relative mode
+    #[test]
+    fn earlyinput_rel_input_test() {
+        const ATTEMPTS: usize = 1_000_000;
+
+        let parse_mode = InputParseMode::Relative;
+        let earlyinput_to_encode = [
+            GameInputEvent::new(
+                1,
+                InputAction {
+                    kind: InputActionKind::Press,
+                    key: InputActionKey::MoveLeft,
+                },
+            )
+            .expect("input should be valid"),
+            GameInputEvent::new(
+                179,
+                InputAction {
+                    kind: InputActionKind::Press,
+                    key: InputActionKey::MoveLeft,
+                },
+            )
+            .expect("input should be valid"),
+        ];
+
+        let mut earlyinput_bytes: Vec<u8> = Vec::new();
+
+        let mut prev_frame = 0;
+        for input in earlyinput_to_encode {
+            let (frame, action) = (input.frame(), input.action());
+            let frame_vlq = VlqData::from_value(frame - prev_frame)
+                .expect("frame # should be in valid vlq range");
+            prev_frame = frame;
+            earlyinput_bytes.extend_from_slice(frame_vlq.as_slice());
+            earlyinput_bytes.push(action.into());
+        }
+
+        eprint!("earlyinput_bytes: [0x");
+        for byte in earlyinput_bytes.iter().copied() {
+            eprint!("{byte:02X}_");
+        }
+        eprintln!("]");
+
+        let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
+
+        let mut earlyinput_decoded = Vec::with_capacity(2);
+
+        for i in 1..=ATTEMPTS {
+            let mut feeder = ByteFeeder::new(&earlyinput_bytes);
+            let mut decoder = InputDecoderState::new(parse_mode);
+            earlyinput_decoded.clear();
+
+            while !feeder.is_empty() {
+                decoder
+                    .update_into_vec(feeder.bite(&mut rng), &mut earlyinput_decoded)
+                    .expect("failed to decode replay");
+            }
+
+            assert_eq!(
+                earlyinput_decoded, earlyinput_to_encode,
+                "decode mismatch on attempt {i}"
+            );
+            eprintln!("attempt {i} succeeded");
+        }
+    }
+
+    #[test]
+    fn earlyinput_abs_input_test() {
+        const ATTEMPTS: usize = 1_000_000;
+
+        let parse_mode = InputParseMode::Absolute;
+        let earlyinput_to_encode = [
+            GameInputEvent::new(
+                1,
+                InputAction {
+                    kind: InputActionKind::Press,
+                    key: InputActionKey::MoveLeft,
+                },
+            )
+            .expect("input should be valid"),
+            GameInputEvent::new(
+                179,
+                InputAction {
+                    kind: InputActionKind::Press,
+                    key: InputActionKey::MoveLeft,
+                },
+            )
+            .expect("input should be valid"),
+        ];
+
+        let mut earlyinput_bytes: Vec<u8> = Vec::new();
+
+        for input in earlyinput_to_encode {
+            let (frame, action) = (input.frame(), input.action());
+            let frame_vlq =
+                VlqData::from_value(frame).expect("frame # should be in valid vlq range");
+            earlyinput_bytes.extend_from_slice(frame_vlq.as_slice());
+            earlyinput_bytes.push(action.into());
+        }
+
+        eprint!("earlyinput_bytes: [0x");
+        for byte in earlyinput_bytes.iter().copied() {
+            eprint!("{byte:02X}_");
+        }
+        eprintln!("]");
+
+        let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
+
+        let mut earlyinput_decoded = Vec::with_capacity(2);
+
+        for i in 1..=ATTEMPTS {
+            let mut feeder = ByteFeeder::new(&earlyinput_bytes);
+            let mut decoder = InputDecoderState::new(parse_mode);
+            earlyinput_decoded.clear();
+
+            while !feeder.is_empty() {
+                decoder
+                    .update_into_vec(feeder.bite(&mut rng), &mut earlyinput_decoded)
+                    .expect("failed to decode replay");
+            }
+
+            assert_eq!(
+                earlyinput_decoded, earlyinput_to_encode,
+                "decode mismatch on attempt {i}"
+            );
+            eprintln!("attempt {i} succeeded");
         }
     }
 }

@@ -3,6 +3,7 @@ use crate::{vlq::VlqData, ReplayParseError};
 // TODO: Rename this to just VlqReader
 /// A VLQ reader state machine that can take in arbitrary chunks
 /// of VLQ-encoded bytes.
+#[derive(Clone, Debug)]
 pub(crate) struct VlqReaderSM {
     buf: [u8; (VlqData::MAX_BYTES - 1) as usize],
     buf_len: u8,
@@ -54,6 +55,12 @@ impl VlqReaderSM {
         self.buf = buf[..(VlqData::MAX_BYTES - 1) as usize].try_into().unwrap();
 
         Ok(())
+    }
+
+    /// Returns false if this struct has any leftover partial data.
+    #[must_use]
+    pub(crate) const fn is_finished(&self) -> bool {
+        self.buf_len == 0
     }
 }
 

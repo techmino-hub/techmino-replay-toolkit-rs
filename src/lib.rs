@@ -29,7 +29,7 @@ extern crate alloc;
 
 mod action;
 mod deserialize;
-mod format;
+pub mod format;
 mod serialize;
 mod types;
 mod vlq;

@@ -33,6 +33,19 @@ impl TryFrom<u8> for InputAction {
     }
 }
 
+impl From<InputAction> for u8 {
+    fn from(value: InputAction) -> Self {
+        let kind_bits = match value.kind {
+            InputActionKind::Release => 0b0010_0000,
+            InputActionKind::Press => 0b0000_0000,
+        };
+
+        let key_bits: u8 = value.key.into();
+
+        key_bits | kind_bits
+    }
+}
+
 /// Whether this is a press action or a release action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]

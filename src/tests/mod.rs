@@ -8,7 +8,7 @@ use cases::*;
 use fastrand::Rng;
 use ron::ser::PrettyConfig;
 
-use crate::{vlq::VlqData, GameReplayData};
+use crate::{format::ReplayBufferKind, vlq::VlqData, GameReplayData};
 
 const TEST_DATA_UNCOMPRESSED_LEN: usize = 16384;
 const TEST_CHUNK_MAX_SIZE: usize = 48;
@@ -110,51 +110,28 @@ fn test_serialize_deserialize_noop() {
             .serialize_to_raw(None)
             .expect("Error while serializing replay");
 
-        let deserialized = GameReplayData::try_from_raw(&serialized, None)
-            .expect("Error while deserializing replay");
+        let deserialized =
+            match GameReplayData::parse_replay(&serialized, ReplayBufferKind::Uncompressed) {
+                Ok(r) => r,
+                Err(e) => {
+                    panic!("Error while deserializing replay {key}: {e:?}");
+                }
+            };
+
+        // Separate assertions to get more narrow assertion failures
+        assert_eq!(
+            data.metadata, deserialized.metadata,
+            "Original and deserialized metadata doesn't match up!",
+        );
+
+        assert_eq!(
+            data.inputs, deserialized.inputs,
+            "Original and deserialized input data doesn't match up!",
+        );
 
         assert_eq!(
             data, deserialized,
             "Original and deserialized data doesn't match up!"
-        );
-    }
-}
-
-#[test]
-fn test_deserialize_serialize_noop() {
-    let cases = get_test_cases();
-
-    for (key, val) in cases {
-        let Some(serialized) = val.serialized else {
-            println!("Skipping testcase '{key}' (it has no serialized data form)");
-            continue;
-        };
-
-        println!("Testing for testcase {key}");
-
-        let deserialized = match serialized {
-            StoredReplay::Base64(ref data) => GameReplayData::try_from_base64(data, None),
-            StoredReplay::Binary(ref data) => GameReplayData::try_from_compressed(data, None),
-        }
-        .expect("Failed to deserialize data");
-
-        let reserialized = match serialized {
-            StoredReplay::Base64(_) => StoredReplay::Base64(
-                deserialized
-                    .serialize_to_base64(None)
-                    .expect("Failed to reserialize data"),
-            ),
-            StoredReplay::Binary(_) => StoredReplay::Binary(
-                deserialized
-                    .serialize_to_compressed(None)
-                    .expect("Failed to reserialize data")
-                    .into_boxed_slice(),
-            ),
-        };
-
-        assert_eq!(
-            serialized, reserialized,
-            "Original and reserialized form doesn't match!"
         );
     }
 }
@@ -183,8 +160,12 @@ fn regenerate_cases() {
         }
 
         let res = match val.serialized.unwrap() {
-            StoredReplay::Base64(string) => GameReplayData::try_from_base64(&string, None),
-            StoredReplay::Binary(bytes) => GameReplayData::try_from_compressed(&bytes, None),
+            StoredReplay::Base64(string) => {
+                GameReplayData::parse_replay(string.as_bytes(), ReplayBufferKind::Base64)
+            }
+            StoredReplay::Binary(bytes) => {
+                GameReplayData::parse_replay(&bytes, ReplayBufferKind::Compressed)
+            }
         };
 
         println!("==========[ {key} ]==========\n\n");

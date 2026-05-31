@@ -1,5 +1,7 @@
 //! Module for representing the three different ways to have inputs/outputs in this library.
 
+/// Represents the different kinds of ways that Techmion replays could be represented.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ReplayBufferKind {
     /// Base64-encoding of zlib-compressed bytes.
     ///

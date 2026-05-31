@@ -1,6 +1,7 @@
 //! General types and structs to represent metadata and other trivial data.
 
 use alloc::{
+    fmt::{self, Debug},
     string::{FromUtf8Error, String},
     vec::Vec,
 };
@@ -45,7 +46,7 @@ use crate::{vlq::VlqDecodeError, InputAction, InputActionKey, InputActionKind};
 ///   Note that since the original game uses Lua, which uses floats, it wouldn't
 ///   handle integers above 2^53 properly, which is why this one was given 54 bits.
 ///   Also see [`Self::MAX_FRAME`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct GameInputEvent(i64);
 
@@ -117,6 +118,16 @@ impl GameInputEvent {
             key: self.key(),
             kind: self.kind(),
         }
+    }
+}
+
+impl Debug for GameInputEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GameInputEvent")
+            .field("raw", &format!("0x{:X?}", self.0))
+            .field("_calc_action", &self.action())
+            .field("_calc_frame", &self.frame())
+            .finish()
     }
 }
 
@@ -347,6 +358,7 @@ pub enum ReplayParseError {
     ///
     /// See [`DecompressError`] for more information.
     ZlibDecompressError {
+        /// The internal zlib status.
         status: TINFLStatus,
         // TODO: After finishing state machine migration, remove this
         mz_error: Option<MZError>,
@@ -404,15 +416,10 @@ pub enum ReplayParseError {
         /// See [`InputAction`] for more details.
         action: u64,
     },
-}
 
-impl From<DecompressError> for ReplayParseError {
-    fn from(value: DecompressError) -> Self {
-        ReplayParseError::ZlibDecompressError {
-            status: value.status,
-            mz_error: None,
-        }
-    }
+    /// Only a portion of the replay was given, i.e.,
+    /// more replay data should have been fed
+    UnexpectedEnd,
 }
 
 impl From<DecodeError> for ReplayParseError {
