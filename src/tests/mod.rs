@@ -2,27 +2,133 @@ mod cases;
 
 extern crate std;
 use core::ops::Deref;
-use std::{format, fs, println};
+use std::{collections::HashMap, format, fs, println, sync::LazyLock};
 
 use cases::*;
 use fastrand::Rng;
 use ron::ser::PrettyConfig;
 
-use crate::{format::ReplayBufferKind, vlq::VlqData, GameReplayData};
+use crate::{
+    format::ReplayBufferKind, vlq::VlqData, GameInputEvent, GameReplayData, GameReplayMetadata,
+    InputAction, InputActionKey, InputActionKind, PlayerSettings,
+};
 
 const TEST_DATA_UNCOMPRESSED_LEN: usize = 16384;
-const TEST_CHUNK_MAX_SIZE: usize = 48;
+pub const TEST_CHUNK_MAX_SIZE: usize = 48;
+
+pub static SAMPLE_METADATA: LazyLock<GameReplayMetadata> = LazyLock::new(|| GameReplayMetadata {
+    date: String::from("2026-01-01 01:23:45"),
+    mode: String::from("sprint_10l"),
+    mods: None,
+    player: String::from("Stacker"),
+    nonstandard: HashMap::new(),
+    private: None,
+    seed: 0,
+    setting: PLAYER_SETTINGS.clone(),
+    tas_used: Some(false),
+    version: String::from("V0.17.21"),
+});
+
+pub static PLAYER_SETTINGS: LazyLock<PlayerSettings> = LazyLock::new(|| PlayerSettings {
+    das: Some(4),
+    arr: Some(0),
+    atk_fx: Some(0),
+    bag_line: Some(true),
+    block: Some(true),
+    center: Some(1.0),
+    clear_fx: Some(0),
+    dascut: Some(2),
+    drop_fx: Some(0),
+    dropcut: Some(0),
+    face: Some(vec![0; 29]),
+    ft_lock: None,
+    ghost: Some(0.8),
+    grid: Some(0.5),
+    high_cam: Some(true),
+    ihs: Some(true),
+    ims: Some(true),
+    irs: Some(true),
+    irscut: Some(2),
+    lock_fx: Some(1),
+    move_fx: Some(0),
+    next_pos: Some(true),
+    nonstandard: HashMap::new(),
+    rs: Some(String::from("TRS")),
+    score: Some(true),
+    sdarr: Some(0),
+    sddas: Some(0),
+    shake_fx: Some(0),
+    skin: Some(vec![
+        1, 7, 11, 3, 14, 4, 9, 1, 7, 2, 6, 10, 2, 13, 5, 9, 15, 4, 11, 3, 12, 2, 16, 8, 4, 10, 13,
+        2, 8,
+    ]),
+    smooth: Some(true),
+    splash_fx: Some(0),
+    text: Some(true),
+    warn: Some(true),
+});
+
+macro_rules! const_unwrap_result {
+    ($e:expr $(,)*) => {
+        match $e {
+            ::core::result::Result::Ok(x) => x,
+            ::core::result::Result::Err(_) => {
+                panic!("attempt to unwrap an err");
+            }
+        }
+    };
+}
+
+pub static SAMPLE_INPUT_DATA: [GameInputEvent; 2] = [
+    const_unwrap_result!(GameInputEvent::new(
+        1,
+        InputAction {
+            kind: InputActionKind::Press,
+            key: InputActionKey::MoveLeft,
+        },
+    )),
+    const_unwrap_result!(GameInputEvent::new(
+        9,
+        InputAction {
+            kind: InputActionKind::Release,
+            key: InputActionKey::MoveLeft,
+        },
+    )),
+];
+
+pub static SAMPLE_UNSORTED_INPUT_DATA: [GameInputEvent; 3] = [
+    const_unwrap_result!(GameInputEvent::new(
+        1,
+        InputAction {
+            kind: InputActionKind::Press,
+            key: InputActionKey::MoveLeft,
+        },
+    )),
+    const_unwrap_result!(GameInputEvent::new(
+        9,
+        InputAction {
+            kind: InputActionKind::Release,
+            key: InputActionKey::MoveLeft,
+        },
+    )),
+    const_unwrap_result!(GameInputEvent::new(
+        3,
+        InputAction {
+            kind: InputActionKind::Press,
+            key: InputActionKey::MoveLeft,
+        },
+    )),
+];
 
 /// Creates not-quite-random data.
 pub(crate) fn slightly_random_data(rng: &mut Rng) -> [u8; TEST_DATA_UNCOMPRESSED_LEN] {
-    /// At max, how many bits in a byte to turn on.
-    const TEST_DATA_BIT_PER_BYTE: usize = 2;
+    let test_data_bit_per_byte = rng.usize(0..3);
 
     core::array::from_fn::<u8, TEST_DATA_UNCOMPRESSED_LEN, _>(|_| {
         // For every byte, choose at most 3 random bits to turn on
         let mut byte = 0;
 
-        for _ in 0..TEST_DATA_BIT_PER_BYTE {
+        for _ in 0..test_data_bit_per_byte {
             let bit = rng.u8(..8);
 
             let mask = 1u8 << bit;
@@ -178,6 +284,10 @@ fn regenerate_cases() {
         let res = res.unwrap();
 
         let ron = ron::ser::to_string_pretty(&res, ron_config.clone());
+
+        //
+        // // Hello this is a wakatime test for testing purposes if you're seeing this please ignore
+        // Hello this is a wakatime test for testing purposes if you're seeing this please ignore
 
         let ron = match ron {
             Ok(r) => r,

@@ -1,9 +1,22 @@
+use core::ops::ControlFlow;
+
+use alloc::borrow::Cow;
+use base64::Engine as _;
+
+use crate::format::ReplayBufferKind;
 use crate::types::{GameInputEvent, GameReplayData, InputParseMode, ReplaySerializeError};
+use crate::vlq::VlqData;
+use crate::GameReplayMetadata;
 use alloc::string::String;
 use alloc::vec::Vec;
 use base64::engine::general_purpose::STANDARD as B64;
-use base64::Engine;
-use miniz_oxide::deflate::compress_to_vec_zlib as compress;
+
+use miniz_oxide::deflate::core::{compress, TDEFLFlush, TDEFLStatus};
+use miniz_oxide::deflate::CompressionLevel;
+use miniz_oxide::{
+    deflate::{compress_to_vec_zlib, core::CompressorOxide},
+    DataFormat,
+};
 
 // TODO: Add tests
 
@@ -104,7 +117,7 @@ impl GameReplayData {
     ) -> Result<Vec<u8>, ReplaySerializeError> {
         let raw_bytes = self.serialize_to_raw(input_mode)?;
 
-        Ok(compress(&raw_bytes, 10))
+        Ok(compress_to_vec_zlib(&raw_bytes, 10))
     }
 
     /// Serialize into a copiable text-based base64 format.
@@ -132,13 +145,12 @@ impl GameReplayData {
 }
 
 fn get_first_unsorted(inputs: &[GameInputEvent]) -> Option<ReplaySerializeError> {
-    for (index, window) in inputs.windows(2).enumerate() {
+    for window in inputs.windows(2) {
         let prev = window[0];
         let cur = window[1];
 
         if cur.frame() < prev.frame() {
             return Some(ReplaySerializeError::UnsortedInput {
-                first_unsorted_index: index + 1,
                 prev_time: prev.frame(),
                 unsorted_time: cur.frame(),
             });
@@ -175,11 +187,565 @@ fn append_vlqs(buffer: &mut Vec<u8>, values: &[u64]) {
     }
 }
 
+/// An encoder for Techmino replays.
+///
+/// This encoder is NOT cumulative, you are expected to
+/// create an external buffer to store its output or stream
+/// it elsewhere.
+pub struct ReplayEncoder {
+    /// The inner state machine for the encoder, that outputs into
+    /// raw uncompressed form.
+    state: ReplayEncoderState,
+    /// The postprocessor to remux the uncompressed replay data
+    /// into compressed binary or base64 forms.
+    postprocessor: ReplayEncoderPostprocessor,
+}
+
+impl ReplayEncoder {
+    #[must_use]
+    pub fn new() -> Self {
+        todo!();
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum ReplayEncoderState {
+    WaitingForMetadata,
+    InputData {
+        prev_frame: u64,
+        parse_mode: InputParseMode,
+    },
+}
+
+impl ReplayEncoderState {
+    /// The starting replay encoder state.
+    const DEFAULT: Self = Self::WaitingForMetadata;
+
+    /// Tries to encode metadata.
+    ///
+    /// # Returns
+    /// If the operation succeeds, returns bytes consisting of the serialized metadata
+    /// *and the separator between metadata and input data* in raw format, to be given
+    /// to the postprocessors.
+    ///
+    /// # Errors
+    /// This function errors if:
+    /// - The current encoder state is not expecting metadata
+    /// - The serialization failed
+    /// - The input parse mode could not be inferred from the metadata's game version
+    ///   and there was no override
+    fn feed_metadata(
+        &mut self,
+        metadata: &GameReplayMetadata,
+        parse_mode_override: Option<InputParseMode>,
+    ) -> Result<Vec<u8>, ReplaySerializeError> {
+        if !matches!(self, Self::WaitingForMetadata) {
+            return Err(ReplaySerializeError::InvalidOperation);
+        }
+
+        let parse_mode = match parse_mode_override {
+            Some(m) => m,
+            None => InputParseMode::try_infer_from_version(&metadata.version).ok_or_else(|| {
+                ReplaySerializeError::UnknownInputParseMode(metadata.version.clone())
+            })?,
+        };
+
+        *self = Self::InputData {
+            prev_frame: 0,
+            parse_mode,
+        };
+
+        Ok(serde_json::to_vec(&metadata)?)
+    }
+
+    /// Tries to encode input data into the given output buffer.
+    ///
+    /// # Returns
+    /// Returns a tuple containing:
+    /// - How many input events were processed.
+    /// - The current length/usage of the output buffer.\
+    ///   This is the first "unused" byte of the output buffer.
+    ///
+    /// # Errors
+    /// This function errors if:
+    /// - The current encoder state is not expecting input data
+    /// - The input data is not sorted
+    ///
+    /// # Remarks
+    /// This function does not allocate any more buffers, so make sure to check
+    /// that all the inputs have been consumed, by checking that the outputted
+    /// index equals the length of the input data. If it does not match, then
+    /// that means the input data was only partially processed, in which case,
+    /// process the partial outputted buffer if necessary, and then call this function
+    /// again *with the already-processed data removed*.
+    fn feed_input_data(
+        &mut self,
+        input_data: &[GameInputEvent],
+        output_buffer: &mut [u8],
+    ) -> Result<(usize, usize), ReplaySerializeError> {
+        let Self::InputData {
+            prev_frame,
+            ref parse_mode,
+        } = self
+        else {
+            return Err(ReplaySerializeError::InvalidOperation);
+        };
+        let parse_mode = *parse_mode;
+
+        let mut inputs_processed = 0;
+        let mut output_idx = 0;
+
+        for &input in input_data {
+            let res = Self::feed_input_data_inner(
+                prev_frame,
+                parse_mode,
+                input,
+                &mut output_buffer[output_idx..],
+            )?;
+            let ControlFlow::Continue(bytes_written) = res else {
+                break;
+            };
+
+            output_idx += bytes_written;
+            inputs_processed += 1;
+        }
+
+        Ok((inputs_processed, output_idx))
+    }
+
+    /// Processes an individual input into the output buffer.
+    ///
+    /// The output buffer is expected to be pre-sliced; that is, this function will try to copy
+    /// starting from the zeroth element of the slice. If this is not desired, feed this function
+    /// something like `&mut output_buffer[starting_idx..]` instead.
+    ///
+    /// # Returns
+    /// If there is enough space in the output buffer, returns the amount of bytes written in
+    /// `Ok(ControlFlow::Continue(bytes))`.
+    /// If there is not enough space, nothing will be written and `Ok(ControlFlow::Break(())` will
+    /// be returned instead.
+    /// If the input data is unsorted, nothing will be written and `Err` will
+    /// be returned instead.
+    fn feed_input_data_inner(
+        prev_frame: &mut u64,
+        parse_mode: InputParseMode,
+        input: GameInputEvent,
+        output_buffer: &mut [u8],
+    ) -> Result<ControlFlow<(), usize>, ReplaySerializeError> {
+        let real_frame = input.frame();
+
+        let encoded_frame = match parse_mode {
+            InputParseMode::Absolute => real_frame,
+            InputParseMode::Relative => real_frame.checked_sub(*prev_frame).ok_or({
+                ReplaySerializeError::UnsortedInput {
+                    prev_time: *prev_frame,
+                    unsorted_time: real_frame,
+                }
+            })?,
+        };
+
+        // GameInputEvent is more restrictive than VlqData's requirements
+        // (2^54 < 2^56).  This will never panic
+        let frame_vlq = VlqData::from_value(encoded_frame).unwrap();
+        let action = u8::from(input.action());
+
+        let frame_len = frame_vlq.len().get() as usize;
+        let required_len = frame_len + 1;
+
+        if required_len > output_buffer.len() {
+            return Ok(ControlFlow::Break(()));
+        }
+
+        if parse_mode == InputParseMode::Relative {
+            *prev_frame = real_frame;
+        }
+
+        output_buffer[..frame_len].copy_from_slice(frame_vlq.as_slice());
+        output_buffer[frame_len] = action;
+
+        Ok(ControlFlow::Continue(required_len))
+    }
+}
+
+enum ReplayEncoderPostprocessor {
+    /// Compress then encode to base64
+    Base64 {
+        /// We can convert every three bytes into 4 base64 chars.
+        /// We can have a leftover of up to two bytes in the byte array.
+        b64_scratch_buffer: [u8; 2],
+        /// The amount of space in the b64 scratch buffer that is currently used.
+        b64_scratch_buffer_len: u8,
+
+        /// The zlib compressor.
+        compressor: CompressorOxide,
+    },
+    /// Just compress into binary
+    Compressed {
+        /// The zlib compressor.
+        compressor: CompressorOxide,
+    },
+    /// No-op.
+    Uncompressed,
+}
+
+impl ReplayEncoderPostprocessor {
+    /// The size for a lone temporary buffer.
+    const TEMP_BUFFER_SIZE: usize = 4096;
+    /// The size for a temporary buffer containing compressed bytes when
+    /// it's not the sole buffer.
+    const COMPRESSED_BUFFER_SIZE: usize = ReplayEncoderPostprocessor::TEMP_BUFFER_SIZE / 2;
+    /// The size for a temporary buffer containing base64 bytes when it's
+    /// not the sole buffer.
+    const BASE64_BUFFER_SIZE: usize =
+        base64::encoded_len(Self::COMPRESSED_BUFFER_SIZE, true).unwrap() + 4;
+
+    /// Creates a new postprocessor of a specific kind.
+    ///
+    /// The compression level dictates, for compressed or base64 formats,
+    /// how hard to try to compress the replay data. For more information,
+    /// see [`miniz_oxide::deflate::CompressionLevel`].
+    ///
+    /// The compression level is ignored for uncompressed formats.
+    fn new(kind: ReplayBufferKind, compression_level: u8) -> Self {
+        match kind {
+            ReplayBufferKind::Base64 => {
+                let mut compressor = CompressorOxide::with_format_and_level(
+                    DataFormat::Zlib,
+                    CompressionLevel::DefaultCompression,
+                );
+                compressor.set_compression_level_raw(compression_level);
+
+                Self::Base64 {
+                    b64_scratch_buffer: [0u8; 2],
+                    b64_scratch_buffer_len: 0,
+                    compressor,
+                }
+            }
+            ReplayBufferKind::Compressed => {
+                let mut compressor = CompressorOxide::with_format_and_level(
+                    DataFormat::Zlib,
+                    CompressionLevel::DefaultCompression,
+                );
+                compressor.set_compression_level_raw(compression_level);
+
+                Self::Compressed { compressor }
+            }
+            ReplayBufferKind::Uncompressed => Self::Uncompressed,
+        }
+    }
+
+    /// Process the raw replay data further into a certain format.
+    ///
+    /// Don't forget to call [`finish`][Self::finish] at the very end!
+    fn postprocess<'a>(&mut self, raw: &'a [u8]) -> Cow<'a, [u8]> {
+        if let Self::Uncompressed = self {
+            Cow::Borrowed(raw)
+        } else {
+            let mut out_bytes = Vec::with_capacity(4096);
+            self.postprocess_into_vec(raw, &mut out_bytes);
+            Cow::Owned(out_bytes)
+        }
+    }
+
+    fn postprocess_into_vec(&mut self, raw: &[u8], out_bytes: &mut Vec<u8>) {
+        match self {
+            Self::Base64 { .. } => todo!(),
+            Self::Compressed { .. } => todo!(),
+            Self::Uncompressed => out_bytes.extend_from_slice(raw),
+        }
+    }
+
+    /// Compress the bytes into the output.
+    fn postprocess_compression(
+        compressor: &mut CompressorOxide,
+        raw: &[u8],
+        compression_output: &mut Vec<u8>,
+    ) -> Result<(), TDEFLStatus> {
+        let mut raw = raw;
+        let mut buf = [0u8; Self::TEMP_BUFFER_SIZE];
+
+        loop {
+            let (status, raw_idx, buf_idx) = compress(compressor, raw, &mut buf, TDEFLFlush::None);
+
+            match status {
+                TDEFLStatus::Okay => (),
+                TDEFLStatus::Done => unreachable!(), // we're not flushing
+                TDEFLStatus::BadParam | TDEFLStatus::PutBufFailed => return Err(status),
+            }
+
+            raw = raw.get(raw_idx..).unwrap_or(const { &[] });
+            compression_output.extend_from_slice(&buf[..buf_idx]);
+
+            if raw.is_empty() || buf_idx < buf.len() {
+                return Ok(());
+            }
+        }
+    }
+
+    /// Compress the uncompressed bytes and encode those compressed bytes
+    /// into base64.
+    fn postprocess_b64(
+        compressor: &mut CompressorOxide,
+        b64_scratch_buffer: &mut [u8; 2],
+        b64_scratch_buffer_len: &mut u8,
+        raw: &[u8],
+        b64_output: &mut Vec<u8>,
+    ) -> Result<(), TDEFLStatus> {
+        let mut raw = raw;
+        let mut compressed_buf = [0u8; Self::COMPRESSED_BUFFER_SIZE];
+        let mut b64_out_buf = [0u8; Self::BASE64_BUFFER_SIZE];
+
+        loop {
+            let (status, raw_idx, cmp_buf_idx) =
+                compress(compressor, raw, &mut compressed_buf, TDEFLFlush::None);
+
+            match status {
+                TDEFLStatus::Okay => (),
+                TDEFLStatus::Done => unreachable!(), // we're not flushing
+                TDEFLStatus::BadParam | TDEFLStatus::PutBufFailed => return Err(status),
+            }
+
+            raw = raw.get(raw_idx..).unwrap_or(const { &[] });
+
+            let compressed_slice = &compressed_buf[..cmp_buf_idx];
+
+            let b64_idx = Self::postprocess_b64_inner(
+                compressed_slice,
+                b64_scratch_buffer,
+                b64_scratch_buffer_len,
+                &mut b64_out_buf,
+            );
+
+            if b64_idx > 0 {
+                // DEBUG
+                dbg!("debug breakpoint");
+            }
+
+            b64_output.extend_from_slice(&b64_out_buf[..b64_idx]);
+
+            if raw.is_empty() || cmp_buf_idx < compressed_buf.len() {
+                return Ok(());
+            }
+        }
+    }
+
+    /// Encode some compressed bytes into the b64 output
+    ///
+    /// Returns the amount of bytes written to `b64_output_buffer`.
+    ///
+    /// # Limit
+    /// This function has a limit to the input `compressed_slice`
+    /// based on `N`. Ensure `N` is big enough for your needs.
+    #[must_use]
+    fn postprocess_b64_inner<const N: usize>(
+        compressed_slice: &[u8],
+        b64_scratch_buffer: &mut [u8; 2],
+        b64_scratch_buffer_len: &mut u8,
+        b64_output_buffer: &mut [u8; N],
+    ) -> usize {
+        assert!(
+            base64::encoded_len(compressed_slice.len(), true).is_some_and(|enc_len| enc_len <= N),
+            "N is too small or the given compressed slice is too large"
+        );
+
+        let total_len = compressed_slice.len() + usize::from(*b64_scratch_buffer_len);
+        let processable_len = if total_len.is_multiple_of(3) {
+            total_len
+        } else {
+            total_len.next_multiple_of(3) - 3
+        };
+
+        if processable_len == 0 {
+            for byte in compressed_slice.iter().copied() {
+                b64_scratch_buffer[*b64_scratch_buffer_len as usize] = byte;
+                *b64_scratch_buffer_len += 1;
+            }
+
+            return 0;
+        }
+
+        // The first chunk may contain a mix of `b64_buffer` and `compressed_buf`
+        let first_chunk: [u8; 3] = core::array::from_fn(|i| {
+            #[expect(clippy::cast_possible_truncation, reason = "3 is below u8::MAX")]
+            let i = i as u8;
+            if let Some(compressed_idx) = i.checked_sub(*b64_scratch_buffer_len) {
+                compressed_slice[compressed_idx as usize]
+            } else {
+                b64_scratch_buffer[i as usize]
+            }
+        });
+
+        B64.encode_slice(first_chunk, &mut b64_output_buffer[..4])
+            .unwrap();
+
+        if processable_len == 3 {
+            // That first chunk is all we could encode
+
+            let unused_len = total_len - processable_len;
+
+            debug_assert!(unused_len < 3);
+
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "unused_len is always less than 3"
+            )]
+            {
+                *b64_scratch_buffer_len = unused_len as u8;
+            }
+
+            for (i, item) in b64_scratch_buffer.iter_mut().enumerate().take(unused_len) {
+                let compressed_idx = compressed_slice.len() + i - unused_len;
+                *item = compressed_slice[compressed_idx];
+            }
+
+            return 4;
+        }
+
+        // The rest may contain only `unprocessed`'s bytes
+        let rest_length = processable_len - 3;
+        let rest_start = usize::from(3 - *b64_scratch_buffer_len);
+        let rest_end = rest_start + rest_length;
+        let rest = &compressed_slice[rest_start..rest_end];
+
+        debug_assert!(rest.len().is_multiple_of(3));
+        debug_assert!(compressed_slice.len() >= rest_end);
+
+        let bytes = B64.encode_slice(rest, &mut b64_output_buffer[4..]).unwrap() + 4;
+
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "total_len is at most 2 more than processable_len"
+        )]
+        {
+            *b64_scratch_buffer_len = (total_len - processable_len) as u8;
+        }
+
+        for (idx, item) in b64_scratch_buffer
+            .iter_mut()
+            .take(*b64_scratch_buffer_len as usize)
+            .enumerate()
+        {
+            *item = compressed_slice[idx + rest_end];
+        }
+
+        bytes
+    }
+
+    /// Finish up serializing the replay data.
+    fn finish(&mut self) -> Result<Vec<u8>, TDEFLStatus> {
+        let mut vec = Vec::with_capacity(Self::TEMP_BUFFER_SIZE);
+        self.finish_into_vec(&mut vec)?;
+        Ok(vec)
+    }
+
+    fn finish_into_vec(&mut self, output: &mut Vec<u8>) -> Result<(), TDEFLStatus> {
+        match self {
+            Self::Uncompressed => Ok(()),
+            Self::Compressed { compressor } => {
+                Self::finish_compression_into_vec(compressor, output)
+            }
+            Self::Base64 {
+                compressor,
+                b64_scratch_buffer,
+                b64_scratch_buffer_len,
+            } => Self::finish_base64_into_vec(
+                compressor,
+                b64_scratch_buffer,
+                b64_scratch_buffer_len,
+                output,
+            ),
+        }
+    }
+
+    /// Flush deflate buffers into the vec.
+    fn finish_compression_into_vec(
+        compressor: &mut CompressorOxide,
+        output: &mut Vec<u8>,
+    ) -> Result<(), TDEFLStatus> {
+        let mut temp_buf = [0u8; Self::TEMP_BUFFER_SIZE];
+
+        loop {
+            let (status, _, out_idx) =
+                compress(compressor, const { &[] }, &mut temp_buf, TDEFLFlush::Finish);
+
+            output.extend_from_slice(&temp_buf[..out_idx]);
+
+            match status {
+                TDEFLStatus::Done => return Ok(()),
+                TDEFLStatus::Okay => (),
+                TDEFLStatus::BadParam | TDEFLStatus::PutBufFailed => return Err(status),
+            }
+        }
+    }
+
+    /// Flush deflate buffers and encode it as base64 into the vec.
+    fn finish_base64_into_vec(
+        compressor: &mut CompressorOxide,
+        b64_scratch_buffer: &mut [u8; 2],
+        b64_scratch_buffer_len: &mut u8,
+        output: &mut Vec<u8>,
+    ) -> Result<(), TDEFLStatus> {
+        let mut compressed_buf = [0u8; Self::COMPRESSED_BUFFER_SIZE];
+        let mut b64_out_buf = [0u8; Self::BASE64_BUFFER_SIZE];
+
+        loop {
+            let (status, _, out_idx) = compress(
+                compressor,
+                const { &[] },
+                &mut compressed_buf,
+                TDEFLFlush::Finish,
+            );
+
+            let compressed_slice = &compressed_buf[..out_idx];
+
+            let b64_out_bytes = Self::postprocess_b64_inner(
+                compressed_slice,
+                b64_scratch_buffer,
+                b64_scratch_buffer_len,
+                &mut b64_out_buf,
+            );
+
+            output.extend_from_slice(&b64_out_buf[..b64_out_bytes]);
+
+            match status {
+                TDEFLStatus::Done => break,
+                TDEFLStatus::Okay => (),
+                TDEFLStatus::BadParam | TDEFLStatus::PutBufFailed => return Err(status),
+            }
+        }
+
+        // Flush b64 buffers, if any
+        let Some(b64_rem) = b64_scratch_buffer.get(..(*b64_scratch_buffer_len as usize)) else {
+            return Ok(());
+        };
+
+        if b64_rem.is_empty() {
+            return Ok(());
+        }
+
+        let mut rem_buf = [0u8; 4];
+
+        let res = B64.encode_slice(b64_rem, &mut rem_buf);
+        debug_assert_eq!(res, Ok(4));
+
+        output.extend_from_slice(rem_buf.as_slice());
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use crate::{
+        tests::{
+            slightly_random_data, ByteFeeder, SAMPLE_INPUT_DATA, SAMPLE_METADATA,
+            SAMPLE_UNSORTED_INPUT_DATA, TEST_CHUNK_MAX_SIZE,
+        },
+        InputAction, InputActionKey, InputActionKind,
+    };
     use alloc::vec;
+    use fastrand::Rng;
 
     fn create_vlqs(values: &[u64]) -> Vec<u8> {
         // Estimation: most values need around 2 bytes
@@ -262,5 +828,190 @@ mod tests {
             append_vlqs(&mut vec, &values);
             assert_eq!(vec, expected);
         }
+    }
+
+    #[test]
+    fn postprocess_compression() {
+        const ROUNDS: usize = 1_000;
+
+        let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
+
+        for _ in 0..ROUNDS {
+            let data = slightly_random_data(&mut rng);
+            let mut feeder = ByteFeeder::new(&data);
+
+            let mut compressor = CompressorOxide::with_format_and_level(
+                DataFormat::Zlib,
+                CompressionLevel::BestSpeed,
+            );
+
+            let mut compressed = Vec::with_capacity(data.len());
+
+            while !feeder.is_empty() {
+                ReplayEncoderPostprocessor::postprocess_compression(
+                    &mut compressor,
+                    feeder.bite(&mut rng),
+                    &mut compressed,
+                )
+                .expect("compression should work");
+            }
+
+            ReplayEncoderPostprocessor::finish_compression_into_vec(
+                &mut compressor,
+                &mut compressed,
+            )
+            .expect("compression should finish");
+
+            let decompressed = miniz_oxide::inflate::decompress_to_vec_zlib(&compressed)
+                .expect("decompression should work");
+
+            assert_eq!(decompressed.as_slice(), data.as_slice());
+        }
+    }
+
+    #[test]
+    fn postprocess_base64() {
+        const ROUNDS: usize = 1_000;
+
+        let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
+
+        for _ in 0..ROUNDS {
+            let data = slightly_random_data(&mut rng);
+
+            let mut feeder = ByteFeeder::new(&data);
+
+            let mut compressor = CompressorOxide::with_format_and_level(
+                DataFormat::Zlib,
+                CompressionLevel::BestSpeed,
+            );
+
+            let mut b64_scratch_buffer = [0u8; 2];
+            let mut b64_scratch_buffer_len = 0;
+
+            let mut b64_output = Vec::with_capacity(data.len());
+
+            while !feeder.is_empty() {
+                ReplayEncoderPostprocessor::postprocess_b64(
+                    &mut compressor,
+                    &mut b64_scratch_buffer,
+                    &mut b64_scratch_buffer_len,
+                    feeder.bite(&mut rng),
+                    &mut b64_output,
+                )
+                .expect("compression and encode should work");
+            }
+
+            ReplayEncoderPostprocessor::finish_base64_into_vec(
+                &mut compressor,
+                &mut b64_scratch_buffer,
+                &mut b64_scratch_buffer_len,
+                &mut b64_output,
+            )
+            .expect("compression and encode should finish");
+
+            let decoded = B64.decode(&b64_output).expect("decode should work");
+            let decompressed = miniz_oxide::inflate::decompress_to_vec_zlib(&decoded)
+                .expect("decompression should work");
+
+            assert_eq!(decompressed.as_slice(), data.as_slice());
+        }
+    }
+
+    #[test]
+    fn postprocess_base64_inner() {
+        const ROUNDS: usize = 1_000;
+
+        let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
+
+        for _ in 0..ROUNDS {
+            let data = slightly_random_data(&mut rng);
+
+            let mut feeder = ByteFeeder::new(data.as_slice());
+
+            let mut b64_scratch_buffer = [0u8; 2];
+            let mut b64_scratch_buffer_len = 0u8;
+            // let mut b64_output_buffer = vec![0u8; base64::encoded_len(data.len(), true).unwrap()];
+            let mut b64_output_buffer =
+                [0u8; base64::encoded_len(TEST_CHUNK_MAX_SIZE, true).unwrap()];
+            let mut encoded = Vec::new();
+
+            while !feeder.is_empty() {
+                let out_len = ReplayEncoderPostprocessor::postprocess_b64_inner(
+                    feeder.bite(&mut rng),
+                    &mut b64_scratch_buffer,
+                    &mut b64_scratch_buffer_len,
+                    &mut b64_output_buffer,
+                );
+
+                encoded.extend_from_slice(&b64_output_buffer[..out_len]);
+            }
+
+            if b64_scratch_buffer_len > 0 {
+                encoded.extend_from_slice(
+                    B64.encode(&b64_scratch_buffer[..b64_scratch_buffer_len as usize])
+                        .as_bytes(),
+                );
+            }
+
+            let decoded = B64
+                .decode(encoded.as_slice())
+                .expect("decoding should work");
+
+            assert_eq!(data.as_slice(), decoded.as_slice());
+        }
+    }
+
+    #[test]
+    fn metadata_encoder_state() {
+        let mut encoder = ReplayEncoderState::WaitingForMetadata;
+
+        assert!(matches!(
+            encoder
+                .feed_input_data(&[], &mut [])
+                .expect_err("this should error"),
+            ReplaySerializeError::InvalidOperation,
+        ));
+
+        encoder
+            .feed_metadata(&SAMPLE_METADATA, None)
+            .expect("this should work");
+    }
+
+    #[test]
+    fn input_encoder_state() {
+        let mut encoder = ReplayEncoderState::InputData {
+            prev_frame: 0,
+            parse_mode: InputParseMode::Relative,
+        };
+
+        assert!(matches!(
+            encoder
+                .feed_metadata(&SAMPLE_METADATA, None)
+                .expect_err("this should error"),
+            ReplaySerializeError::InvalidOperation,
+        ));
+
+        let mut output_buffer = [0u8; 16];
+
+        let tuple = encoder
+            .feed_input_data(SAMPLE_INPUT_DATA.as_slice(), &mut output_buffer)
+            .expect("serialization should work");
+
+        assert_eq!(tuple, (2, 4));
+
+        let mut encoder = ReplayEncoderState::InputData {
+            prev_frame: 0,
+            parse_mode: InputParseMode::Relative,
+        };
+
+        assert!(matches!(
+            encoder
+                .feed_input_data(SAMPLE_UNSORTED_INPUT_DATA.as_slice(), &mut output_buffer)
+                .expect_err("this should not work"),
+            ReplaySerializeError::UnsortedInput {
+                prev_time: 9,
+                unsorted_time: 3
+            }
+        ));
     }
 }

@@ -6,6 +6,7 @@ use alloc::{
     vec::Vec,
 };
 
+use std::borrow::Cow;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
@@ -59,18 +60,18 @@ impl GameInputEvent {
     /// # Errors
     /// For this to work, `frame` must be at most [`Self::MAX_FRAME`].
     /// This will return an error if this condition is not met.
-    pub fn new(frame: u64, action: InputAction) -> Result<Self, GameInputEventError> {
+    pub const fn new(frame: u64, action: InputAction) -> Result<Self, GameInputEventError> {
         if frame > Self::MAX_FRAME {
             return Err(GameInputEventError);
         }
 
         let InputAction { kind, key } = action;
 
-        let kind = u8::from(kind);
-        let kind = i64::from(kind);
+        let kind = kind.into_bool();
+        let kind = kind as i64;
 
-        let key = u8::from(key);
-        let key = i64::from(key);
+        let key = key.into_byte();
+        let key = key as i64;
 
         let res: i64 = kind << 63 | key << 56 | frame.cast_signed();
         Ok(Self(res))
@@ -208,7 +209,7 @@ pub struct PlayerSettings {
     /// The DAS (delayed auto-shift) cut slider in the control settings.
     ///
     /// Normal values: integer from 0 to 20, measured in frames\
-    /// Learn more about DAS: <https://tetris.wiki/DAS>  
+    /// Learn more about DAS: <https://tetris.wiki/DAS>
     pub dascut: Option<u64>,
     /// The IRS (initial rotation system) cut slider in the control settings.
     ///
@@ -360,8 +361,7 @@ pub enum ReplayParseError {
     ZlibDecompressError {
         /// The internal zlib status.
         status: TINFLStatus,
-        // TODO: After finishing state machine migration, remove this
-        mz_error: Option<MZError>,
+        mz_error: MZError,
     },
 
     /// An error occurred while parsing the base64 string.
@@ -456,6 +456,12 @@ pub enum ReplaySerializeError {
     /// To fix this error, consider passing in the input parse mode explicitly.
     UnknownInputParseMode(String),
 
+    /// There was an attempt to call a function at the wrong state.
+    ///
+    /// For example, if the replay encoder expects metadata, but input data
+    /// was given instead (or vice versa), this error will be returned.
+    InvalidOperation,
+
     /// The input [`Vec`] isn't sorted.
     ///
     /// The serializer expects the input [`Vec`] to be sorted, or the game may parse the inputs
@@ -464,8 +470,6 @@ pub enum ReplaySerializeError {
     /// To fix this error, consider calling [`sort_inputs`][GameReplayData::sort_inputs] on the
     /// [`GameReplayData`] before serializing it.
     UnsortedInput {
-        /// The first data point index in which the array isn't sorted.
-        first_unsorted_index: usize,
         /// The frame number of the previous data point.
         prev_time: u64,
         /// The frame number of the first data point which caused the array to not be sorted.
@@ -504,7 +508,8 @@ pub enum InputParseMode {
     /// pair are relative to the frame of the previous input.
     ///
     /// For example, if you press two keys at the exact same frame, the first input
-    /// has a time of the current frame number, while the second input has a time of 0.
+    /// has a stored time of the number of frames since the previous input,
+    /// while the second input has a time of 0.
     Relative,
     /// Absolute timing.
     ///
@@ -588,6 +593,72 @@ impl InputParseMode {
 
         // It's not really possible to "disprove" relative mode, so we're still unsure
         None
+    }
+}
+
+/// A [`Cow`] of either strings or bytes.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum StringOrBytes<'a> {
+    String(Cow<'a, str>),
+    Bytes(Cow<'a, [u8]>),
+}
+
+impl<'a> StringOrBytes<'a> {
+    /// Checks if this enum instance is the [`String`][Self::String] variant.
+    pub fn is_string(&self) -> bool {
+        matches!(self, Self::String(..))
+    }
+
+    /// Checks if this enum instance is the [`Bytes`][Self::Bytes] variant.
+    pub fn is_bytes(&self) -> bool {
+        matches!(self, Self::Bytes(..))
+    }
+
+    /// Returns the string interpretation of this, if any.
+    ///
+    /// *No attempt is made trying to convert the bytes into a valid UTF-8 string.*
+    ///
+    /// If this instance is of the [`String`][Self::String] variant, return that.\
+    /// If this instance is of the [`Bytes`][Self::Bytes] variant, return [`None`].
+    ///
+    /// # Example
+    /// ```
+    /// use alloc::borrow::Cow;
+    /// use techmino_replay_toolkit::StringOrBytes;
+    ///
+    /// let string = StringOrBytes::String(Cow::Borrowed("hello"));
+    /// assert_eq!(string.as_string(), Some(Cow::Borrowed("hello")))
+    ///
+    /// let bytes = StringOrBytes::Bytes(Cow::Borrowed(&b"hello"));
+    /// assert_eq!(bytes.as_string(), None);
+    /// ```
+    pub fn as_string(&self) -> Option<&str> {
+        let Self::String(s) = self else { return None };
+
+        Some(s)
+    }
+
+    /// Return the byte representation.
+    ///
+    /// If this instance is of the [`String`][Self::String] variant, return its bytes.\
+    /// If this instance is of the [`Bytes`][Self::Bytes] variant, return its bytes.
+    ///
+    /// # Example
+    /// ```
+    /// use alloc::borrow::Cow;
+    /// use techmino_replay_toolkit::StringOrBytes;
+    ///
+    /// let string = StringOrBytes::String(Cow::Borrowed("hello"));
+    /// assert_eq!(string.as_bytes(), &b"hello");
+    ///
+    /// let bytes = StringOrBytes::Bytes(Cow::Borrowed(&b"hello"));
+    /// assert_eq!(bytes.as_bytes(), &b"hello");
+    /// ```
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            Self::String(s) => s.as_bytes(),
+            Self::Bytes(b) => b,
+        }
     }
 }
 

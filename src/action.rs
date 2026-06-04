@@ -3,6 +3,8 @@
 //! The action is stored as a single packed byte containing information on its kind
 //! (press or release) as well as its key (e.g., move left, move right).
 
+use std::num::TryFromIntError;
+
 use serde::{Deserialize, Serialize};
 
 /// Represents an action associated with a certain input event.
@@ -14,35 +16,47 @@ pub struct InputAction {
     pub key: InputActionKey,
 }
 
-impl TryFrom<u8> for InputAction {
-    // TODO: Replace with actual error type
-    type Error = <InputActionKey as TryFrom<u8>>::Error;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        // TODO: investigate whether this should have been >=
-        let kind = if value > 0b0010_0000 {
+impl InputAction {
+    pub const fn try_from_byte(value: u8) -> Result<Self, <InputActionKey as TryFrom<u8>>::Error> {
+        let kind = if value >= 0b0010_0000 {
             InputActionKind::Release
         } else {
             InputActionKind::Press
         };
 
-        let keycode = value & 0b0001_1111;
-        let key = InputActionKey::try_from(keycode)?;
+        let keycode = value & 0b001_1111;
+        let key = match InputActionKey::try_from_byte(keycode) {
+            Ok(k) => k,
+            Err(e) => return Err(e),
+        };
 
         Ok(Self { kind, key })
+    }
+
+    pub const fn into_byte(self) -> u8 {
+        let kind_bits = match self.kind {
+            InputActionKind::Release => 0b0010_0000,
+            InputActionKind::Press => 0b0000_0000,
+        };
+
+        let key_bits = self.key.into_byte();
+
+        key_bits | kind_bits
+    }
+}
+
+impl TryFrom<u8> for InputAction {
+    // TODO: Replace with actual error type
+    type Error = <InputActionKey as TryFrom<u8>>::Error;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        InputAction::try_from_byte(value)
     }
 }
 
 impl From<InputAction> for u8 {
     fn from(value: InputAction) -> Self {
-        let kind_bits = match value.kind {
-            InputActionKind::Release => 0b0010_0000,
-            InputActionKind::Press => 0b0000_0000,
-        };
-
-        let key_bits: u8 = value.key.into();
-
-        key_bits | kind_bits
+        value.into_byte()
     }
 }
 
@@ -56,42 +70,45 @@ pub enum InputActionKind {
     Release = 1,
 }
 
-impl TryFrom<u8> for InputActionKind {
-    type Error = ();
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::Press),
-            1 => Ok(Self::Release),
-            _ => Err(()),
-        }
-    }
-}
-
-impl From<bool> for InputActionKind {
-    fn from(value: bool) -> Self {
+impl InputActionKind {
+    pub const fn from_bool(value: bool) -> Self {
         if value {
             Self::Release
         } else {
             Self::Press
         }
     }
+
+    pub const fn into_bool(self) -> bool {
+        match self {
+            Self::Release => true,
+            Self::Press => false,
+        }
+    }
+}
+
+impl TryFrom<u8> for InputActionKind {
+    type Error = TryFromIntError;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        Ok(Self::from_bool(bool::try_from(value)?))
+    }
+}
+
+impl From<bool> for InputActionKind {
+    fn from(value: bool) -> Self {
+        Self::from_bool(value)
+    }
 }
 
 impl From<InputActionKind> for u8 {
     fn from(value: InputActionKind) -> Self {
-        match value {
-            InputActionKind::Press => 0,
-            InputActionKind::Release => 1,
-        }
+        value.into_bool().into()
     }
 }
 
 impl From<InputActionKind> for bool {
     fn from(value: InputActionKind) -> Self {
-        match value {
-            InputActionKind::Press => false,
-            InputActionKind::Release => true,
-        }
+        value.into_bool()
     }
 }
 
@@ -125,10 +142,9 @@ pub enum InputActionKey {
     RightZangi = 20,
 }
 
-impl TryFrom<u8> for InputActionKey {
-    // TODO: Replace with actual error
-    type Error = ();
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+impl InputActionKey {
+    // TODO: Replace with actual error type
+    pub const fn try_from_byte(value: u8) -> Result<Self, ()> {
         use InputActionKey::{
             Down1, Down10, Down4, Function1, Function2, HardDrop, Hold, InstantLeft, InstantRight,
             LeftDrop, LeftZangi, MoveLeft, MoveRight, RightDrop, RightZangi, Rotate180, RotateLeft,
@@ -159,17 +175,15 @@ impl TryFrom<u8> for InputActionKey {
             _ => Err(()),
         }
     }
-}
 
-impl From<InputActionKey> for u8 {
-    fn from(value: InputActionKey) -> Self {
+    pub const fn into_byte(self) -> u8 {
         use InputActionKey::{
             Down1, Down10, Down4, Function1, Function2, HardDrop, Hold, InstantLeft, InstantRight,
             LeftDrop, LeftZangi, MoveLeft, MoveRight, RightDrop, RightZangi, Rotate180, RotateLeft,
             RotateRight, SoftDrop, SonicDrop,
         };
 
-        match value {
+        match self {
             MoveLeft => 1,
             MoveRight => 2,
             RotateRight => 3,
@@ -191,5 +205,20 @@ impl From<InputActionKey> for u8 {
             LeftZangi => 19,
             RightZangi => 20,
         }
+    }
+}
+
+impl TryFrom<u8> for InputActionKey {
+    // TODO: Replace with actual error type
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        Self::try_from_byte(value)
+    }
+}
+
+impl From<InputActionKey> for u8 {
+    fn from(value: InputActionKey) -> Self {
+        value.into_byte()
     }
 }

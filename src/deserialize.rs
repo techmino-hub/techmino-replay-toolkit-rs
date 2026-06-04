@@ -57,13 +57,22 @@ impl TryFrom<&[u8]> for GameReplayMetadata {
 
 /// A decoder for Techmino replays.
 ///
+/// This decoder is NOT cumulative, you are expected to
+/// create an external buffer to store its output or stream
+/// it elsewhere.
+///
 /// # Large Size
 /// This struct has a large size. To avoid stack overflow, you should
 /// [`Box`] this struct if you're using this a lot or over a long period
 /// of time.
 pub struct ReplayDecoder {
-    state: ReplayDecoderState,
+    /// The preprocessor responsible to convert the
+    /// inputted data into the same raw format to
+    /// be given to the decoder.
     preprocessor: ReplayDecoderPreprocessor,
+    /// The inner decoder state machine that takes in replay data
+    /// in raw, uncompressed format from the preprocessor.
+    state: ReplayDecoderState,
 }
 
 impl ReplayDecoder {
@@ -88,10 +97,7 @@ impl ReplayDecoder {
             Ok(b) => b,
             Err(FormatError::Base64Error(e)) => return Err(ReplayParseError::Base64DecodeError(e)),
             Err(FormatError::ZlibError { status, mz_error }) => {
-                return Err(ReplayParseError::ZlibDecompressError {
-                    status,
-                    mz_error: Some(mz_error),
-                })
+                return Err(ReplayParseError::ZlibDecompressError { status, mz_error })
             }
         };
 
@@ -110,7 +116,8 @@ impl ReplayDecoder {
     }
 }
 
-/// The state machine for the replay decoder.
+/// The inner state machine for the replay decoder, taking
+/// in the raw uncompressed replay data.
 enum ReplayDecoderState {
     /// Waiting for the metadata section to finish.
     WaitingForMetadata(MetadataDecoderState),
@@ -356,7 +363,8 @@ impl InputDecoderState {
 
 /// Preprocesses different replay data forms into uncompressed form.
 enum ReplayDecoderPreprocessor {
-    /// The base64 preprocessor.
+    /// Preprocess by decoding base64 and then
+    /// decompressing it
     Base64 {
         /// b64 has this quirk where each input char/byte
         /// encodes 6 bits of data.
@@ -522,12 +530,11 @@ impl ReplayDecoderPreprocessor {
         let rest = &unprocessed[rest_start..rest_end];
 
         debug_assert!(rest.len().is_multiple_of(4));
+        debug_assert!(unprocessed.len() >= rest_end);
 
         if let Err(e) = engine.decode_vec(rest, &mut compressed) {
             return Err(FormatError::Base64Error(e));
         }
-
-        debug_assert!(unprocessed.len() >= rest_end);
 
         #[expect(
             clippy::cast_possible_truncation,
@@ -757,7 +764,7 @@ mod tests {
         }
 
         eprint!("earlyinput_bytes: [0x");
-        for byte in earlyinput_bytes.iter().copied() {
+        for byte in &earlyinput_bytes {
             eprint!("{byte:02X}_");
         }
         eprintln!("]");
@@ -820,7 +827,7 @@ mod tests {
         }
 
         eprint!("earlyinput_bytes: [0x");
-        for byte in earlyinput_bytes.iter().copied() {
+        for byte in &earlyinput_bytes {
             eprint!("{byte:02X}_");
         }
         eprintln!("]");
