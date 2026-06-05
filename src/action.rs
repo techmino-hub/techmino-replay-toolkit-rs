@@ -3,7 +3,7 @@
 //! The action is stored as a single packed byte containing information on its kind
 //! (press or release) as well as its key (e.g., move left, move right).
 
-use std::num::TryFromIntError;
+use core::num::TryFromIntError;
 
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +17,12 @@ pub struct InputAction {
 }
 
 impl InputAction {
+    /// Tries to convert an encoded byte into an [`InputAction`].
+    ///
+    /// This is the `const fn` version of the `TryFrom<u8>` implementation. For more information, see [`TryFrom`].
+    ///
+    /// # Errors
+    /// This function errors if the given byte is not a valid encoded input action byte.
     pub const fn try_from_byte(value: u8) -> Result<Self, <InputActionKey as TryFrom<u8>>::Error> {
         let kind = if value >= 0b0010_0000 {
             InputActionKind::Release
@@ -33,6 +39,10 @@ impl InputAction {
         Ok(Self { kind, key })
     }
 
+    /// Converts this input action to its encoded byte.
+    ///
+    /// This is the `const fn` version of the `Into<u8>` implementation. For more information, see [`Into`].
+    #[must_use]
     pub const fn into_byte(self) -> u8 {
         let kind_bits = match self.kind {
             InputActionKind::Release => 0b0010_0000,
@@ -71,6 +81,11 @@ pub enum InputActionKind {
 }
 
 impl InputActionKind {
+    /// Converts a bool into the corresponding [`InputActionKind`] as used by the game.
+    ///
+    /// This is a `const fn` version of the corresponding `From<u8>` implementation. For more
+    /// information, see [`From`].
+    #[must_use]
     pub const fn from_bool(value: bool) -> Self {
         if value {
             Self::Release
@@ -79,6 +94,8 @@ impl InputActionKind {
         }
     }
 
+    /// Converts this
+    #[must_use]
     pub const fn into_bool(self) -> bool {
         match self {
             Self::Release => true,
@@ -143,7 +160,12 @@ pub enum InputActionKey {
 }
 
 impl InputActionKey {
-    // TODO: Replace with actual error type
+    /// Tries to convert an encoded byte into an [`InputActionKey`]
+    ///
+    /// This is the `const fn` version of the `TryFrom<u8>` implementation. For more information, see [`TryFrom`].
+    ///
+    /// # Errors
+    /// This function errors if the given byte is not a valid encoded input action byte.
     pub const fn try_from_byte(value: u8) -> Result<Self, ()> {
         use InputActionKey::{
             Down1, Down10, Down4, Function1, Function2, HardDrop, Hold, InstantLeft, InstantRight,
@@ -176,6 +198,11 @@ impl InputActionKey {
         }
     }
 
+    /// Converts an [`InputActionKey`] to its encoded byte representation.
+    ///
+    /// This is the `const fn` version of the corresponding `Into<u8>` implementation. For more
+    /// information, see [`Into`].
+    #[must_use]
     pub const fn into_byte(self) -> u8 {
         use InputActionKey::{
             Down1, Down10, Down4, Function1, Function2, HardDrop, Hold, InstantLeft, InstantRight,

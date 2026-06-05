@@ -1,3 +1,57 @@
+//! # Deserialization
+//! Deserialize or parse an existing replay file.
+//!
+//! The default [`GameReplayData`] struct provides simple deserialization defaults and should
+//! cover most usecases. But for e.g. streaming, use the [`ReplayDecoder`] struct instead and pass in
+//! your data.
+//!
+//! ## Example
+//! ```
+//! # use techmino_replay_toolkit::{
+//! #   GameReplayData, ReplayBufferKind, ReplayDecoder, GameReplayMetadata,
+//! #   GameInputEvent,
+//! # };
+//! # fn read_file(_source: &str) -> &[u8] { &[] }
+//! # fn read_clipboard() -> &'static str { "" }
+//! # struct Stream;
+//! # impl Stream {
+//! #   fn new() -> Self {
+//! #       Self
+//! #   }
+//! #   fn next(&mut self) -> &[u8] {
+//! #       &[]
+//! #   }
+//! #   fn is_empty(&self) -> bool {
+//! #       true
+//! #   }
+//! # }
+//!
+//! // .rep files are of compressed form
+//! let replay_data: &[u8] = read_file("my_replay.rep");
+//! let result = GameReplayData::parse_replay(replay_data, ReplayBufferKind::Compressed);
+//!
+//! // copied text replays from the Replays menu is in base64 form
+//! let replay_string: &[u8] = read_clipboard();
+//! let result = GameReplayData::parse_replay(replay_string, ReplayBufferKind::Base64);
+//!
+//! // Streaming example, using an arbitrary stream
+//! // We will gradually fill in the details at it comes in
+//! let mut metadata: Option<GameReplayMetadata> = None;
+//! let mut inputs: Vec<GameInputEvent> = Vec::new();
+//! let mut my_stream = Stream::new();
+//! let mut decoder = ReplayDecoder::new(ReplayBufferKind::Compressed);
+//!
+//! while !my_stream.is_empty() {
+//!     let next_chunk: &[u8] = my_stream.next();
+//!     let decoded = decoder.update().unwrap();
+//!     if let Some(m) = decoded.metadata {
+//!         metadata = Some(m);
+//!     }
+//!
+//!     inputs.extend_from_slice(&decoded.inputs);
+//! }
+//! ```
+
 use crate::{
     format::ReplayBufferKind,
     types::{GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplayParseError},
@@ -80,6 +134,7 @@ impl ReplayDecoder {
     ///
     /// You must give the kind of replay data you will feed this decoder.
     /// For more information, see [`ReplayBufferKind`].
+    #[must_use]
     pub fn new(kind: ReplayBufferKind) -> Self {
         Self {
             state: ReplayDecoderState::WaitingForMetadata(MetadataDecoderState::new()),
@@ -92,6 +147,12 @@ impl ReplayDecoder {
     /// This can be used multiple times. For example, if you have
     /// a stream of bytes, you can gradually feed the bytes into this
     /// update function.
+    ///
+    /// # Errors
+    /// This function errors when the given byte slice is invalid.
+    /// This may be due to:
+    /// - Incorrect replay buffer kind
+    /// - Malformed replay data
     pub fn update(&mut self, bytes: &[u8]) -> Result<Decoded, ReplayParseError> {
         let uncompressed = match self.preprocessor.preprocess(bytes) {
             Ok(b) => b,
@@ -109,8 +170,9 @@ impl ReplayDecoder {
     /// This does NOT mean that the replay is guaranteed to have finished, this
     /// ONLY means that it's fine if the replay finished at the current state.
     ///
-    /// This function may return true even though there is more data to process.
-    /// But this function should return false if there isn't more data to process.
+    /// This function may return true even though you have more data to process.
+    /// But this function should return false if there isn't any more data to process.
+    #[must_use]
     pub fn is_finished(&self) -> bool {
         self.preprocessor.is_finished() && self.state.is_finished()
     }
@@ -161,14 +223,10 @@ impl ReplayDecoderState {
                     inputs,
                 })
             }
-            Self::InputDecode(input_decoder) => {
-                let inputs = input_decoder.update(bytes)?;
-
-                Ok(Decoded {
-                    metadata: None,
-                    inputs,
-                })
-            }
+            Self::InputDecode(input_decoder) => Ok(Decoded {
+                metadata: None,
+                inputs: input_decoder.update(bytes)?,
+            }),
         }
     }
 

@@ -1,12 +1,13 @@
 //! General types and structs to represent metadata and other trivial data.
 
 use alloc::{
-    fmt::{self, Debug},
+    fmt::{self},
     string::{FromUtf8Error, String},
     vec::Vec,
 };
 
-use std::borrow::Cow;
+use alloc::borrow::Cow;
+use core::fmt::Debug;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
@@ -14,10 +15,7 @@ use std::collections::HashMap;
 use hashbrown::HashMap;
 
 use base64::DecodeError;
-use miniz_oxide::{
-    inflate::{DecompressError, TINFLStatus},
-    MZError,
-};
+use miniz_oxide::{inflate::TINFLStatus, MZError};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
@@ -361,6 +359,7 @@ pub enum ReplayParseError {
     ZlibDecompressError {
         /// The internal zlib status.
         status: TINFLStatus,
+        /// The miniz failure status code.
         mz_error: MZError,
     },
 
@@ -599,17 +598,21 @@ impl InputParseMode {
 /// A [`Cow`] of either strings or bytes.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum StringOrBytes<'a> {
+    /// A [`Cow`] of UTF-8 bytes.
     String(Cow<'a, str>),
+    /// A [`Cow`] of arbitrary bytes.
     Bytes(Cow<'a, [u8]>),
 }
 
-impl<'a> StringOrBytes<'a> {
+impl StringOrBytes<'_> {
     /// Checks if this enum instance is the [`String`][Self::String] variant.
+    #[must_use]
     pub fn is_string(&self) -> bool {
         matches!(self, Self::String(..))
     }
 
     /// Checks if this enum instance is the [`Bytes`][Self::Bytes] variant.
+    #[must_use]
     pub fn is_bytes(&self) -> bool {
         matches!(self, Self::Bytes(..))
     }
@@ -632,6 +635,7 @@ impl<'a> StringOrBytes<'a> {
     /// let bytes = StringOrBytes::Bytes(Cow::Borrowed(&b"hello"));
     /// assert_eq!(bytes.as_string(), None);
     /// ```
+    #[must_use]
     pub fn as_string(&self) -> Option<&str> {
         let Self::String(s) = self else { return None };
 
@@ -654,6 +658,7 @@ impl<'a> StringOrBytes<'a> {
     /// let bytes = StringOrBytes::Bytes(Cow::Borrowed(&b"hello"));
     /// assert_eq!(bytes.as_bytes(), &b"hello");
     /// ```
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         match self {
             Self::String(s) => s.as_bytes(),

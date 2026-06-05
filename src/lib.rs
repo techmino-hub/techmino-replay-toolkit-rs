@@ -28,9 +28,9 @@ compile_error!("You must enable either the `std` feature or the `alloc` feature"
 extern crate alloc;
 
 mod action;
-mod deserialize;
+pub mod deserialize;
 pub mod format;
-mod serialize;
+pub mod serialize;
 mod types;
 mod vlq;
 

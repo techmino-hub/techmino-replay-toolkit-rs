@@ -1,15 +1,109 @@
-use core::ops::ControlFlow;
-
-use alloc::borrow::Cow;
-use base64::Engine as _;
+//! # Serialization
+//! Serialize or save replay data into raw bytes readable by the game.
+//!
+//! The default [`GameReplayData`] struct provides simple serialization defaults and should
+//! cover most usecases. But for e.g. streaming, use the [`ReplayEncoder`] struct instead and
+//! pass in your data.
+//!
+//! ## Example
+//! ```
+//! # use techmino_replay_toolkit::{
+//! #   GameReplayData, ReplayBufferKind, ReplayEncoder, GameReplayMetadata,
+//! #   GameInputEvent, PlayerSettings
+//! # };
+//! # struct Stream;
+//! # impl Stream {
+//! #   fn new() -> Self {
+//! #       Self
+//! #   }
+//! #   fn next(&mut self) -> &[GameInputEvent] {
+//! #       &[]
+//! #   }
+//! #   fn is_empty(&self) -> bool {
+//! #       true
+//! #   }
+//! # }
+//!
+//! let metadata = GameReplayMetadata {
+//!     // ...
+//! #   date: "".into(),
+//! #   mode: "".into(),
+//! #   mods: None,
+//! #   player: "".into(),
+//! #   nonstandard: HashMap::new(),
+//! #   private: None,
+//! #   seed: 0,
+//! #   setting: PlayerSettings {
+//! #       das: None,
+//! #       arr: None,
+//! #       atk_fx: None,
+//! #       bag_line: None,
+//! #       block: None,
+//! #       center: None,
+//! #       clear_fx: None,
+//! #       dascut: None,
+//! #       drop_fx: None,
+//! #       dropcut: None,
+//! #       face: None,
+//! #       ft_lock: None,
+//! #       ghost: None,
+//! #       grid: None,
+//! #       high_cam: None,
+//! #       ihs: None,
+//! #       ims: None,
+//! #       irs: None,
+//! #       irscut: None,
+//! #       lock_fx: None,
+//! #       move_fx: None,
+//! #       next_pos: None,
+//! #       nonstandard: HashMap::new(),
+//! #       rs: None,
+//! #       score: None,
+//! #       sdarr: None,
+//! #       sddas: None,
+//! #       shake_fx: None,
+//! #       skin: None,
+//! #       smooth: None,
+//! #       splash_fx: None,
+//! #       text: None,
+//! #       warn: None,
+//! #   },
+//! #   tas_used: None,
+//! #   string: "".into(),
+//! };
+//! let inputs: Vec<GameInputEvent> = vec![
+//!     // ...
+//! ];
+//!
+//! // Default serialization
+//! let replay = GameReplayData { inputs, metadata: metadata.clone() };
+//!
+//! let rep_file = replay.serialize_to_compressed(None);
+//! let copiable_b64 = replay.serialize_to_base64(None);
+//!
+//! // Streaming serialization
+//! let mut input_stream = Stream::new();
+//! let mut encoder = ReplayEncoder::new(ReplayBufferKind::Compressed, None);
+//! let mut replay_bytes: Vec<u8> = encoder.feed_metadata(metadata).unwrap();
+//!
+//! while !input_stream.is_empty() {
+//!     let inputs: &[GameInputEvent] = input_stream.next();
+//!     encoder.feed_input_data(inputs, &mut replay_bytes).unwrap();
+//! }
+//!
+//! encoder.finish(&mut replay_bytes).unwrap();
+//! ```
 
 use crate::format::ReplayBufferKind;
 use crate::types::{GameInputEvent, GameReplayData, InputParseMode, ReplaySerializeError};
 use crate::vlq::VlqData;
 use crate::GameReplayMetadata;
+use alloc::borrow::Cow;
 use alloc::string::String;
 use alloc::vec::Vec;
 use base64::engine::general_purpose::STANDARD as B64;
+use base64::Engine as _;
+use core::ops::ControlFlow;
 
 use miniz_oxide::deflate::core::{compress, TDEFLFlush, TDEFLStatus};
 use miniz_oxide::deflate::CompressionLevel;
@@ -42,6 +136,13 @@ impl GameReplayData {
     /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.\
     /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
     /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
+    ///
+    /// # Input Parse Mode
+    /// This function takes in an input parse mode override. This is often not required, but can be useful
+    /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
+    ///
+    /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
+    /// best to give a `None`.
     ///
     /// # Errors
     /// For more information, refer to [`ReplaySerializeError`]
@@ -109,6 +210,13 @@ impl GameReplayData {
     /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
     /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
     ///
+    /// # Input Parse Mode
+    /// This function takes in an input parse mode override. This is often not required, but can be useful
+    /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
+    ///
+    /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
+    /// best to give a `None`.
+    ///
     /// # Errors
     /// For more information, refer to [`ReplaySerializeError`]
     pub fn serialize_to_compressed(
@@ -131,6 +239,13 @@ impl GameReplayData {
     /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.\
     /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
     /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
+    ///
+    /// # Input Parse Mode
+    /// This function takes in an input parse mode override. This is often not required, but can be useful
+    /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
+    ///
+    /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
+    /// best to give a `None`.
     ///
     /// # Errors
     /// For more information, refer to [`ReplaySerializeError`]
@@ -202,8 +317,90 @@ pub struct ReplayEncoder {
 }
 
 impl ReplayEncoder {
+    /// Creates a new [`ReplayEncoder`] instance.
+    ///
+    /// # Input Parse Mode
+    /// This function takes in an input parse mode override. This is often not required, but can be useful
+    /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
+    ///
+    /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
+    /// best to give a `None`.
+    ///
+    /// # Next Steps
+    /// After creating the [`ReplayEncoder`], start by feeding it some metadata to serialize \
+    /// using [`feed_metadata`]. Note that that step can only be done once per encoding since
+    /// there's only one metadata segment in the replay structure.
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(rep_kind: ReplayBufferKind, input_mode: Option<InputParseMode>) -> Self {
+        todo!();
+    }
+
+    /// Feeds some metadata into this [`ReplayEncoder`].
+    ///
+    /// # Returns
+    /// If this function succeeds, returns a `Vec` of encoded replay bytes. The form of this
+    /// depends on the specific replay kind you chose. In the case of [`ReplayBufferKind::Base64`],
+    /// the output is guaranteed to be a valid UTF-8 string.
+    ///
+    /// Note that the output is still incomplete, and may not be a valid replay yet.
+    ///
+    /// # Errors
+    /// This function errors if the metadata is invalid or if the encoder isn't expecting metadata
+    /// (i.e., it's already been given metadata and is now expecting input data).
+    ///
+    /// # Next Steps
+    /// After feeding the [`ReplayEncoder`] metadata, the last step is to feed it input data
+    /// using [`feed_input_data`]. Note that unlike feeding metadata, you can feed input data
+    /// in multiple batches.
+    pub fn feed_metadata(
+        &mut self,
+        metadata: &GameReplayMetadata,
+    ) -> Result<Vec<u8>, ReplaySerializeError> {
+        todo!();
+    }
+
+    /// Feeds some input data into this [`ReplayEncoder`].
+    ///
+    /// Any output will be appended into the given `output` `Vec`. \
+    /// The `output` `Vec` doesn't need to be filled or anything, it just needs to be a `Vec<u8>`
+    /// to place any output.
+    ///
+    /// # Errors
+    /// This function errors if the input data is invalid (e.g., unsorted), or if the encoder
+    /// isn't expecting input data right now (i.e., it's not yet been given metadata).
+    ///
+    /// # Requirements
+    /// This function requires the input data to be sorted, otherwise returns an error.
+    /// This function also requires that metadata has been fed to the [`ReplayEncoder`] using
+    /// [`feed_metadata`][Self::feed_metadata].
+    ///
+    /// # Repeatable
+    /// You can safely call this function multiple times with chunks of input data.
+    ///
+    /// # Next Steps
+    /// After you have given all your input data into the encoder, you'll have to finish
+    /// up by calling the [`finish`][Self::finish] function.
+    pub fn feed_input_data(
+        &mut self,
+        input_data: &[GameInputEvent],
+        output: &mut Vec<u8>,
+    ) -> Result<(), ReplaySerializeError> {
+        todo!();
+    }
+
+    /// Finishes up the replay.
+    ///
+    /// Any output will be appended into the given `output` `Vec`. \
+    /// The `output` `Vec` doesn't need to be filled or anything, it just needs to be a `Vec<u8>`
+    /// to place any output.
+    ///
+    /// # Errors
+    /// This function errors if something went wrong while compressing.
+    ///
+    /// # Requirements
+    /// This function requires the metadata to be filled, and for this encoder
+    /// to not be previously finished.
+    pub fn finish(&mut self, output: &mut Vec<u8>) -> Result<(), ReplaySerializeError> {
         todo!();
     }
 }
@@ -737,12 +934,9 @@ impl ReplayEncoderPostprocessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        tests::{
-            slightly_random_data, ByteFeeder, SAMPLE_INPUT_DATA, SAMPLE_METADATA,
-            SAMPLE_UNSORTED_INPUT_DATA, TEST_CHUNK_MAX_SIZE,
-        },
-        InputAction, InputActionKey, InputActionKind,
+    use crate::tests::{
+        slightly_random_data, ByteFeeder, SAMPLE_INPUT_DATA, SAMPLE_METADATA,
+        SAMPLE_UNSORTED_INPUT_DATA, TEST_CHUNK_MAX_SIZE,
     };
     use alloc::vec;
     use fastrand::Rng;

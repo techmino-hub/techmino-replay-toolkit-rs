@@ -1,6 +1,10 @@
 //! Module for representing the three different ways to have inputs/outputs in this library.
 
-/// Represents the different kinds of ways that Techmion replays could be represented.
+/// Represents the different kinds of ways that Techmino replays could be represented.
+///
+/// The most common ones are [`Base64`][Self::Base64] for copy-pasteable text from the
+/// "Replays" menu and the [`Compressed`][Self::Compressed] from the `.rep` files in the
+/// save directory.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ReplayBufferKind {
     /// Base64-encoding of zlib-compressed bytes.
