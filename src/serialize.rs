@@ -95,20 +95,23 @@
 //! encoder.finish(&mut replay_bytes).unwrap();
 //! ```
 
-use crate::format::ReplayBufferKind;
-use crate::types::{GameInputEvent, GameReplayData, InputParseMode, ReplaySerializeError};
-use crate::vlq::VlqData;
-use crate::GameReplayMetadata;
-use alloc::borrow::Cow;
-use alloc::string::String;
-use alloc::vec::Vec;
-use base64::engine::general_purpose::STANDARD as B64;
-use base64::Engine as _;
+use crate::{
+    format::ReplayBufferKind,
+    types::{
+        GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplaySerializeError,
+    },
+    vlq::VlqData,
+};
+use alloc::{borrow::Cow, string::String, vec::Vec};
+use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use core::ops::ControlFlow;
-
-use miniz_oxide::deflate::core::{compress, TDEFLFlush, TDEFLStatus};
-use miniz_oxide::deflate::CompressionLevel;
-use miniz_oxide::{deflate::core::CompressorOxide, DataFormat};
+use miniz_oxide::{
+    deflate::{
+        core::{compress, CompressorOxide, TDEFLFlush, TDEFLStatus},
+        CompressionLevel,
+    },
+    DataFormat,
+};
 
 // TODO: Add tests
 

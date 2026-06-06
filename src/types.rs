@@ -1,25 +1,22 @@
 //! General types and structs to represent metadata and other trivial data.
 
+use crate::{vlq::VlqDecodeError, InputAction, InputActionKey, InputActionKind};
 use alloc::{
+    borrow::Cow,
     fmt::{self},
     string::{FromUtf8Error, String},
     vec::Vec,
 };
-
-use alloc::borrow::Cow;
-use core::fmt::Debug;
-#[cfg(feature = "std")]
-use std::collections::HashMap;
-
-#[cfg(feature = "alloc")]
-use hashbrown::HashMap;
-
 use base64::DecodeError;
+use core::fmt::Debug;
 use miniz_oxide::{deflate::core::TDEFLStatus, inflate::TINFLStatus, MZError};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
-use crate::{vlq::VlqDecodeError, InputAction, InputActionKey, InputActionKind};
+#[cfg(feature = "alloc")]
+use hashbrown::HashMap;
+#[cfg(feature = "std")]
+use std::collections::HashMap;
 
 /// A packed struct representing a single input event in the game.
 ///

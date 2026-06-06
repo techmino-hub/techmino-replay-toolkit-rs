@@ -1,17 +1,15 @@
 mod cases;
 
 extern crate std;
-use core::ops::Deref;
-use std::{collections::HashMap, format, fs, println, sync::LazyLock};
-
-use cases::*;
-use fastrand::Rng;
-use ron::ser::PrettyConfig;
-
 use crate::{
     format::ReplayBufferKind, vlq::VlqData, GameInputEvent, GameReplayData, GameReplayMetadata,
     InputAction, InputActionKey, InputActionKind, PlayerSettings,
 };
+use cases::*;
+use core::ops::Deref;
+use fastrand::Rng;
+use ron::ser::PrettyConfig;
+use std::{collections::HashMap, format, fs, println, sync::LazyLock};
 
 const TEST_DATA_UNCOMPRESSED_LEN: usize = 16384;
 pub const TEST_CHUNK_MAX_SIZE: usize = 48;

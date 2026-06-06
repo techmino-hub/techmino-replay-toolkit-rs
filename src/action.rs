@@ -4,7 +4,6 @@
 //! (press or release) as well as its key (e.g., move left, move right).
 
 use core::num::TryFromIntError;
-
 use serde::{Deserialize, Serialize};
 
 /// Represents an action associated with a certain input event.

@@ -1,14 +1,12 @@
 extern crate std;
-use std::collections::HashMap;
-
+use crate::GameReplayData;
 use alloc::{
     boxed::Box,
     string::{String, ToString},
     vec::Vec,
 };
 use serde::{Deserialize, Serialize};
-
-use crate::GameReplayData;
+use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StoredReplay {
