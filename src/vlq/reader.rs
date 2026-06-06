@@ -3,12 +3,12 @@ use crate::vlq::VlqData;
 /// A VLQ reader state machine that can take in arbitrary chunks
 /// of VLQ-encoded bytes.
 #[derive(Clone, Debug)]
-pub(crate) struct VlqReaderSM {
+pub(crate) struct VlqReader {
     buf: [u8; (VlqData::MAX_BYTES - 1) as usize],
     buf_len: u8,
 }
 
-impl VlqReaderSM {
+impl VlqReader {
     /// Create a new instance of a VLQ reader state machine.
     pub(crate) const fn new() -> Self {
         Self {
@@ -91,7 +91,7 @@ mod tests {
 
         let mut feeder = ByteFeeder::new(&data);
 
-        let mut sm = VlqReaderSM::new();
+        let mut sm = VlqReader::new();
         let mut output_vlqs = Vec::with_capacity(input_vlqs.len());
 
         while !feeder.is_empty() {

@@ -55,7 +55,7 @@
 use crate::{
     format::ReplayBufferKind,
     types::{GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplayParseError},
-    vlq::VlqReaderSM,
+    vlq::VlqReader,
     InputAction,
 };
 use alloc::{borrow::Cow, string::String, vec::Vec};
@@ -301,7 +301,7 @@ enum MetadataDecoderStatus<'a> {
 
 struct InputDecoderState {
     /// The VLQ reader state machine.
-    vlq_reader: VlqReaderSM,
+    vlq_reader: VlqReader,
 
     /// The previous frame number that was processed.
     ///
@@ -322,7 +322,7 @@ impl InputDecoderState {
     #[must_use]
     fn new(parse_mode: InputParseMode) -> Self {
         Self {
-            vlq_reader: VlqReaderSM::new(),
+            vlq_reader: VlqReader::new(),
             prev_frame: 0,
             expecting_action: false,
             parse_mode,
