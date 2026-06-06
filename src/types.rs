@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use hashbrown::HashMap;
 
 use base64::DecodeError;
-use miniz_oxide::{inflate::TINFLStatus, MZError};
+use miniz_oxide::{deflate::core::TDEFLStatus, inflate::TINFLStatus, MZError};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
@@ -485,11 +485,25 @@ pub enum ReplaySerializeError {
         /// The `u64` value that couldn't be encoded into the VLQ format.
         number: u64,
     },
+
+    /// Something went wrong relating to compression.
+    ZlibError {
+        /// The TDEFL status returned from the compressor.
+        tdefl_status: TDEFLStatus,
+    },
 }
 
 impl From<serde_json::Error> for ReplaySerializeError {
     fn from(value: serde_json::Error) -> Self {
         Self::MetadataSerializeError(value)
+    }
+}
+
+impl From<TDEFLStatus> for ReplaySerializeError {
+    fn from(value: TDEFLStatus) -> Self {
+        Self::ZlibError {
+            tdefl_status: value,
+        }
     }
 }
 
@@ -626,14 +640,16 @@ impl StringOrBytes<'_> {
     ///
     /// # Example
     /// ```
-    /// use alloc::borrow::Cow;
+    /// use std::borrow::Cow;
     /// use techmino_replay_toolkit::StringOrBytes;
     ///
+    /// # fn main() {
     /// let string = StringOrBytes::String(Cow::Borrowed("hello"));
-    /// assert_eq!(string.as_string(), Some(Cow::Borrowed("hello")))
+    /// assert_eq!(string.as_string(), Some("hello"));
     ///
-    /// let bytes = StringOrBytes::Bytes(Cow::Borrowed(&b"hello"));
+    /// let bytes = StringOrBytes::Bytes(Cow::Borrowed(b"hello".as_slice()));
     /// assert_eq!(bytes.as_string(), None);
+    /// # }
     /// ```
     #[must_use]
     pub fn as_string(&self) -> Option<&str> {
@@ -649,14 +665,14 @@ impl StringOrBytes<'_> {
     ///
     /// # Example
     /// ```
-    /// use alloc::borrow::Cow;
+    /// use std::borrow::Cow;
     /// use techmino_replay_toolkit::StringOrBytes;
     ///
     /// let string = StringOrBytes::String(Cow::Borrowed("hello"));
-    /// assert_eq!(string.as_bytes(), &b"hello");
+    /// assert_eq!(string.as_bytes(), b"hello".as_slice());
     ///
-    /// let bytes = StringOrBytes::Bytes(Cow::Borrowed(&b"hello"));
-    /// assert_eq!(bytes.as_bytes(), &b"hello");
+    /// let bytes = StringOrBytes::Bytes(Cow::Borrowed(b"hello".as_slice()));
+    /// assert_eq!(bytes.as_bytes(), b"hello".as_slice());
     /// ```
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {

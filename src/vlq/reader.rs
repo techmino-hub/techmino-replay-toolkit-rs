@@ -1,6 +1,5 @@
-use crate::{vlq::VlqData, ReplayParseError};
+use crate::vlq::VlqData;
 
-// TODO: Rename this to just VlqReader
 /// A VLQ reader state machine that can take in arbitrary chunks
 /// of VLQ-encoded bytes.
 #[derive(Clone, Debug)]

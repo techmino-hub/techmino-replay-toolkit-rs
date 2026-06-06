@@ -7,9 +7,10 @@
 //!
 //! ## Example
 //! ```
+//! # use std::collections::HashMap;
 //! # use techmino_replay_toolkit::{
-//! #   GameReplayData, ReplayBufferKind, ReplayEncoder, GameReplayMetadata,
-//! #   GameInputEvent, PlayerSettings
+//! #   GameReplayData, format::ReplayBufferKind, serialize::ReplayEncoder, GameReplayMetadata,
+//! #   GameInputEvent, PlayerSettings, InputParseMode
 //! # };
 //! # struct Stream;
 //! # impl Stream {
@@ -69,7 +70,7 @@
 //! #       warn: None,
 //! #   },
 //! #   tas_used: None,
-//! #   string: "".into(),
+//! #   version: "".into(),
 //! };
 //! let inputs: Vec<GameInputEvent> = vec![
 //!     // ...
@@ -78,13 +79,13 @@
 //! // Default serialization
 //! let replay = GameReplayData { inputs, metadata: metadata.clone() };
 //!
-//! let rep_file = replay.serialize_to_compressed(None);
-//! let copiable_b64 = replay.serialize_to_base64(None);
+//! let rep_file = replay.serialize_to_compressed(Some(InputParseMode::Relative), 1);
+//! let copiable_b64 = replay.serialize_to_base64(Some(InputParseMode::Relative), 1);
 //!
 //! // Streaming serialization
 //! let mut input_stream = Stream::new();
-//! let mut encoder = ReplayEncoder::new(ReplayBufferKind::Compressed, None);
-//! let mut replay_bytes: Vec<u8> = encoder.feed_metadata(metadata).unwrap();
+//! let mut encoder = ReplayEncoder::new(ReplayBufferKind::Compressed, 1);
+//! let mut replay_bytes: Vec<u8> = encoder.feed_metadata(&metadata, Some(InputParseMode::Relative)).unwrap();
 //!
 //! while !input_stream.is_empty() {
 //!     let inputs: &[GameInputEvent] = input_stream.next();
@@ -107,10 +108,7 @@ use core::ops::ControlFlow;
 
 use miniz_oxide::deflate::core::{compress, TDEFLFlush, TDEFLStatus};
 use miniz_oxide::deflate::CompressionLevel;
-use miniz_oxide::{
-    deflate::{compress_to_vec_zlib, core::CompressorOxide},
-    DataFormat,
-};
+use miniz_oxide::{deflate::core::CompressorOxide, DataFormat};
 
 // TODO: Add tests
 
@@ -150,51 +148,13 @@ impl GameReplayData {
         &self,
         input_mode: Option<InputParseMode>,
     ) -> Result<Vec<u8>, ReplaySerializeError> {
-        let input_mode =
-            input_mode.or_else(|| InputParseMode::try_infer_from_version(&self.metadata.version));
+        let mut encoder = ReplayEncoder::new(ReplayBufferKind::Uncompressed, 0);
 
-        let Some(input_mode) = input_mode else {
-            return Err(ReplaySerializeError::UnknownInputParseMode(
-                self.metadata.version.clone(),
-            ));
-        };
+        let mut output = encoder.feed_metadata(&self.metadata, input_mode)?;
 
-        let json = serde_json::to_string(&self.metadata)?;
+        encoder.feed_input_data(&self.inputs, &mut output)?;
 
-        let mut bytes = Vec::with_capacity(json.len() + self.inputs.len() * 2);
-        bytes.extend_from_slice(json.as_bytes());
-        bytes.push(b'\n');
-
-        let inputs = &self.inputs;
-
-        if let Some(u) = get_first_unsorted(inputs) {
-            return Err(u);
-        }
-
-        let mut numbers = Vec::with_capacity(inputs.len() * 2);
-
-        let mut prev_time = 0;
-        for input in inputs {
-            let key = input.key();
-            let kind = input.kind();
-            let frame = input.frame();
-
-            let key = u8::from(key) | (u8::from(kind) << 5);
-
-            let time = match input_mode {
-                InputParseMode::Relative => frame - prev_time,
-                InputParseMode::Absolute => frame,
-            };
-
-            prev_time = frame;
-
-            numbers.push(u64::from(key));
-            numbers.push(time);
-        }
-
-        append_vlqs(&mut bytes, &numbers);
-
-        Ok(bytes)
+        Ok(output)
     }
 
     /// Serialize into a compressed byte array used by the game.
@@ -217,15 +177,24 @@ impl GameReplayData {
     /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
     /// best to give a `None`.
     ///
+    /// # Compression Level
+    /// You can choose how hard to try to compress the output using zlib. The default is usually 7.
+    /// For more information, see [`miniz_oxide::deflate::CompressionLevel`].
+    ///
     /// # Errors
     /// For more information, refer to [`ReplaySerializeError`]
     pub fn serialize_to_compressed(
         &self,
         input_mode: Option<InputParseMode>,
+        compression_level: u8,
     ) -> Result<Vec<u8>, ReplaySerializeError> {
-        let raw_bytes = self.serialize_to_raw(input_mode)?;
+        let mut encoder = ReplayEncoder::new(ReplayBufferKind::Compressed, compression_level);
 
-        Ok(compress_to_vec_zlib(&raw_bytes, 10))
+        let mut output = encoder.feed_metadata(&self.metadata, input_mode)?;
+
+        encoder.feed_input_data(&self.inputs, &mut output)?;
+
+        Ok(output)
     }
 
     /// Serialize into a copiable text-based base64 format.
@@ -247,32 +216,26 @@ impl GameReplayData {
     /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
     /// best to give a `None`.
     ///
+    /// # Compression Level
+    /// You can choose how hard to try to compress the output using zlib. The default is usually 7.
+    /// For more information, see [`miniz_oxide::deflate::CompressionLevel`].
+    ///
     /// # Errors
     /// For more information, refer to [`ReplaySerializeError`]
     pub fn serialize_to_base64(
         &self,
         input_mode: Option<InputParseMode>,
+        compression_level: u8,
     ) -> Result<String, ReplaySerializeError> {
-        let bytes = self.serialize_to_compressed(input_mode)?;
+        let mut encoder = ReplayEncoder::new(ReplayBufferKind::Base64, compression_level);
 
-        Ok(B64.encode(&bytes))
+        let mut output = encoder.feed_metadata(&self.metadata, input_mode)?;
+
+        encoder.feed_input_data(&self.inputs, &mut output)?;
+
+        // SAFETY: `output` only consists of base64
+        Ok(unsafe { String::from_utf8_unchecked(output) })
     }
-}
-
-fn get_first_unsorted(inputs: &[GameInputEvent]) -> Option<ReplaySerializeError> {
-    for window in inputs.windows(2) {
-        let prev = window[0];
-        let cur = window[1];
-
-        if cur.frame() < prev.frame() {
-            return Some(ReplaySerializeError::UnsortedInput {
-                prev_time: prev.frame(),
-                unsorted_time: cur.frame(),
-            });
-        }
-    }
-
-    None
 }
 
 fn append_vlqs(buffer: &mut Vec<u8>, values: &[u64]) {
@@ -319,23 +282,54 @@ pub struct ReplayEncoder {
 impl ReplayEncoder {
     /// Creates a new [`ReplayEncoder`] instance.
     ///
-    /// # Input Parse Mode
-    /// This function takes in an input parse mode override. This is often not required, but can be useful
-    /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
+    /// # Compression Level
+    /// You can choose how hard to try to compress the output using zlib. The default is usually 7.
+    /// For more information, see [`miniz_oxide::deflate::CompressionLevel`].
     ///
-    /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
-    /// best to give a `None`.
+    /// For uncompressed replays, this parameter is ignored.
     ///
     /// # Next Steps
     /// After creating the [`ReplayEncoder`], start by feeding it some metadata to serialize \
     /// using [`feed_metadata`]. Note that that step can only be done once per encoding since
     /// there's only one metadata segment in the replay structure.
     #[must_use]
-    pub fn new(rep_kind: ReplayBufferKind, input_mode: Option<InputParseMode>) -> Self {
-        todo!();
+    pub fn new(rep_kind: ReplayBufferKind, compression_level: u8) -> Self {
+        Self {
+            state: ReplayEncoderState::WaitingForMetadata,
+            postprocessor: match rep_kind {
+                ReplayBufferKind::Uncompressed => ReplayEncoderPostprocessor::Uncompressed,
+                ReplayBufferKind::Compressed => {
+                    let mut compressor = CompressorOxide::with_format_and_level(
+                        DataFormat::Zlib,
+                        CompressionLevel::DefaultCompression,
+                    );
+                    compressor.set_compression_level_raw(compression_level);
+                    ReplayEncoderPostprocessor::Compressed { compressor }
+                }
+                ReplayBufferKind::Base64 => {
+                    let mut compressor = CompressorOxide::with_format_and_level(
+                        DataFormat::Zlib,
+                        CompressionLevel::DefaultCompression,
+                    );
+                    compressor.set_compression_level_raw(compression_level);
+                    ReplayEncoderPostprocessor::Base64 {
+                        compressor,
+                        b64_scratch_buffer: [0u8; 2],
+                        b64_scratch_buffer_len: 0,
+                    }
+                }
+            },
+        }
     }
 
     /// Feeds some metadata into this [`ReplayEncoder`].
+    ///
+    /// # Input Parse Mode
+    /// This function takes in an input parse mode override. This is often not required, but can be useful
+    /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
+    ///
+    /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
+    /// best to give a `None`.
     ///
     /// # Returns
     /// If this function succeeds, returns a `Vec` of encoded replay bytes. The form of this
@@ -355,8 +349,9 @@ impl ReplayEncoder {
     pub fn feed_metadata(
         &mut self,
         metadata: &GameReplayMetadata,
+        input_mode: Option<InputParseMode>,
     ) -> Result<Vec<u8>, ReplaySerializeError> {
-        todo!();
+        self.state.feed_metadata(metadata, input_mode)
     }
 
     /// Feeds some input data into this [`ReplayEncoder`].
@@ -382,10 +377,24 @@ impl ReplayEncoder {
     /// up by calling the [`finish`][Self::finish] function.
     pub fn feed_input_data(
         &mut self,
-        input_data: &[GameInputEvent],
+        mut input_data: &[GameInputEvent],
         output: &mut Vec<u8>,
     ) -> Result<(), ReplaySerializeError> {
-        todo!();
+        let mut raw_bytes_buf = [0u8; 2048];
+
+        while !input_data.is_empty() {
+            let (inputs_processed, bytes_outputted) =
+                self.state.feed_input_data(input_data, &mut raw_bytes_buf)?;
+
+            let raw_bytes_slice = &raw_bytes_buf[..bytes_outputted];
+
+            self.postprocessor
+                .postprocess_into_vec(raw_bytes_slice, output);
+
+            input_data = &input_data[inputs_processed..];
+        }
+
+        Ok(())
     }
 
     /// Finishes up the replay.
@@ -401,7 +410,9 @@ impl ReplayEncoder {
     /// This function requires the metadata to be filled, and for this encoder
     /// to not be previously finished.
     pub fn finish(&mut self, output: &mut Vec<u8>) -> Result<(), ReplaySerializeError> {
-        todo!();
+        self.postprocessor.finish_into_vec(output)?;
+
+        Ok(())
     }
 }
 
@@ -452,7 +463,11 @@ impl ReplayEncoderState {
             parse_mode,
         };
 
-        Ok(serde_json::to_vec(&metadata)?)
+        let mut vec = serde_json::to_vec(&metadata)?;
+
+        vec.push(b'\n');
+
+        Ok(vec)
     }
 
     /// Tries to encode input data into the given output buffer.

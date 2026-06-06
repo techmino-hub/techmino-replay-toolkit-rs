@@ -8,7 +8,7 @@
 //! ## Example
 //! ```
 //! # use techmino_replay_toolkit::{
-//! #   GameReplayData, ReplayBufferKind, ReplayDecoder, GameReplayMetadata,
+//! #   GameReplayData, format::ReplayBufferKind, deserialize::ReplayDecoder, GameReplayMetadata,
 //! #   GameInputEvent,
 //! # };
 //! # fn read_file(_source: &str) -> &[u8] { &[] }
@@ -31,8 +31,8 @@
 //! let result = GameReplayData::parse_replay(replay_data, ReplayBufferKind::Compressed);
 //!
 //! // copied text replays from the Replays menu is in base64 form
-//! let replay_string: &[u8] = read_clipboard();
-//! let result = GameReplayData::parse_replay(replay_string, ReplayBufferKind::Base64);
+//! let replay_string: &str = read_clipboard();
+//! let result = GameReplayData::parse_replay(replay_string.as_bytes(), ReplayBufferKind::Base64);
 //!
 //! // Streaming example, using an arbitrary stream
 //! // We will gradually fill in the details at it comes in
@@ -43,9 +43,9 @@
 //!
 //! while !my_stream.is_empty() {
 //!     let next_chunk: &[u8] = my_stream.next();
-//!     let decoded = decoder.update().unwrap();
+//!     let decoded = decoder.update(next_chunk).unwrap();
 //!     if let Some(m) = decoded.metadata {
-//!         metadata = Some(m);
+//!         metadata = Some(*m);
 //!     }
 //!
 //!     inputs.extend_from_slice(&decoded.inputs);
@@ -264,23 +264,23 @@ impl MetadataDecoderState {
         let prev_buf_len = self.buf.len();
         self.buf.extend_from_slice(bytes);
 
-        if let Some(newline_pos_in_input) = bytes.iter().position(|b| *b == b'\n') {
-            let newline_pos_in_buf = newline_pos_in_input + prev_buf_len;
+        let Some(newline_pos_in_input) = bytes.iter().position(|b| *b == b'\n') else {
+            return Ok(MetadataDecoderStatus::NotDone);
+        };
 
-            let metadata =
-                serde_json::from_slice::<GameReplayMetadata>(&self.buf[..newline_pos_in_buf])?;
+        let newline_pos_in_buf = newline_pos_in_input + prev_buf_len;
 
-            let unprocessed = bytes
-                .get(newline_pos_in_input + 1..)
-                .unwrap_or(const { &[] });
+        let metadata =
+            serde_json::from_slice::<GameReplayMetadata>(&self.buf[..newline_pos_in_buf])?;
 
-            return Ok(MetadataDecoderStatus::Done {
-                metadata: Box::new(metadata),
-                unprocessed,
-            });
-        }
+        let unprocessed = bytes
+            .get(newline_pos_in_input + 1..)
+            .unwrap_or(const { &[] });
 
-        Ok(MetadataDecoderStatus::NotDone)
+        Ok(MetadataDecoderStatus::Done {
+            metadata: Box::new(metadata),
+            unprocessed,
+        })
     }
 }
 
@@ -652,10 +652,10 @@ pub struct Decoded {
     ///
     /// The metadata will only ever be returned once! Every decode return
     /// after the first `Some(...)` will result in `None`.
-    metadata: Option<Box<GameReplayMetadata>>,
+    pub metadata: Option<Box<GameReplayMetadata>>,
 
     /// The inputs decoded in this update call.
-    inputs: Vec<GameInputEvent>,
+    pub inputs: Vec<GameInputEvent>,
 }
 
 #[cfg(test)]
