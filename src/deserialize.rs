@@ -58,7 +58,7 @@ use crate::{
     vlq::VlqReader,
     InputAction,
 };
-use alloc::{borrow::Cow, string::String, vec::Vec};
+use alloc::{borrow::Cow, boxed::Box, string::String, vec::Vec};
 use base64::Engine;
 use miniz_oxide::{
     inflate::{stream::InflateState, TINFLStatus},
@@ -407,7 +407,7 @@ impl InputDecoderState {
                     frame,
                     action: raw_action,
                 })?;
-            let action = InputAction::try_from(action).map_err(|()| {
+            let action = InputAction::try_from(action).map_err(|_| {
                 ReplayParseError::MalformedInputData {
                     raw_frame,
                     frame,

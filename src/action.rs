@@ -2,9 +2,26 @@
 //!
 //! The action is stored as a single packed byte containing information on its kind
 //! (press or release) as well as its key (e.g., move left, move right).
+//!
+//! # Representation
+//! The raw (uncompressed) game replay format represents the input action in a single
+//! byte, in the following format:
+//!
+//! `0b00AB_BBBB`
+//!
+//! - `0` denotes that that bit is currently unused and should be set to zero.
+//! - `A` denotes the [input action kind][InputActionKind] bit, where
+//!   `false` maps to [`Press`][InputActionKind::Press] and
+//!   `true` maps to [`Release`][InputActionKind::Release].
+//! - `B` denotes the [input action key][InputActionKey], where `0` is
+//!   mapped to [`MoveLeft`][InputActionKey::MoveLeft], etc.
 
-use core::num::TryFromIntError;
+use core::{
+    fmt::{self, Display},
+    num::TryFromIntError,
+};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 /// Represents an action associated with a certain input event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -16,7 +33,7 @@ pub struct InputAction {
 }
 
 impl InputAction {
-    /// Tries to convert an encoded byte into an [`InputAction`].
+    /// Tries to convert an encoded raw input action byte into an [`InputAction`].
     ///
     /// This is the `const fn` version of the `TryFrom<u8>` implementation. For more information, see [`TryFrom`].
     ///
@@ -165,7 +182,7 @@ impl InputActionKey {
     ///
     /// # Errors
     /// This function errors if the given byte is not a valid encoded input action byte.
-    pub const fn try_from_byte(value: u8) -> Result<Self, ()> {
+    pub const fn try_from_byte(value: u8) -> Result<Self, InvalidInputActionKey> {
         use InputActionKey::{
             Down1, Down10, Down4, Function1, Function2, HardDrop, Hold, InstantLeft, InstantRight,
             LeftDrop, LeftZangi, MoveLeft, MoveRight, RightDrop, RightZangi, Rotate180, RotateLeft,
@@ -193,7 +210,7 @@ impl InputActionKey {
             18 => Ok(RightDrop),
             19 => Ok(LeftZangi),
             20 => Ok(RightZangi),
-            _ => Err(()),
+            _ => Err(InvalidInputActionKey(value)),
         }
     }
 
@@ -235,8 +252,7 @@ impl InputActionKey {
 }
 
 impl TryFrom<u8> for InputActionKey {
-    // TODO: Replace with actual error type
-    type Error = ();
+    type Error = InvalidInputActionKey;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         Self::try_from_byte(value)
@@ -246,5 +262,41 @@ impl TryFrom<u8> for InputActionKey {
 impl From<InputActionKey> for u8 {
     fn from(value: InputActionKey) -> Self {
         value.into_byte()
+    }
+}
+
+/// Error type for when a byte is not a valid input action key.
+#[derive(Debug, Error)]
+pub struct InvalidInputActionKey(u8);
+
+impl Display for InvalidInputActionKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} is not a valid input action key", self.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "strum")]
+    #[test]
+    fn action_key_byte_roundtrip() {
+        use strum::IntoEnumIterator;
+
+        for key in InputActionKey::iter() {
+            let byte = key.into_byte();
+            let byte2 = u8::from(key);
+
+            assert_eq!(byte, byte2);
+
+            let roundtripped = InputActionKey::try_from_byte(byte)
+                .expect("this should be a valid action key byte");
+            let roundtripped2 =
+                InputActionKey::try_from(byte).expect("this should be a valid action key byte");
+
+            assert_eq!(roundtripped, roundtripped2);
+            assert_eq!(key, roundtripped);
+        }
     }
 }

@@ -102,7 +102,8 @@ use crate::{
     },
     vlq::VlqData,
 };
-use alloc::{string::String, vec::Vec};
+use alloc::vec::Vec;
+use ascii::AsciiString;
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use core::ops::ControlFlow;
 use miniz_oxide::{
@@ -227,15 +228,14 @@ impl GameReplayData {
         &self,
         input_mode: Option<InputParseMode>,
         compression_level: u8,
-    ) -> Result<String, ReplaySerializeError> {
+    ) -> Result<AsciiString, ReplaySerializeError> {
         let mut encoder = ReplayEncoder::new(ReplayBufferKind::Base64, compression_level);
 
         let mut output = encoder.feed_metadata(&self.metadata, input_mode)?;
 
         encoder.feed_input_data(&self.inputs, &mut output)?;
 
-        // SAFETY: `output` only consists of base64
-        Ok(unsafe { String::from_utf8_unchecked(output) })
+        Ok(unsafe { AsciiString::from_ascii_unchecked(output) })
     }
 }
 
@@ -269,30 +269,8 @@ impl ReplayEncoder {
     #[must_use]
     pub fn new(rep_kind: ReplayBufferKind, compression_level: u8) -> Self {
         Self {
-            state: ReplayEncoderState::WaitingForMetadata,
-            postprocessor: match rep_kind {
-                ReplayBufferKind::Uncompressed => ReplayEncoderPostprocessor::Uncompressed,
-                ReplayBufferKind::Compressed => {
-                    let mut compressor = CompressorOxide::with_format_and_level(
-                        DataFormat::Zlib,
-                        CompressionLevel::DefaultCompression,
-                    );
-                    compressor.set_compression_level_raw(compression_level);
-                    ReplayEncoderPostprocessor::Compressed { compressor }
-                }
-                ReplayBufferKind::Base64 => {
-                    let mut compressor = CompressorOxide::with_format_and_level(
-                        DataFormat::Zlib,
-                        CompressionLevel::DefaultCompression,
-                    );
-                    compressor.set_compression_level_raw(compression_level);
-                    ReplayEncoderPostprocessor::Base64 {
-                        compressor,
-                        b64_scratch_buffer: [0u8; 2],
-                        b64_scratch_buffer_len: 0,
-                    }
-                }
-            },
+            state: ReplayEncoderState::DEFAULT,
+            postprocessor: ReplayEncoderPostprocessor::new(rep_kind, compression_level),
         }
     }
 
@@ -363,7 +341,7 @@ impl ReplayEncoder {
             let raw_bytes_slice = &raw_bytes_buf[..bytes_outputted];
 
             self.postprocessor
-                .postprocess_into_vec(raw_bytes_slice, output);
+                .postprocess_into_vec(raw_bytes_slice, output)?;
 
             input_data = &input_data[inputs_processed..];
         }
@@ -709,11 +687,6 @@ impl ReplayEncoderPostprocessor {
                 &mut b64_out_buf,
             );
 
-            if b64_idx > 0 {
-                // DEBUG
-                dbg!("debug breakpoint");
-            }
-
             b64_output.extend_from_slice(&b64_out_buf[..b64_idx]);
 
             if raw.is_empty() || cmp_buf_idx < compressed_buf.len() {
@@ -824,13 +797,6 @@ impl ReplayEncoderPostprocessor {
         bytes
     }
 
-    /// Finish up serializing the replay data.
-    fn finish(&mut self) -> Result<Vec<u8>, TDEFLStatus> {
-        let mut vec = Vec::with_capacity(Self::TEMP_BUFFER_SIZE);
-        self.finish_into_vec(&mut vec)?;
-        Ok(vec)
-    }
-
     fn finish_into_vec(&mut self, output: &mut Vec<u8>) -> Result<(), TDEFLStatus> {
         match self {
             Self::Uncompressed => Ok(()),
@@ -934,37 +900,7 @@ mod tests {
         slightly_random_data, ByteFeeder, SAMPLE_INPUT_DATA, SAMPLE_METADATA,
         SAMPLE_UNSORTED_INPUT_DATA, TEST_CHUNK_MAX_SIZE,
     };
-    use alloc::vec;
     use fastrand::Rng;
-
-    fn create_vlqs(values: &[u64]) -> Vec<u8> {
-        // Estimation: most values need around 2 bytes
-        let mut vlqs = Vec::with_capacity(values.len() * 2);
-
-        // u64 is up to 9 VLQ bytes
-        let mut vlq = Vec::with_capacity(9);
-        for &value in values {
-            vlq.clear();
-            let mut value = value;
-
-            vlq.push((value & 0x7F) as u8);
-            value >>= 7;
-
-            while value > 0 {
-                #[expect(
-                    clippy::cast_possible_truncation,
-                    reason = "This is already masked and should never truncate"
-                )]
-                vlq.push(((value & 0x7F) | 0x80) as u8);
-                value >>= 7;
-            }
-
-            vlq.reverse();
-            vlqs.append(&mut vlq);
-        }
-
-        vlqs
-    }
 
     #[test]
     fn postprocess_compression() {
@@ -1149,5 +1085,32 @@ mod tests {
                 unsorted_time: 3
             }
         ));
+    }
+
+    #[test]
+    fn b64_postprocessor_returns_b64_string() {
+        const ROUNDS: usize = 1_000;
+
+        let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
+
+        for _ in 0..ROUNDS {
+            let mut postprocessor = ReplayEncoderPostprocessor::new(ReplayBufferKind::Base64, 0);
+
+            let data = slightly_random_data(&mut rng);
+            let mut out = Vec::with_capacity(data.len());
+
+            postprocessor
+                .postprocess_into_vec(data.as_slice(), &mut out)
+                .expect("postprocessing should work");
+            postprocessor
+                .finish_into_vec(&mut out)
+                .expect("postprocessor should finish");
+
+            let string =
+                AsciiString::from_ascii(out).expect("postprocessor output should be valid ascii");
+
+            B64.decode(string.as_bytes())
+                .expect("postprocessor output should be valid base64");
+        }
     }
 }

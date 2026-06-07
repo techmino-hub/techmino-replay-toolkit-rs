@@ -132,26 +132,10 @@ impl VlqData {
         value
     }
 
-    /// Get an iterator into the VLQ-encoded bytes.
-    pub fn iter(&self) -> impl Iterator<Item = u8> + '_ {
-        self.as_slice().iter().copied()
-    }
-
     /// Get the VLQ-encoded bytes as a slice.
     #[must_use]
     pub fn as_slice(&self) -> &[u8] {
         self.bytes.get(..self.len().get() as usize).unwrap()
-    }
-
-    /// Get an iterator of VLQ-encoded bytes.
-    pub fn multi_iter(vlqs: &[Self]) -> impl Iterator<Item = u8> + '_ {
-        vlqs.iter().flat_map(VlqData::iter)
-    }
-
-    /// Get a [`Vec`] of VLQ-encoded bytes.
-    #[must_use]
-    pub fn multi_to_vec(vlqs: &[Self]) -> Vec<u8> {
-        VlqData::multi_iter(vlqs).collect()
     }
 }
 

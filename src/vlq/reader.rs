@@ -1,4 +1,6 @@
 use crate::vlq::VlqData;
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
 
 /// A VLQ reader state machine that can take in arbitrary chunks
 /// of VLQ-encoded bytes.
@@ -81,13 +83,18 @@ mod tests {
 
     use super::*;
 
+    /// Get an iterator of VLQ-encoded bytes from a slice of [`VlqData`] instances.
+    fn vlq_multi_iter(vlqs: &[VlqData]) -> impl Iterator<Item = u8> + '_ {
+        vlqs.iter().flat_map(|v| v.as_slice().iter().copied())
+    }
+
     #[test]
     fn test_vlq_extraction_sm() {
         const VLQ_AMOUNT: usize = 1_000_000;
 
         let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
         let input_vlqs: Box<[VlqData]> = (0..VLQ_AMOUNT).map(|_| random_vlq(&mut rng)).collect();
-        let data: Box<[u8]> = VlqData::multi_iter(&input_vlqs).collect();
+        let data: Box<[u8]> = vlq_multi_iter(&input_vlqs).collect();
 
         let mut feeder = ByteFeeder::new(&data);
 

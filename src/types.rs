@@ -4,6 +4,7 @@ use crate::{vlq::VlqDecodeError, InputAction, InputActionKey, InputActionKind};
 use alloc::{
     borrow::Cow,
     fmt::{self},
+    format,
     string::{FromUtf8Error, String},
     vec::Vec,
 };
@@ -132,7 +133,16 @@ impl Debug for GameInputEvent {
 pub struct GameInputEventError;
 
 /// A struct representing all the data contained within the game replay.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(
+    test,
+    expect(
+        clippy::unsafe_derive_deserialize,
+        reason = "ser/de here is for testing, library users \
+        are expected to use the inherent parse/serialize methods instead"
+    ),
+    derive(Serialize, Deserialize)
+)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct GameReplayData {
     /// A list of game input events that happened during the replay.
     pub inputs: Vec<GameInputEvent>,

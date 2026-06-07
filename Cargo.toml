@@ -24,6 +24,7 @@ alloc = []
 strum = ["dep:strum"]
 
 [dependencies]
+ascii = { version = "1.1.0", default-features = false, features = ["alloc"] }
 base64 = { version = "0.22.1", default-features = false, features = ["alloc"] }
 hashbrown = { version = "0.17.1", default-features = false, features = [
     "alloc",

@@ -14,7 +14,7 @@ pub enum StoredReplay {
     Binary(Box<[u8]>),
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq)]
 pub struct TestCase {
     pub serialized: Option<StoredReplay>,
     pub data: Option<GameReplayData>,
