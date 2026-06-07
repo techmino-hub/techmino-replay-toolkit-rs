@@ -25,7 +25,7 @@ fn main() {
 
         println!(
             "{:?}",
-            GameReplayData::parse_replay(input.trim().as_bytes(), ReplayBufferKind::Base64),
+            GameReplayData::parse_replay(input.trim().as_bytes(), ReplayBufferKind::Base64, None),
         );
     }
 }

@@ -28,18 +28,18 @@
 //!
 //! // .rep files are of compressed form
 //! let replay_data: &[u8] = read_file("my_replay.rep");
-//! let result = GameReplayData::parse_replay(replay_data, ReplayBufferKind::Compressed);
+//! let result = GameReplayData::parse_replay(replay_data, ReplayBufferKind::Compressed, None);
 //!
 //! // copied text replays from the Replays menu is in base64 form
 //! let replay_string: &str = read_clipboard();
-//! let result = GameReplayData::parse_replay(replay_string.as_bytes(), ReplayBufferKind::Base64);
+//! let result = GameReplayData::parse_replay(replay_string.as_bytes(), ReplayBufferKind::Base64, None);
 //!
 //! // Streaming example, using an arbitrary stream
 //! // We will gradually fill in the details at it comes in
 //! let mut metadata: Option<GameReplayMetadata> = None;
 //! let mut inputs: Vec<GameInputEvent> = Vec::new();
 //! let mut my_stream = Stream::new();
-//! let mut decoder = ReplayDecoder::new(ReplayBufferKind::Compressed);
+//! let mut decoder = ReplayDecoder::new(ReplayBufferKind::Compressed, None);
 //!
 //! while !my_stream.is_empty() {
 //!     let next_chunk: &[u8] = my_stream.next();
@@ -73,11 +73,19 @@ impl GameReplayData {
     ///
     /// If you have a partial replay or a replay data stream, you should manually
     /// use [`ReplayDecoder`] and feed the data yourself.
+    ///
+    /// # Input Parse Mode
+    /// This function takes in an input parse mode override. This is often not required, but can be useful
+    /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
+    ///
+    /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
+    /// best to give a `None`.
     pub fn parse_replay(
         replay_data: &[u8],
         kind: ReplayBufferKind,
+        input_mode: Option<InputParseMode>,
     ) -> Result<Self, ReplayParseError> {
-        let mut decoder = ReplayDecoder::new(kind);
+        let mut decoder = ReplayDecoder::new(kind, input_mode);
 
         let decoded_data = decoder.update(replay_data)?;
 
@@ -134,10 +142,17 @@ impl ReplayDecoder {
     ///
     /// You must give the kind of replay data you will feed this decoder.
     /// For more information, see [`ReplayBufferKind`].
+    ///
+    /// # Input Parse Mode
+    /// This function takes in an input parse mode override. This is often not required, but can be useful
+    /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
+    ///
+    /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
+    /// best to give a `None`.
     #[must_use]
-    pub fn new(kind: ReplayBufferKind) -> Self {
+    pub fn new(kind: ReplayBufferKind, input_mode: Option<InputParseMode>) -> Self {
         Self {
-            state: ReplayDecoderState::WaitingForMetadata(MetadataDecoderState::new()),
+            state: ReplayDecoderState::WaitingForMetadata(MetadataDecoderState::new(), input_mode),
             preprocessor: ReplayDecoderPreprocessor::new(kind),
         }
     }
@@ -182,7 +197,7 @@ impl ReplayDecoder {
 /// in the raw uncompressed replay data.
 enum ReplayDecoderState {
     /// Waiting for the metadata section to finish.
-    WaitingForMetadata(MetadataDecoderState),
+    WaitingForMetadata(MetadataDecoderState, Option<InputParseMode>),
     /// Decoding inputs.
     InputDecode(InputDecoderState),
 }
@@ -193,7 +208,7 @@ impl ReplayDecoderState {
     /// **`bytes` is expected to be in uncompressed/raw format.**
     fn update(&mut self, bytes: &[u8]) -> Result<Decoded, ReplayParseError> {
         match self {
-            Self::WaitingForMetadata(metadata_decoder) => {
+            Self::WaitingForMetadata(metadata_decoder, ref override_input_mode) => {
                 let res = metadata_decoder.update(bytes)?;
 
                 let MetadataDecoderStatus::Done {
@@ -207,9 +222,12 @@ impl ReplayDecoderState {
                     });
                 };
 
-                let Some(parse_mode) = InputParseMode::try_infer_from_version(&metadata.version)
+                let Some(parse_mode) = override_input_mode
+                    .or_else(|| InputParseMode::try_infer_from_version(&metadata.version))
                 else {
-                    return Err(ReplayParseError::UnknownInputParseMode(metadata.version));
+                    {
+                        return Err(ReplayParseError::UnknownInputParseMode(metadata.version));
+                    }
                 };
 
                 let mut input_decoder = InputDecoderState::new(parse_mode);

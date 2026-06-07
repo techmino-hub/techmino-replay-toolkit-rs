@@ -215,7 +215,7 @@ fn test_serialize_deserialize_noop() {
             .expect("Error while serializing replay");
 
         let deserialized =
-            match GameReplayData::parse_replay(&serialized, ReplayBufferKind::Uncompressed) {
+            match GameReplayData::parse_replay(&serialized, ReplayBufferKind::Uncompressed, None) {
                 Ok(r) => r,
                 Err(e) => {
                     panic!("Error while deserializing replay {key}: {e:?}");
@@ -265,10 +265,10 @@ fn regenerate_cases() {
 
         let res = match val.serialized.unwrap() {
             StoredReplay::Base64(string) => {
-                GameReplayData::parse_replay(string.as_bytes(), ReplayBufferKind::Base64)
+                GameReplayData::parse_replay(string.as_bytes(), ReplayBufferKind::Base64, None)
             }
             StoredReplay::Binary(bytes) => {
-                GameReplayData::parse_replay(&bytes, ReplayBufferKind::Compressed)
+                GameReplayData::parse_replay(&bytes, ReplayBufferKind::Compressed, None)
             }
         };
 

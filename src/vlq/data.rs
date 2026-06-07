@@ -186,8 +186,6 @@ pub struct VlqEncodeError {
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::random_vlq;
-
     use super::*;
     use fastrand::Rng;
 

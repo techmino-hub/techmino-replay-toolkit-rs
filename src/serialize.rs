@@ -102,7 +102,7 @@ use crate::{
     },
     vlq::VlqData,
 };
-use alloc::{borrow::Cow, string::String, vec::Vec};
+use alloc::{string::String, vec::Vec};
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use core::ops::ControlFlow;
 use miniz_oxide::{
@@ -112,8 +112,6 @@ use miniz_oxide::{
     },
     DataFormat,
 };
-
-// TODO: Add tests
 
 impl GameReplayData {
     /// Sort the inputs so that they are sorted by time.
@@ -238,33 +236,6 @@ impl GameReplayData {
 
         // SAFETY: `output` only consists of base64
         Ok(unsafe { String::from_utf8_unchecked(output) })
-    }
-}
-
-fn append_vlqs(buffer: &mut Vec<u8>, values: &[u64]) {
-    // Estimation: most values need around 2 bytes
-    buffer.reserve(values.len() * 2 + 1);
-
-    // u64 is up to 9 VLQ bytes
-    let mut vlq = Vec::with_capacity(9);
-    for &value in values {
-        vlq.clear();
-        let mut value = value;
-
-        vlq.push((value & 0x7F) as u8);
-        value >>= 7;
-
-        while value > 0 {
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "This is already masked and should never truncate"
-            )]
-            vlq.push(((value & 0x7F) | 0x80) as u8);
-            value >>= 7;
-        }
-
-        vlq.reverse();
-        buffer.append(&mut vlq);
     }
 }
 
@@ -649,24 +620,31 @@ impl ReplayEncoderPostprocessor {
         }
     }
 
-    /// Process the raw replay data further into a certain format.
-    ///
-    /// Don't forget to call [`finish`][Self::finish] at the very end!
-    fn postprocess<'a>(&mut self, raw: &'a [u8]) -> Cow<'a, [u8]> {
-        if let Self::Uncompressed = self {
-            Cow::Borrowed(raw)
-        } else {
-            let mut out_bytes = Vec::with_capacity(4096);
-            self.postprocess_into_vec(raw, &mut out_bytes);
-            Cow::Owned(out_bytes)
-        }
-    }
-
-    fn postprocess_into_vec(&mut self, raw: &[u8], out_bytes: &mut Vec<u8>) {
+    fn postprocess_into_vec(
+        &mut self,
+        raw: &[u8],
+        out_bytes: &mut Vec<u8>,
+    ) -> Result<(), TDEFLStatus> {
         match self {
-            Self::Base64 { .. } => todo!(),
-            Self::Compressed { .. } => todo!(),
-            Self::Uncompressed => out_bytes.extend_from_slice(raw),
+            Self::Base64 {
+                compressor,
+                b64_scratch_buffer,
+                b64_scratch_buffer_len,
+            } => Self::postprocess_b64(
+                compressor,
+                b64_scratch_buffer,
+                b64_scratch_buffer_len,
+                raw,
+                out_bytes,
+            ),
+            Self::Compressed { compressor } => {
+                Self::postprocess_compression(compressor, raw, out_bytes)?;
+                Ok(())
+            }
+            Self::Uncompressed => {
+                out_bytes.extend_from_slice(raw);
+                Ok(())
+            }
         }
     }
 
@@ -986,60 +964,6 @@ mod tests {
         }
 
         vlqs
-    }
-
-    #[test]
-    fn test_vlq_creation() {
-        // Mostly sourced from https://en.wikipedia.org/wiki/Variable-length_quantity#Examples
-        let cases = [
-            (vec![0x00], vec![0x00]),
-            (vec![0x01], vec![0x01]),
-            (vec![0x7F], vec![0x7F]),
-            (vec![0x81, 0x00], vec![0x80]),
-            (vec![0xC0, 0x00], vec![0x2000]),
-            (vec![0xFF, 0x7F], vec![0x3FFF]),
-            (vec![0x81, 0x80, 0x00], vec![0x4000]),
-            (vec![0xFF, 0xFF, 0x7F], vec![0x001F_FFFF]),
-            (
-                vec![0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0x7F],
-                vec![0x001F_FFFF, 0x001F_FFFF],
-            ),
-            (vec![0x81, 0x80, 0x80, 0x00], vec![0x0020_0000]),
-            (vec![0x01, 0x01, 0x01], vec![1, 1, 1]),
-            (vec![0x8F, 0x00], vec![1920]),
-        ];
-
-        for (expected, values) in cases {
-            assert_eq!(create_vlqs(&values), expected);
-        }
-    }
-
-    #[test]
-    fn test_vlq_append() {
-        // Mostly sourced from https://en.wikipedia.org/wiki/Variable-length_quantity#Examples
-        let cases = [
-            (vec![0x00], vec![0x00]),
-            (vec![0x01], vec![0x01]),
-            (vec![0x7F], vec![0x7F]),
-            (vec![0x81, 0x00], vec![0x80]),
-            (vec![0xC0, 0x00], vec![0x2000]),
-            (vec![0xFF, 0x7F], vec![0x3FFF]),
-            (vec![0x81, 0x80, 0x00], vec![0x4000]),
-            (vec![0xFF, 0xFF, 0x7F], vec![0x001F_FFFF]),
-            (
-                vec![0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0x7F],
-                vec![0x001F_FFFF, 0x001F_FFFF],
-            ),
-            (vec![0x81, 0x80, 0x80, 0x00], vec![0x0020_0000]),
-            (vec![0x01, 0x01, 0x01], vec![1, 1, 1]),
-            (vec![0x8F, 0x00], vec![1920]),
-        ];
-
-        for (expected, values) in cases {
-            let mut vec = Vec::new();
-            append_vlqs(&mut vec, &values);
-            assert_eq!(vec, expected);
-        }
     }
 
     #[test]
