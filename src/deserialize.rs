@@ -661,6 +661,17 @@ enum FormatError {
     Base64Error(base64::DecodeError),
 }
 
+impl From<FormatError> for ReplayParseError {
+    fn from(value: FormatError) -> Self {
+        match value {
+            FormatError::ZlibError { status, mz_error } => {
+                Self::ZlibDecompressError { status, mz_error }
+            }
+            FormatError::Base64Error(decode_error) => Self::Base64DecodeError(decode_error),
+        }
+    }
+}
+
 /// Return the data was decoded in the last update call.
 ///
 /// Not cumulative; if you want a full replay, you have to build it yourself.

@@ -39,7 +39,7 @@ impl InputAction {
     ///
     /// # Errors
     /// This function errors if the given byte is not a valid encoded input action byte.
-    pub const fn try_from_byte(value: u8) -> Result<Self, <InputActionKey as TryFrom<u8>>::Error> {
+    pub const fn try_from_byte(value: u8) -> Result<Self, <InputAction as TryFrom<u8>>::Error> {
         let kind = if value >= 0b0010_0000 {
             InputActionKind::Release
         } else {

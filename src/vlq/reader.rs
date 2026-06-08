@@ -1,6 +1,9 @@
+use core::fmt::{self, Display};
+
 use crate::vlq::VlqData;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
+use thiserror::Error;
 
 /// A VLQ reader state machine that can take in arbitrary chunks
 /// of VLQ-encoded bytes.
@@ -40,7 +43,7 @@ impl VlqReader {
         for input in vlq_encoded.iter().copied() {
             if self.buf_len as usize == buf.len() {
                 self.buf = buf[..(VlqData::MAX_BYTES - 1) as usize].try_into().unwrap();
-                return Err(VlqDecodeError::OversizedVlq { partial_vlq: buf });
+                return Err(VlqDecodeError { partial_vlq: buf });
             }
 
             buf[self.buf_len as usize] = input;
@@ -65,14 +68,17 @@ impl VlqReader {
     }
 }
 
-/// Something went wrong trying to decode a VLQ.
-#[derive(Debug)]
-pub enum VlqDecodeError {
-    /// There was an attempt to decode an oversized VLQ into a `u64`.
-    OversizedVlq {
-        /// Part of the VLQ byte array that couldn't be encoded into the `u64` format.
-        partial_vlq: [u8; VlqData::MAX_BYTES as usize],
-    },
+/// There was an attempt to decode an oversized VLQ into a `u64`.
+#[derive(Debug, Error)]
+pub struct VlqDecodeError {
+    /// Part of the VLQ byte array that couldn't be encoded into the `u64` format.
+    partial_vlq: [u8; VlqData::MAX_BYTES as usize],
+}
+
+impl Display for VlqDecodeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "VLQ slice cannot fit into u64: {:?}", self.partial_vlq)
+    }
 }
 
 #[cfg(test)]

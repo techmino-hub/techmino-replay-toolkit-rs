@@ -13,6 +13,7 @@ use core::fmt::Debug;
 use miniz_oxide::{deflate::core::TDEFLStatus, inflate::TINFLStatus, MZError};
 use semver::Version;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[cfg(feature = "alloc")]
 use hashbrown::HashMap;
@@ -358,11 +359,12 @@ pub struct GameReplayMetadata {
 }
 
 /// An error from parsing the replay data.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ReplayParseError {
     /// An error occurred when zlib tried to decompress the replay data.
     ///
     /// See [`DecompressError`] for more information.
+    #[error("zlib failed to decompress the replay data")]
     ZlibDecompressError {
         /// The internal zlib status.
         status: TINFLStatus,
@@ -373,38 +375,46 @@ pub enum ReplayParseError {
     /// An error occurred while parsing the base64 string.
     ///
     /// See [`DecodeError`] for more information.
+    #[error("the given base64 string was not valid base64")]
     Base64DecodeError(DecodeError),
 
     /// The separator between the replay metadata and the input data was not found.
     ///
-    /// The separator is a linefeed character, or a byte with a decimal value of `10`.
+    /// The separator is a linefeed character (`b'\n'`).
+    #[error("failed to find separator between replay metadata and input data")]
     MetadataSeparatorNotFound,
 
     /// The metadata was found to not be valid UTF-8.
     ///
     /// See [`FromUtf8Error`] for more information.
-    MetadataNotUtf8(FromUtf8Error),
+    #[error("metadata is not valid utf-8")]
+    MetadataNotUtf8(#[from] FromUtf8Error),
 
     /// The metadata could not be deserialized into the [`GameReplayMetadata`] struct,
     /// possibly due to missing values.
     ///
     /// See [`serde_json`'s Error type][serde_json::Error] for more information.
-    MetadataDeserializeError(serde_json::Error),
+    #[error("failed to deserialize metadata")]
+    MetadataDeserializeError(#[from] serde_json::Error),
 
     /// The mode in which to parse the inputs could not be inferred from the version string.
     ///
     /// Contains a [`String`] containing the version string.
     ///
     /// To fix this error, consider passing in the input parse mode explicitly.
+    #[error("could not infer input parse mode from version metadata")]
     UnknownInputParseMode(String),
 
     /// The input data was malformed and could not be decoded from the VLQ stream.
+    #[error("input data contains invalid vlq")]
     MalformedVlqData {
         /// The inner VLQ decoding error.
+        #[from]
         inner: VlqDecodeError,
     },
 
     /// The input data was malformed and could not be casted into the proper enum types.
+    #[error("malformed input data")]
     MalformedInputData {
         /// The unprocessed frame of the associated input event.
         ///
@@ -425,30 +435,13 @@ pub enum ReplayParseError {
 
     /// Only a portion of the replay was given, i.e.,
     /// more replay data should have been fed
+    #[error("replay data unexpectedly ended")]
     UnexpectedEnd,
 }
 
 impl From<DecodeError> for ReplayParseError {
     fn from(value: DecodeError) -> Self {
-        ReplayParseError::Base64DecodeError(value)
-    }
-}
-
-impl From<FromUtf8Error> for ReplayParseError {
-    fn from(value: FromUtf8Error) -> Self {
-        ReplayParseError::MetadataNotUtf8(value)
-    }
-}
-
-impl From<serde_json::Error> for ReplayParseError {
-    fn from(value: serde_json::Error) -> Self {
-        Self::MetadataDeserializeError(value)
-    }
-}
-
-impl From<VlqDecodeError> for ReplayParseError {
-    fn from(value: VlqDecodeError) -> Self {
-        Self::MalformedVlqData { inner: value }
+        Self::Base64DecodeError(value)
     }
 }
 
