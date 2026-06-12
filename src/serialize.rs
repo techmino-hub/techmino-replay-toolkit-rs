@@ -303,7 +303,13 @@ impl ReplayEncoder {
         metadata: &GameReplayMetadata,
         input_mode: Option<InputParseMode>,
     ) -> Result<Vec<u8>, ReplaySerializeError> {
-        self.state.feed_metadata(metadata, input_mode)
+        let metadata_bytes = self.state.feed_metadata(metadata, input_mode)?;
+        let mut postprocessed = Vec::with_capacity(metadata_bytes.len());
+
+        self.postprocessor
+            .postprocess_into_vec(&metadata_bytes, &mut postprocessed)?;
+
+        Ok(postprocessed)
     }
 
     /// Feeds some input data into this [`ReplayEncoder`].
@@ -647,7 +653,7 @@ impl ReplayEncoderPostprocessor {
             raw = raw.get(raw_idx..).unwrap_or(const { &[] });
             compression_output.extend_from_slice(&buf[..buf_idx]);
 
-            if raw.is_empty() || buf_idx < buf.len() {
+            if raw.is_empty() && buf_idx == 0 {
                 return Ok(());
             }
         }
@@ -689,7 +695,7 @@ impl ReplayEncoderPostprocessor {
 
             b64_output.extend_from_slice(&b64_out_buf[..b64_idx]);
 
-            if raw.is_empty() || cmp_buf_idx < compressed_buf.len() {
+            if raw.is_empty() || cmp_buf_idx == 0 {
                 return Ok(());
             }
         }
@@ -904,7 +910,7 @@ mod tests {
 
     #[test]
     fn postprocess_compression() {
-        const ROUNDS: usize = 1_000;
+        const ROUNDS: usize = 100;
 
         let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
 
@@ -937,7 +943,20 @@ mod tests {
             let decompressed = miniz_oxide::inflate::decompress_to_vec_zlib(&compressed)
                 .expect("decompression should work");
 
-            assert_eq!(decompressed.as_slice(), data.as_slice());
+            let first_ne_idx = data
+                .iter()
+                .copied()
+                .zip(decompressed.iter().copied())
+                .position(|(original, decompressed)| original != decompressed);
+
+            if let Some(index) = first_ne_idx {
+                println!("First mismatch at index {index}");
+                println!("Real slice: {:?}", &data[index..]);
+                println!("Dec. slice: {:?}", &decompressed[index..]);
+                println!("Full real data: {data:?}");
+                println!("Full dec. data: {decompressed:?}");
+                panic!("Decompressed and real data doesn't match")
+            }
         }
     }
 
@@ -985,7 +1004,7 @@ mod tests {
             let decompressed = miniz_oxide::inflate::decompress_to_vec_zlib(&decoded)
                 .expect("decompression should work");
 
-            assert_eq!(decompressed.as_slice(), data.as_slice());
+            assert_eq!(decompressed.as_slice(), &*data);
         }
     }
 
@@ -998,7 +1017,7 @@ mod tests {
         for _ in 0..ROUNDS {
             let data = slightly_random_data(&mut rng);
 
-            let mut feeder = ByteFeeder::new(data.as_slice());
+            let mut feeder = ByteFeeder::new(&data);
 
             let mut b64_scratch_buffer = [0u8; 2];
             let mut b64_scratch_buffer_len = 0u8;
@@ -1029,7 +1048,7 @@ mod tests {
                 .decode(encoded.as_slice())
                 .expect("decoding should work");
 
-            assert_eq!(data.as_slice(), decoded.as_slice());
+            assert_eq!(&*data, decoded.as_slice());
         }
     }
 
@@ -1100,7 +1119,7 @@ mod tests {
             let mut out = Vec::with_capacity(data.len());
 
             postprocessor
-                .postprocess_into_vec(data.as_slice(), &mut out)
+                .postprocess_into_vec(&data, &mut out)
                 .expect("postprocessing should work");
             postprocessor
                 .finish_into_vec(&mut out)

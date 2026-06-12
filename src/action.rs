@@ -72,7 +72,6 @@ impl InputAction {
 }
 
 impl TryFrom<u8> for InputAction {
-    // TODO: Replace with actual error type
     type Error = <InputActionKey as TryFrom<u8>>::Error;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {

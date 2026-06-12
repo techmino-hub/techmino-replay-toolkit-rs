@@ -2,8 +2,9 @@ mod cases;
 
 extern crate std;
 use crate::{
-    format::ReplayBufferKind, vlq::VlqData, GameInputEvent, GameReplayData, GameReplayMetadata,
-    InputAction, InputActionKey, InputActionKind, PlayerSettings,
+    deserialize::ReplayDecoder, format::ReplayBufferKind, serialize::ReplayEncoder, vlq::VlqData,
+    GameInputEvent, GameReplayData, GameReplayMetadata, InputAction, InputActionKey,
+    InputActionKind, InputParseMode, PlayerSettings,
 };
 use cases::*;
 use core::ops::Deref;
@@ -11,7 +12,11 @@ use fastrand::Rng;
 use ron::ser::PrettyConfig;
 use std::{collections::HashMap, format, fs, println, sync::LazyLock};
 
-const TEST_DATA_UNCOMPRESSED_LEN: usize = 16384;
+/// How many inputs to insert into the stream every round in the `test_streaming`
+/// test.
+const STREAMING_INPUTS_PER_ROUND: usize = 1_048_576;
+
+const TEST_DATA_UNCOMPRESSED_LEN: usize = 65536;
 pub const TEST_CHUNK_MAX_SIZE: usize = 48;
 
 pub static SAMPLE_METADATA: LazyLock<GameReplayMetadata> = LazyLock::new(|| GameReplayMetadata {
@@ -119,23 +124,25 @@ pub static SAMPLE_UNSORTED_INPUT_DATA: [GameInputEvent; 3] = [
 ];
 
 /// Creates not-quite-random data.
-pub(crate) fn slightly_random_data(rng: &mut Rng) -> [u8; TEST_DATA_UNCOMPRESSED_LEN] {
+pub(crate) fn slightly_random_data(rng: &mut Rng) -> Box<[u8]> {
     let test_data_bit_per_byte = rng.usize(0..3);
 
-    core::array::from_fn::<u8, TEST_DATA_UNCOMPRESSED_LEN, _>(|_| {
-        // For every byte, choose at most 3 random bits to turn on
-        let mut byte = 0;
+    (0..TEST_DATA_UNCOMPRESSED_LEN)
+        .map(|_| {
+            // For every byte, choose at most 3 random bits to turn on
+            let mut byte = 0;
 
-        for _ in 0..test_data_bit_per_byte {
-            let bit = rng.u8(..8);
+            for _ in 0..test_data_bit_per_byte {
+                let bit = rng.u8(..8);
 
-            let mask = 1u8 << bit;
+                let mask = 1u8 << bit;
 
-            byte |= mask;
-        }
+                byte |= mask;
+            }
 
-        byte
-    })
+            byte
+        })
+        .collect()
 }
 
 pub(crate) fn random_vlq(rng: &mut Rng) -> VlqData {
@@ -187,14 +194,14 @@ fn internal_test_byte_feeder() {
 
     for _ in 0..1024 {
         let init_data = slightly_random_data(&mut rng);
-        let mut feeder = ByteFeeder::new(init_data.as_slice());
+        let mut feeder = ByteFeeder::new(&init_data);
         let mut feeder_output = Vec::with_capacity(TEST_DATA_UNCOMPRESSED_LEN);
 
         while !feeder.is_empty() {
             feeder_output.extend_from_slice(feeder.bite(&mut rng));
         }
 
-        assert_eq!(init_data.as_slice(), feeder_output.as_slice());
+        assert_eq!(&*init_data, feeder_output.as_slice());
     }
 }
 
@@ -240,10 +247,37 @@ fn test_serialize_deserialize_noop() {
     }
 }
 
+/// There should not be any difference between the original data and the
+/// result of deserializing the original serialized data
 #[test]
 fn test_difference() {
-    // TODO:
-    // Check if there is a difference between parsed replay and the one gotten from the RON
+    let cases = get_test_cases();
+
+    for (key, val) in cases {
+        let Some(saved_deserialized) = val.data else {
+            println!("Skipping testcase '{key}' (it has no deserialized data form)");
+            continue;
+        };
+
+        let Some(saved_serialized) = val.serialized else {
+            println!("Skipping testcase '{key}' (it has no serialized data form)");
+            continue;
+        };
+
+        println!("Testing for testcase {key}");
+
+        let (saved_serialized_bytes, serialized_kind) = match &saved_serialized {
+            StoredReplay::Base64(string) => (string.as_bytes(), ReplayBufferKind::Base64),
+            StoredReplay::Binary(binary) => (&binary[..], ReplayBufferKind::Compressed),
+        };
+
+        // dbg!(&saved_serialized, &saved_serialized_bytes);
+
+        let parsed = GameReplayData::parse_replay(saved_serialized_bytes, serialized_kind, None)
+            .expect("deserialization should work");
+
+        assert_eq!(saved_deserialized, parsed);
+    }
 }
 
 fn get_ron_config() -> PrettyConfig {
@@ -315,5 +349,187 @@ fn regenerate_cases() {
                 println!("Error while writing RON to '{file_path}': {e}");
             }
         }
+    }
+
+    todo!("implement hash checks");
+}
+
+/// Test streaming by generating replays that should have a significant impact on RAM if directly
+/// and fully stored there.
+///
+/// The deserialized output is then checked by comparing the `GameInputEvent` stream that we expect
+/// utilizing a previously-cloned rng instance.
+#[test]
+fn test_streaming() {
+    let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
+
+    let chunk_sizes = [2, 4, 8, 16, 32, 128, 256, 512, 1024, 2048];
+    let input_modes = [InputParseMode::Absolute, InputParseMode::Relative];
+    let replay_kinds = [
+        // ReplayBufferKind::Uncompressed,
+        ReplayBufferKind::Compressed,
+        ReplayBufferKind::Base64,
+    ];
+
+    for rbk in replay_kinds {
+        for input_mode in input_modes {
+            for rounds in chunk_sizes {
+                test_streaming_with_params(rounds, input_mode, rbk, &mut rng);
+            }
+        }
+    }
+}
+
+struct InputGenState {
+    rng: Rng,
+    prev_input_frame: u64,
+}
+
+/// Streaming test for a certain round count parameter.
+///
+/// `input_rng` is the rng instance used for generating the game input event sequence.
+fn test_streaming_with_params(
+    rounds: usize,
+    input_mode: InputParseMode,
+    replay_kind: ReplayBufferKind,
+    input_rng: &mut Rng,
+) {
+    eprintln!(
+        "test params: {replay_kind:?}, {input_mode:?}, {rounds} rounds × {STREAMING_INPUTS_PER_ROUND} inputs each = {total_inputs} inputs.",
+        total_inputs = STREAMING_INPUTS_PER_ROUND * rounds
+    );
+
+    let mut encoder = ReplayEncoder::new(replay_kind, 1);
+    let metadata_bytes = encoder
+        .feed_metadata(&SAMPLE_METADATA, Some(input_mode))
+        .expect("feeding metadata should succeed");
+
+    let mut decoder = ReplayDecoder::new(replay_kind, Some(input_mode));
+
+    let mut generator_state = InputGenState {
+        prev_input_frame: 0,
+        rng: input_rng.fork(),
+    };
+
+    let mut checker_state = InputGenState {
+        prev_input_frame: 0,
+        rng: generator_state.rng.clone(),
+    };
+
+    // Temp buffer to be fed to serialization
+    let mut this_frame_input_data = Vec::with_capacity(STREAMING_INPUTS_PER_ROUND);
+    // Temp buffer from serialization to be fed into deser
+    let mut ser_out_buf = metadata_bytes;
+    // Accumulative length of serialization output
+    let mut ser_out_acc_len = 0;
+
+    for _ in 0..rounds {
+        generate_event_chunk(
+            &mut generator_state.rng,
+            &mut generator_state.prev_input_frame,
+            &mut this_frame_input_data,
+        );
+
+        encoder
+            .feed_input_data(&this_frame_input_data, &mut ser_out_buf)
+            .expect("feeding input data should succeed");
+
+        if ser_out_buf.is_empty() {
+            continue;
+        }
+
+        ser_out_acc_len += ser_out_buf.len();
+
+        let deser_output = decoder
+            .update(ser_out_buf.drain(..).as_slice())
+            .expect("decoding should work");
+
+        for game_input in deser_output.inputs {
+            let expected_input = random_game_input_event(
+                &mut checker_state.rng,
+                &mut checker_state.prev_input_frame,
+            );
+            assert_eq!(game_input, expected_input);
+        }
+    }
+
+    encoder
+        .finish(&mut ser_out_buf)
+        .expect("encoder should finish");
+
+    ser_out_acc_len += ser_out_buf.len();
+
+    let deser_output = decoder
+        .update(ser_out_buf.drain(..).as_slice())
+        .expect("decoder should properly finish deserializing replay");
+
+    for game_input in deser_output.inputs {
+        let action = random_action(&mut checker_state.rng);
+        let frame = checker_state.prev_input_frame + checker_state.rng.u64(0..4);
+        checker_state.prev_input_frame = frame;
+
+        let expected_input =
+            GameInputEvent::new(frame, action).expect("frame number should be within bounds");
+
+        assert_eq!(game_input, expected_input);
+    }
+
+    assert!(decoder.is_finished());
+
+    eprintln!("serializer outputted {ser_out_acc_len} bytes in total");
+}
+
+fn random_action(rng: &mut Rng) -> InputAction {
+    let bool = rng.bool();
+    let kind = InputActionKind::from_bool(bool);
+
+    let key = rng.u8(InputActionKey::MoveLeft as u8..=InputActionKey::RightZangi as u8);
+    let key = InputActionKey::try_from_byte(key).unwrap();
+
+    InputAction { kind, key }
+}
+
+fn random_game_input_event(rng: &mut Rng, prev_input_frame: &mut u64) -> GameInputEvent {
+    let action = random_action(rng);
+    let frame = *prev_input_frame + rng.u64(0..4);
+    *prev_input_frame = frame;
+
+    GameInputEvent::new(frame, action).expect("frame count should be within bounds")
+}
+
+/// Overwrites a vec with an event chunk consisting of many events.
+fn generate_event_chunk(
+    rng: &mut Rng,
+    prev_input_frame: &mut u64,
+    out_vec: &mut Vec<GameInputEvent>,
+) {
+    out_vec.clear();
+
+    out_vec.reserve_exact(STREAMING_INPUTS_PER_ROUND);
+
+    for _ in 0..STREAMING_INPUTS_PER_ROUND {
+        out_vec.push(random_game_input_event(rng, prev_input_frame));
+    }
+}
+
+#[test]
+fn test_rng_cloning_works() {
+    let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
+    let mut cloned = rng.clone();
+
+    let mut chunk = Vec::new();
+    generate_event_chunk(&mut rng, &mut 0, &mut chunk);
+
+    let mut prev_frame_input = 0;
+
+    for event in chunk {
+        let action = random_action(&mut cloned);
+        let frame = prev_frame_input + cloned.u64(0..4);
+        prev_frame_input = frame;
+
+        let event2 =
+            GameInputEvent::new(frame, action).expect("frame count should be within bounds");
+
+        assert_eq!(event, event2);
     }
 }

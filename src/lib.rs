@@ -14,8 +14,6 @@
 //!
 //! [parsing and serializing]: <https://en.wikipedia.org/wiki/Serialization>
 
-// TODO: Improve crate-level docs and more tests
-
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 

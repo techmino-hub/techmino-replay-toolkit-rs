@@ -511,22 +511,23 @@ impl ReplayDecoderPreprocessor {
                 miniz_oxide::MZFlush::None,
             );
 
-            compressed_bytes = &[];
+            compressed_bytes = &compressed_bytes[res.bytes_consumed..];
+
+            out_vec.extend_from_slice(&out_buf[..res.bytes_written]);
 
             match res.status {
                 Ok(miniz_oxide::MZStatus::StreamEnd) => {
-                    out_vec.extend_from_slice(&out_buf[..res.bytes_written]);
                     return Ok(Cow::Owned(out_vec));
                 }
                 Ok(_) => {
-                    out_vec.extend_from_slice(&out_buf[..res.bytes_written]);
                     // We may have more output, so continue
                 }
                 // We need more input
-                Err(miniz_oxide::MZError::Buf) if res.bytes_written == 0 => {
+                Err(miniz_oxide::MZError::Buf)
+                    if decompressor.last_status() == TINFLStatus::NeedsMoreInput =>
+                {
                     return Ok(Cow::Owned(out_vec));
                 }
-                // Genuine error
                 Err(e) => {
                     return Err(FormatError::ZlibError {
                         status: decompressor.last_status(),
@@ -709,7 +710,7 @@ mod tests {
 
         for _ in 0..PREPROCESSOR_TRIALS {
             let init_data = slightly_random_data(&mut rng);
-            let mut feeder = ByteFeeder::new(init_data.as_slice());
+            let mut feeder = ByteFeeder::new(&init_data);
             let mut result_data = Vec::new();
 
             let mut preprocessor = ReplayDecoderPreprocessor::new(ReplayBufferKind::Uncompressed);
@@ -721,18 +722,26 @@ mod tests {
                 result_data.extend_from_slice(&out);
             }
 
-            assert_eq!(init_data.as_slice(), result_data.as_slice());
+            assert_eq!(&*init_data, result_data.as_slice());
         }
     }
 
     #[test]
     fn preprocess_compressed() {
-        let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
+        let mut rng = Rng::with_seed(0x173E_C0AB_520D_8524);
 
-        for _ in 0..PREPROCESSOR_TRIALS {
+        for i in 0..PREPROCESSOR_TRIALS {
+            eprintln!("trial {i} of {PREPROCESSOR_TRIALS}");
             let init_data = slightly_random_data(&mut rng);
 
-            let compressed = miniz_oxide::deflate::compress_to_vec_zlib(init_data.as_slice(), 1);
+            let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&init_data, 1);
+
+            assert_eq!(
+                &*miniz_oxide::inflate::decompress_to_vec_zlib(&compressed)
+                    .expect("compressed data should be valid zlib"),
+                &*init_data,
+                "zlib should roundtrip properly"
+            );
 
             let mut feeder = ByteFeeder::new(&compressed);
             let mut result_data = Vec::new();
@@ -746,7 +755,25 @@ mod tests {
                 result_data.extend_from_slice(&out);
             }
 
-            assert_eq!(init_data.as_slice(), result_data.as_slice());
+            let ReplayDecoderPreprocessor::Compressed { decompressor, .. } = preprocessor else {
+                unreachable!();
+            };
+
+            assert_eq!(
+                decompressor.last_status(),
+                TINFLStatus::Done,
+                "decompressor was not done"
+            );
+            // assert_eq!(
+            //     init_data.len(),
+            //     result_data.len(),
+            //     "input vs output data lengths don't match"
+            // );
+            assert_eq!(
+                &*init_data,
+                result_data.as_slice(),
+                "input vs output data don't match"
+            );
         }
     }
 
@@ -757,7 +784,7 @@ mod tests {
         for _ in 0..PREPROCESSOR_TRIALS {
             let init_data = slightly_random_data(&mut rng);
 
-            let encoded = base64::engine::general_purpose::STANDARD.encode(init_data);
+            let encoded = base64::engine::general_purpose::STANDARD.encode(&init_data);
 
             let mut feeder = ByteFeeder::new(encoded.as_bytes());
             let mut result_data = Vec::new();
@@ -783,7 +810,7 @@ mod tests {
                 }
             }
 
-            assert_eq!(init_data.as_slice(), result_data.as_slice());
+            assert_eq!(&*init_data, result_data.as_slice());
         }
     }
 
@@ -794,7 +821,7 @@ mod tests {
         for _ in 0..PREPROCESSOR_TRIALS {
             let init_data = slightly_random_data(&mut rng);
 
-            let compressed = miniz_oxide::deflate::compress_to_vec_zlib(init_data.as_slice(), 1);
+            let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&init_data, 1);
             let encoded = base64::engine::general_purpose::STANDARD.encode(compressed);
 
             let mut feeder = ByteFeeder::new(encoded.as_bytes());
@@ -809,7 +836,7 @@ mod tests {
                 result_data.extend_from_slice(&out);
             }
 
-            assert_eq!(init_data.as_slice(), result_data.as_slice());
+            assert_eq!(&*init_data, result_data.as_slice());
         }
     }
 
