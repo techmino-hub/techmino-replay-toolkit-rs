@@ -7,11 +7,15 @@
     clippy::std_instead_of_core,
     reason = "tests aren't meant to be run no_std"
 )]
+#![allow(
+    dead_code,
+    reason = "this module is being imported in both unit tests and integration tests"
+)]
 
 extern crate std;
 use crate::{
-    format::ReplayBufferKind, vlq::VlqData, GameInputEvent, GameReplayData, GameReplayMetadata,
-    InputAction, InputActionKey, InputActionKind, PlayerSettings,
+    format::ReplayBufferKind, GameInputEvent, GameReplayData, GameReplayMetadata, InputAction,
+    InputActionKey, InputActionKind, PlayerSettings,
 };
 use cases::*;
 use core::ops::Deref;
@@ -154,20 +158,6 @@ pub fn slightly_random_data(rng: &mut Rng) -> Box<[u8]> {
             byte
         })
         .collect()
-}
-
-pub fn random_vlq(rng: &mut Rng) -> VlqData {
-    let max = match rng.u8(..4) {
-        0 => 2,
-        1 => const { u8::MAX as u64 },
-        2 => const { u16::MAX as u64 },
-        _ => VlqData::MAX_REPRESENTABLE,
-    };
-
-    let num = rng.u64(..=max);
-
-    // SAFETY: `num` is always at most the maximum representable by VlqData
-    unsafe { VlqData::try_from(num).unwrap_unchecked() }
 }
 
 /// A struct to split an input data into randomly-sized chunks.
@@ -401,27 +391,5 @@ pub fn generate_event_chunk(
 
     for _ in 0..STREAMING_INPUTS_PER_ROUND {
         out_vec.push(random_game_input_event(rng, prev_input_frame));
-    }
-}
-
-#[test]
-fn test_rng_cloning_works() {
-    let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
-    let mut cloned = rng.clone();
-
-    let mut chunk = Vec::new();
-    generate_event_chunk(&mut rng, &mut 0, &mut chunk);
-
-    let mut prev_frame_input = 0;
-
-    for event in chunk {
-        let action = random_action(&mut cloned);
-        let frame = prev_frame_input + cloned.u64(0..4);
-        prev_frame_input = frame;
-
-        let event2 =
-            GameInputEvent::new(frame, action).expect("frame count should be within bounds");
-
-        assert_eq!(event, event2);
     }
 }

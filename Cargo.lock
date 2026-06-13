@@ -80,6 +80,7 @@ dependencies = [
  "serde_json",
  "strum",
  "thiserror",
+ "trt-vlq",
 ]
 
 [[package]]
@@ -260,6 +261,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "trt-vlq"
+version = "0.1.0"
+dependencies = [
+ "fastrand",
+ "thiserror",
 ]
 
 [[package]]

@@ -33,7 +33,7 @@ mod types;
 
 #[cfg(test)]
 mod test_utils;
-use __unstable::vlq;
+use trt_vlq as vlq;
 
 pub use action::*;
 pub use types::*;
@@ -41,7 +41,5 @@ pub use types::*;
 /// Unstable internals used for testing purposes only. Do not use.
 #[doc(hidden)]
 pub mod __unstable {
-    #[path = "../vlq/mod.rs"]
-    pub mod vlq;
-    // pub use crate::vlq;
+    pub use trt_vlq as vlq;
 }

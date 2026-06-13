@@ -174,6 +174,8 @@ mod tests {
     use super::*;
     use fastrand::Rng;
 
+    use alloc::vec;
+
     #[test]
     fn test_vlq_creation() {
         // Mostly sourced from https://en.wikipedia.org/wiki/Variable-length_quantity#Examples

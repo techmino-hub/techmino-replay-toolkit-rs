@@ -1,0 +1,13 @@
+[package]
+name = "trt-vlq"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+std = ["thiserror/std"]
+
+[dependencies]
+thiserror = { version = "2.0.18", default-features = false }
+
+[dev-dependencies]
+fastrand = "2.4.1"

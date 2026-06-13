@@ -1,7 +1,6 @@
 use core::fmt::{self, Display};
 
-use crate::vlq::VlqData;
-#[cfg(feature = "alloc")]
+use crate::VlqData;
 use alloc::vec::Vec;
 use thiserror::Error;
 
@@ -15,7 +14,7 @@ pub struct VlqReader {
 
 impl VlqReader {
     /// Create a new instance of a VLQ reader state machine.
-    pub(crate) const fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             buf: [0u8; _],
             buf_len: 0,
@@ -24,7 +23,7 @@ impl VlqReader {
 
     /// Feed a VLQ-encoded chunk into this state machine and
     /// append the VLQ data points into an existing Vec.
-    pub(crate) fn update_to_vec(
+    pub fn update_to_vec(
         &mut self,
         vlq_encoded: &[u8],
         vlq_data_points: &mut Vec<VlqData>,
@@ -63,8 +62,14 @@ impl VlqReader {
 
     /// Returns false if this struct has any leftover partial data.
     #[must_use]
-    pub(crate) const fn is_finished(&self) -> bool {
+    pub const fn is_finished(&self) -> bool {
         self.buf_len == 0
+    }
+}
+
+impl Default for VlqReader {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -83,11 +88,10 @@ impl Display for VlqDecodeError {
 
 #[cfg(test)]
 mod tests {
-    use fastrand::Rng;
-
-    use crate::test_utils::{random_vlq, ByteFeeder};
-
     use super::*;
+    use crate::test_utils::{random_vlq, ByteFeeder};
+    use alloc::boxed::Box;
+    use fastrand::Rng;
 
     /// Get an iterator of VLQ-encoded bytes from a slice of [`VlqData`] instances.
     fn vlq_multi_iter(vlqs: &[VlqData]) -> impl Iterator<Item = u8> + '_ {

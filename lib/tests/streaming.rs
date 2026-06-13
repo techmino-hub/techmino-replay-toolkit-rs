@@ -6,8 +6,7 @@
 
 use fastrand::Rng;
 use libtechmino_replay::{
-    __unstable::vlq, deserialize::ReplayDecoder, format::ReplayBufferKind,
-    serialize::ReplayEncoder, *,
+    deserialize::ReplayDecoder, format::ReplayBufferKind, serialize::ReplayEncoder, *,
 };
 
 use crate::common::{
