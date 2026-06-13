@@ -363,7 +363,7 @@ fn regenerate_cases() {
 fn test_streaming() {
     let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
 
-    let chunk_sizes = [2, 4, 8, 16, 32, 128, 256, 512, 1024, 2048];
+    let round_counts = [2, 4, 8, 16, 32, 128, 256, 512, 1024, 2048];
     let input_modes = [InputParseMode::Absolute, InputParseMode::Relative];
     let replay_kinds = [
         // ReplayBufferKind::Uncompressed,
@@ -373,8 +373,8 @@ fn test_streaming() {
 
     for rbk in replay_kinds {
         for input_mode in input_modes {
-            for rounds in chunk_sizes {
-                test_streaming_with_params(rounds, input_mode, rbk, &mut rng);
+            for round_count in round_counts {
+                test_streaming_with_params(round_count, input_mode, rbk, &mut rng);
             }
         }
     }
@@ -389,14 +389,14 @@ struct InputGenState {
 ///
 /// `input_rng` is the rng instance used for generating the game input event sequence.
 fn test_streaming_with_params(
-    rounds: usize,
+    round_count: usize,
     input_mode: InputParseMode,
     replay_kind: ReplayBufferKind,
     input_rng: &mut Rng,
 ) {
     eprintln!(
-        "test params: {replay_kind:?}, {input_mode:?}, {rounds} rounds × {STREAMING_INPUTS_PER_ROUND} inputs each = {total_inputs} inputs.",
-        total_inputs = STREAMING_INPUTS_PER_ROUND * rounds
+        "test params: {replay_kind:?}, {input_mode:?}, {round_count} rounds × {STREAMING_INPUTS_PER_ROUND} inputs each = {total_inputs} inputs.",
+        total_inputs = STREAMING_INPUTS_PER_ROUND * round_count
     );
 
     let mut encoder = ReplayEncoder::new(replay_kind, 1);
@@ -423,7 +423,7 @@ fn test_streaming_with_params(
     // Accumulative length of serialization output
     let mut ser_out_acc_len = 0;
 
-    for _ in 0..rounds {
+    for _ in 0..round_count {
         generate_event_chunk(
             &mut generator_state.rng,
             &mut generator_state.prev_input_frame,
