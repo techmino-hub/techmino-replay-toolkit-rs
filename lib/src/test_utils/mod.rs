@@ -10,9 +10,8 @@
 
 extern crate std;
 use crate::{
-    deserialize::ReplayDecoder, format::ReplayBufferKind, serialize::ReplayEncoder, vlq::VlqData,
-    GameInputEvent, GameReplayData, GameReplayMetadata, InputAction, InputActionKey,
-    InputActionKind, InputParseMode, PlayerSettings,
+    format::ReplayBufferKind, vlq::VlqData, GameInputEvent, GameReplayData, GameReplayMetadata,
+    InputAction, InputActionKey, InputActionKind, PlayerSettings,
 };
 use cases::*;
 use core::ops::Deref;
@@ -166,7 +165,9 @@ pub fn random_vlq(rng: &mut Rng) -> VlqData {
     };
 
     let num = rng.u64(..=max);
-    VlqData::try_from(num).unwrap()
+
+    // SAFETY: `num` is always at most the maximum representable by VlqData
+    unsafe { VlqData::try_from(num).unwrap_unchecked() }
 }
 
 /// A struct to split an input data into randomly-sized chunks.
@@ -367,151 +368,29 @@ fn regenerate_cases() {
     todo!("implement hash checks");
 }
 
-/// Test streaming by generating replays that should have a significant impact on RAM if directly
-/// and fully stored there.
-///
-/// The deserialized output is then checked by comparing the `GameInputEvent` stream that we expect
-/// utilizing a previously-cloned rng instance.
-#[test]
-fn test_streaming() {
-    let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
-
-    let round_counts = [2, 4, 8, 16, 32, 128, 256, 512, 1024, 2048];
-    let input_modes = [InputParseMode::Absolute, InputParseMode::Relative];
-    let replay_kinds = [
-        // ReplayBufferKind::Uncompressed,
-        ReplayBufferKind::Compressed,
-        ReplayBufferKind::Base64,
-    ];
-
-    for rbk in replay_kinds {
-        for input_mode in input_modes {
-            for round_count in round_counts {
-                test_streaming_with_params(round_count, input_mode, rbk, &mut rng);
-            }
-        }
-    }
-}
-
-struct InputGenState {
-    rng: Rng,
-    prev_input_frame: u64,
-}
-
-/// Streaming test for a certain round count parameter.
-///
-/// `input_rng` is the rng instance used for generating the game input event sequence.
-fn test_streaming_with_params(
-    round_count: usize,
-    input_mode: InputParseMode,
-    replay_kind: ReplayBufferKind,
-    input_rng: &mut Rng,
-) {
-    eprintln!(
-        "test params: {replay_kind:?}, {input_mode:?}, {round_count} rounds × {STREAMING_INPUTS_PER_ROUND} inputs each = {total_inputs} inputs.",
-        total_inputs = STREAMING_INPUTS_PER_ROUND * round_count
-    );
-
-    let mut encoder = ReplayEncoder::new(replay_kind, 1);
-    let metadata_bytes = encoder
-        .feed_metadata(&SAMPLE_METADATA, Some(input_mode))
-        .expect("feeding metadata should succeed");
-
-    let mut decoder = ReplayDecoder::new(replay_kind, Some(input_mode));
-
-    let mut generator_state = InputGenState {
-        prev_input_frame: 0,
-        rng: input_rng.fork(),
-    };
-
-    let mut checker_state = InputGenState {
-        prev_input_frame: 0,
-        rng: generator_state.rng.clone(),
-    };
-
-    // Temp buffer to be fed to serialization
-    let mut this_frame_input_data = Vec::with_capacity(STREAMING_INPUTS_PER_ROUND);
-    // Temp buffer from serialization to be fed into deser
-    let mut ser_out_buf = metadata_bytes;
-    // Accumulative length of serialization output
-    let mut ser_out_acc_len = 0;
-
-    for _ in 0..round_count {
-        generate_event_chunk(
-            &mut generator_state.rng,
-            &mut generator_state.prev_input_frame,
-            &mut this_frame_input_data,
-        );
-
-        encoder
-            .feed_input_data(&this_frame_input_data, &mut ser_out_buf)
-            .expect("feeding input data should succeed");
-
-        if ser_out_buf.is_empty() {
-            continue;
-        }
-
-        ser_out_acc_len += ser_out_buf.len();
-
-        let deser_output = decoder
-            .update(ser_out_buf.drain(..).as_slice())
-            .expect("decoding should work");
-
-        for game_input in deser_output.inputs {
-            let expected_input = random_game_input_event(
-                &mut checker_state.rng,
-                &mut checker_state.prev_input_frame,
-            );
-            assert_eq!(game_input, expected_input);
-        }
-    }
-
-    encoder
-        .finish(&mut ser_out_buf)
-        .expect("encoder should finish");
-
-    ser_out_acc_len += ser_out_buf.len();
-
-    let deser_output = decoder
-        .update(ser_out_buf.drain(..).as_slice())
-        .expect("decoder should properly finish deserializing replay");
-
-    for game_input in deser_output.inputs {
-        let action = random_action(&mut checker_state.rng);
-        let frame = checker_state.prev_input_frame + checker_state.rng.u64(0..4);
-        checker_state.prev_input_frame = frame;
-
-        let expected_input =
-            GameInputEvent::new(frame, action).expect("frame number should be within bounds");
-
-        assert_eq!(game_input, expected_input);
-    }
-
-    assert!(decoder.is_finished());
-
-    eprintln!("serializer outputted {ser_out_acc_len} bytes in total");
-}
-
-fn random_action(rng: &mut Rng) -> InputAction {
+pub fn random_action(rng: &mut Rng) -> InputAction {
     let bool = rng.bool();
     let kind = InputActionKind::from_bool(bool);
 
     let key = rng.u8(InputActionKey::MoveLeft as u8..=InputActionKey::RightZangi as u8);
-    let key = InputActionKey::try_from_byte(key).unwrap();
+
+    // SAFETY: The range MoveLeft..=RightZangi is contiguous and is always valid.
+    let key = unsafe { InputActionKey::try_from_byte(key).unwrap_unchecked() };
 
     InputAction { kind, key }
 }
 
-fn random_game_input_event(rng: &mut Rng, prev_input_frame: &mut u64) -> GameInputEvent {
+pub fn random_game_input_event(rng: &mut Rng, prev_input_frame: &mut u64) -> GameInputEvent {
     let action = random_action(rng);
-    let frame = *prev_input_frame + rng.u64(0..4);
+    let frame = (*prev_input_frame + rng.u64(0..4)).min(GameInputEvent::MAX_FRAME);
     *prev_input_frame = frame;
 
-    GameInputEvent::new(frame, action).expect("frame count should be within bounds")
+    // SAFETY: frame is clamped to be at most the maximum frame GameInputEvent can handle.
+    unsafe { GameInputEvent::new(frame, action).unwrap_unchecked() }
 }
 
 /// Overwrites a vec with an event chunk consisting of many events.
-fn generate_event_chunk(
+pub fn generate_event_chunk(
     rng: &mut Rng,
     prev_input_frame: &mut u64,
     out_vec: &mut Vec<GameInputEvent>,

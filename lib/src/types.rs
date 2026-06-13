@@ -50,7 +50,7 @@ pub struct GameInputEvent(i64);
 
 impl GameInputEvent {
     /// The final frame number where events can be reliably played back by the game.
-    const MAX_FRAME: u64 = 1 << 53;
+    pub const MAX_FRAME: u64 = 1 << 53;
 
     /// Create a new packed [`GameInputEvent`].
     ///

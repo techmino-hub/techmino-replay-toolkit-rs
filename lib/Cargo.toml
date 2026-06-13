@@ -53,3 +53,6 @@ thiserror = { version = "2.0.18", default-features = false }
 [dev-dependencies]
 fastrand = "2.4.1"
 ron = "0.12.1"
+
+[[test]]
+name = "streaming"
