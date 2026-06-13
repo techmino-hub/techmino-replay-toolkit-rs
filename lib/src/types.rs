@@ -134,16 +134,19 @@ impl Debug for GameInputEvent {
 pub struct GameInputEventError;
 
 /// A struct representing all the data contained within the game replay.
-#[cfg_attr(
-    test,
-    expect(
-        clippy::unsafe_derive_deserialize,
-        reason = "ser/de here is for testing, library users \
-        are expected to use the inherent parse/serialize methods instead"
-    ),
-    derive(Serialize, Deserialize)
+///
+/// # A note on the `serde` implementations
+/// Although this struct derives `Serialize` and `Deserialize`, these
+/// impls do not serialize or deserialize to/from the format used by
+/// the game. For that, use the inherent parse and serialize methods.
+///
+/// This struct derives `Serialize` and `Deserialize` mainly if you want
+/// to serialize/deserialize to your own format, e.g. RON or CBOR.
+#[expect(
+    clippy::unsafe_derive_deserialize,
+    reason = "this is for internal testing purposes only"
 )]
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct GameReplayData {
     /// A list of game input events that happened during the replay.
     pub inputs: Vec<GameInputEvent>,

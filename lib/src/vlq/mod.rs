@@ -2,5 +2,5 @@
 mod data;
 mod reader;
 
-pub(crate) use data::VlqData;
-pub(crate) use reader::{VlqDecodeError, VlqReader};
+pub use data::VlqData;
+pub use reader::{VlqDecodeError, VlqReader};

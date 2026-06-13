@@ -9,7 +9,7 @@ use core::num::NonZeroU8;
 /// which means it has a limit of representing up to
 /// 56 bits (since one bit of each byte is used by the format).
 #[derive(Clone, Debug)]
-pub(crate) struct VlqData {
+pub struct VlqData {
     /// The byte array representing the VLQ-encoded data.
     ///
     /// The first byte with the most significant bit ON
@@ -52,7 +52,7 @@ impl VlqData {
     ///
     /// An `Err` is returned when `value` exceeds [`Self::MAX_REPRESENTABLE`]
     /// and cannot be represented as a VLQ.
-    pub(crate) const fn from_value(mut value: u64) -> Result<Self, VlqEncodeError> {
+    pub const fn from_value(mut value: u64) -> Result<Self, VlqEncodeError> {
         let Some(len) = Self::value_repr_len(value) else {
             return Err(VlqEncodeError { number: value });
         };
@@ -83,7 +83,8 @@ impl VlqData {
     /// less than 0x80, and every byte before that (if any) must be greater than 0x80.
     ///
     /// Failing this constraint is a logic error.
-    pub(crate) const fn from_raw(bytes: [u8; Self::MAX_BYTES as usize]) -> Self {
+    #[must_use]
+    pub const fn from_raw(bytes: [u8; Self::MAX_BYTES as usize]) -> Self {
         debug_assert!(
             u64::from_ne_bytes(bytes) & 0x8080_8080_8080_8080 != 0x8080_8080_8080_8080,
             "invalid vlq: no ending byte found"

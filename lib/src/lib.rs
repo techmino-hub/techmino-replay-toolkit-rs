@@ -30,10 +30,18 @@ pub mod deserialize;
 pub mod format;
 pub mod serialize;
 mod types;
-mod vlq;
+
+#[cfg(test)]
+mod test_utils;
+use __unstable::vlq;
 
 pub use action::*;
 pub use types::*;
 
-#[cfg(test)]
-mod tests;
+/// Unstable internals used for testing purposes only. Do not use.
+#[doc(hidden)]
+pub mod __unstable {
+    #[path = "../vlq/mod.rs"]
+    pub mod vlq;
+    // pub use crate::vlq;
+}

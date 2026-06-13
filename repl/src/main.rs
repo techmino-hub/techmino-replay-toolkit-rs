@@ -1,6 +1,6 @@
 use std::io;
 
-use techmino_replay_toolkit::{format::ReplayBufferKind, GameReplayData};
+use libtechmino_replay::{format::ReplayBufferKind, GameReplayData};
 
 fn main() {
     println!(

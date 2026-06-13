@@ -235,6 +235,7 @@ impl GameReplayData {
 
         encoder.feed_input_data(&self.inputs, &mut output)?;
 
+        // SAFETY: Base64 is always valid ASCII
         Ok(unsafe { AsciiString::from_ascii_unchecked(output) })
     }
 }
@@ -902,7 +903,7 @@ impl ReplayEncoderPostprocessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{
+    use crate::test_utils::{
         slightly_random_data, ByteFeeder, SAMPLE_INPUT_DATA, SAMPLE_METADATA,
         SAMPLE_UNSORTED_INPUT_DATA, TEST_CHUNK_MAX_SIZE,
     };

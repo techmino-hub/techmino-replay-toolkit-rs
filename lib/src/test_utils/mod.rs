@@ -1,4 +1,12 @@
-mod cases;
+//! Utilities for unit tests and integration tests.
+#![allow(
+    clippy::std_instead_of_alloc,
+    reason = "tests aren't meant to be run no_std"
+)]
+#![allow(
+    clippy::std_instead_of_core,
+    reason = "tests aren't meant to be run no_std"
+)]
 
 extern crate std;
 use crate::{
@@ -8,15 +16,19 @@ use crate::{
 };
 use cases::*;
 use core::ops::Deref;
+#[cfg(test)]
 use fastrand::Rng;
+#[cfg(test)]
 use ron::ser::PrettyConfig;
-use std::{collections::HashMap, format, fs, println, sync::LazyLock};
+use std::{collections::HashMap, fs, sync::LazyLock};
+
+mod cases;
 
 /// How many inputs to insert into the stream every round in the `test_streaming`
 /// test.
-const STREAMING_INPUTS_PER_ROUND: usize = 1_048_576;
+pub const STREAMING_INPUTS_PER_ROUND: usize = 1_048_576;
 
-const TEST_DATA_UNCOMPRESSED_LEN: usize = 65536;
+pub const TEST_DATA_UNCOMPRESSED_LEN: usize = 65536;
 pub const TEST_CHUNK_MAX_SIZE: usize = 48;
 
 pub static SAMPLE_METADATA: LazyLock<GameReplayMetadata> = LazyLock::new(|| GameReplayMetadata {
@@ -124,7 +136,7 @@ pub static SAMPLE_UNSORTED_INPUT_DATA: [GameInputEvent; 3] = [
 ];
 
 /// Creates not-quite-random data.
-pub(crate) fn slightly_random_data(rng: &mut Rng) -> Box<[u8]> {
+pub fn slightly_random_data(rng: &mut Rng) -> Box<[u8]> {
     let test_data_bit_per_byte = rng.usize(0..3);
 
     (0..TEST_DATA_UNCOMPRESSED_LEN)
@@ -145,7 +157,7 @@ pub(crate) fn slightly_random_data(rng: &mut Rng) -> Box<[u8]> {
         .collect()
 }
 
-pub(crate) fn random_vlq(rng: &mut Rng) -> VlqData {
+pub fn random_vlq(rng: &mut Rng) -> VlqData {
     let max = match rng.u8(..4) {
         0 => 2,
         1 => const { u8::MAX as u64 },
@@ -158,7 +170,7 @@ pub(crate) fn random_vlq(rng: &mut Rng) -> VlqData {
 }
 
 /// A struct to split an input data into randomly-sized chunks.
-pub(crate) struct ByteFeeder<'a> {
+pub struct ByteFeeder<'a> {
     /// The slice representing the yet-to-be-output data.
     data: &'a [u8],
 }
@@ -166,13 +178,13 @@ pub(crate) struct ByteFeeder<'a> {
 impl<'a> ByteFeeder<'a> {
     /// Creates a new byte feeder.
     #[must_use]
-    pub(crate) const fn new(data: &'a [u8]) -> Self {
+    pub const fn new(data: &'a [u8]) -> Self {
         Self { data }
     }
 
     /// Get a randomly-sized chunk of data.
     #[must_use]
-    pub(crate) fn bite(&mut self, rng: &mut Rng) -> &'a [u8] {
+    pub fn bite(&mut self, rng: &mut Rng) -> &'a [u8] {
         let chunk_size = rng.usize(1..=(TEST_CHUNK_MAX_SIZE.min(self.data.len())));
         let (chunk, rest) = self.data.split_at(chunk_size);
         self.data = rest;
@@ -188,8 +200,9 @@ impl<'a> Deref for ByteFeeder<'a> {
     }
 }
 
+/// Test for the [`ByteFeeder`] test util
 #[test]
-fn internal_test_byte_feeder() {
+fn test_byte_feeder() {
     let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
 
     for _ in 0..1024 {

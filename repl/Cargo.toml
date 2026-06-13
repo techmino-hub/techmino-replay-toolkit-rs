@@ -1,0 +1,7 @@
+[package]
+name = "techmino-replay-toolkit"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libtechmino-replay = { path = "../lib" }

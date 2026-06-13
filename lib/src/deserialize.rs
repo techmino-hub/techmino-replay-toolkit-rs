@@ -695,7 +695,7 @@ mod tests {
         action::{InputAction, InputActionKey, InputActionKind},
         deserialize::ReplayDecoderPreprocessor,
         format::ReplayBufferKind,
-        tests::{slightly_random_data, ByteFeeder},
+        test_utils::{slightly_random_data, ByteFeeder},
         vlq::VlqData,
         GameInputEvent, InputParseMode,
     };

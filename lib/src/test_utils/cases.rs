@@ -1,12 +1,11 @@
-extern crate std;
 use crate::GameReplayData;
-use alloc::{
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::{
     boxed::Box,
     string::{String, ToString},
     vec::Vec,
 };
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StoredReplay {
@@ -20,7 +19,7 @@ pub struct TestCase {
     pub data: Option<GameReplayData>,
 }
 
-pub const TESTCASE_PATH: &str = "./src/tests/cases";
+pub const TESTCASE_PATH: &str = "./src/test_utils/cases";
 
 pub fn get_test_cases() -> HashMap<String, TestCase> {
     let files: Vec<_> = std::fs::read_dir(TESTCASE_PATH)

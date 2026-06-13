@@ -8,7 +8,7 @@ use thiserror::Error;
 /// A VLQ reader state machine that can take in arbitrary chunks
 /// of VLQ-encoded bytes.
 #[derive(Clone, Debug)]
-pub(crate) struct VlqReader {
+pub struct VlqReader {
     buf: [u8; (VlqData::MAX_BYTES - 1) as usize],
     buf_len: u8,
 }
@@ -85,7 +85,7 @@ impl Display for VlqDecodeError {
 mod tests {
     use fastrand::Rng;
 
-    use crate::tests::{random_vlq, ByteFeeder};
+    use crate::test_utils::{random_vlq, ByteFeeder};
 
     use super::*;
 
