@@ -11,6 +11,10 @@
     dead_code,
     reason = "this module is being imported in both unit tests and integration tests"
 )]
+#![allow(
+    clippy::missing_panics_doc,
+    reason = "test utils module isn't meant to be panic-free"
+)]
 
 extern crate std;
 use crate::{
@@ -25,7 +29,7 @@ use fastrand::Rng;
 use ron::ser::PrettyConfig;
 use std::{collections::HashMap, fs, sync::LazyLock};
 
-mod cases;
+pub mod cases;
 
 /// How many inputs to insert into the stream every round in the `test_streaming`
 /// test.
@@ -206,81 +210,6 @@ fn test_byte_feeder() {
         }
 
         assert_eq!(&*init_data, feeder_output.as_slice());
-    }
-}
-
-#[test]
-fn test_serialize_deserialize_noop() {
-    let cases = get_test_cases();
-
-    for (key, val) in cases {
-        let Some(data) = val.data else {
-            println!("Skipping testcase '{key}' (it has no deserialized data form)");
-            continue;
-        };
-
-        println!("Testing for testcase {key}");
-
-        let serialized = data
-            .serialize_to_raw(None)
-            .expect("Error while serializing replay");
-
-        let deserialized =
-            match GameReplayData::parse_replay(&serialized, ReplayBufferKind::Uncompressed, None) {
-                Ok(r) => r,
-                Err(e) => {
-                    panic!("Error while deserializing replay {key}: {e:?}");
-                }
-            };
-
-        // Separate assertions to get more narrow assertion failures
-        assert_eq!(
-            data.metadata, deserialized.metadata,
-            "Original and deserialized metadata doesn't match up!",
-        );
-
-        assert_eq!(
-            data.inputs, deserialized.inputs,
-            "Original and deserialized input data doesn't match up!",
-        );
-
-        assert_eq!(
-            data, deserialized,
-            "Original and deserialized data doesn't match up!"
-        );
-    }
-}
-
-/// There should not be any difference between the original data and the
-/// result of deserializing the original serialized data
-#[test]
-fn test_difference() {
-    let cases = get_test_cases();
-
-    for (key, val) in cases {
-        let Some(saved_deserialized) = val.data else {
-            println!("Skipping testcase '{key}' (it has no deserialized data form)");
-            continue;
-        };
-
-        let Some(saved_serialized) = val.serialized else {
-            println!("Skipping testcase '{key}' (it has no serialized data form)");
-            continue;
-        };
-
-        println!("Testing for testcase {key}");
-
-        let (saved_serialized_bytes, serialized_kind) = match &saved_serialized {
-            StoredReplay::Base64(string) => (string.as_bytes(), ReplayBufferKind::Base64),
-            StoredReplay::Binary(binary) => (&binary[..], ReplayBufferKind::Compressed),
-        };
-
-        // dbg!(&saved_serialized, &saved_serialized_bytes);
-
-        let parsed = GameReplayData::parse_replay(saved_serialized_bytes, serialized_kind, None)
-            .expect("deserialization should work");
-
-        assert_eq!(saved_deserialized, parsed);
     }
 }
 

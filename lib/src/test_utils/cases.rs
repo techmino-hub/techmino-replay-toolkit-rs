@@ -20,6 +20,7 @@ const EXTENSION_B64_REPLAY: &str = "b64.rep";
 const EXTENSION_BIN_REPLAY: &str = "bin.rep";
 const EXTENSION_RON: &str = "ron";
 
+#[must_use]
 pub fn get_test_cases() -> HashMap<String, TestCase> {
     let files: Vec<_> = std::fs::read_dir(TESTCASE_PATH)
         .unwrap()

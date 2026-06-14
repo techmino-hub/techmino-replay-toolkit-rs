@@ -36,6 +36,7 @@ mod test_utils;
 use trt_vlq as vlq;
 
 pub use action::*;
+pub use format::*;
 pub use types::*;
 
 /// Unstable internals used for testing purposes only. Do not use.
