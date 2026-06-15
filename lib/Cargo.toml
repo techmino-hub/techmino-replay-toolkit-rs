@@ -56,7 +56,10 @@ fastrand = "2.4.1"
 ron = "0.12.1"
 
 [[test]]
-name = "streaming"
+name = "streaming_roundtrip"
 
 [[test]]
 name = "roundtrip_noop"
+
+[[test]]
+name = "deser_data_match"
