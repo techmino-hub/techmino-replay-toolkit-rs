@@ -55,11 +55,11 @@
 use crate::{
     format::ReplayBufferKind,
     types::{GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplayParseError},
-    vlq::VlqReader,
     InputAction,
 };
 use alloc::{borrow::Cow, boxed::Box, string::String, vec::Vec};
 use base64::Engine;
+use libtechmino_vlq::VlqReader;
 use miniz_oxide::{
     inflate::{stream::InflateState, TINFLStatus},
     MZError,
@@ -696,11 +696,11 @@ mod tests {
         deserialize::ReplayDecoderPreprocessor,
         format::ReplayBufferKind,
         test_utils::{slightly_random_data, ByteFeeder},
-        vlq::VlqData,
         GameInputEvent, InputParseMode,
     };
     use base64::Engine;
     use fastrand::Rng;
+    use libtechmino_vlq::VlqData;
 
     const PREPROCESSOR_TRIALS: usize = 1024;
 
@@ -906,6 +906,7 @@ mod tests {
         }
     }
 
+    /// Tests using only the input data of the earlyinput replay, absolute mode
     #[test]
     fn earlyinput_abs_input_test() {
         const ATTEMPTS: usize = 1_000_000;

@@ -1,4 +1,12 @@
 [workspace]
 
 resolver = "3"
-members = ["lib", "repl", "vlq"]
+members = ["lib", "vlq"]
+
+[package]
+name = "techmino-replay-toolkit"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libtechmino-replay = { path = "./lib" }

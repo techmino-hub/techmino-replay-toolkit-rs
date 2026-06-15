@@ -73,6 +73,7 @@ dependencies = [
  "base64",
  "fastrand",
  "hashbrown",
+ "libtechmino-vlq",
  "miniz_oxide",
  "ron",
  "semver",
@@ -80,7 +81,14 @@ dependencies = [
  "serde_json",
  "strum",
  "thiserror",
- "trt-vlq",
+]
+
+[[package]]
+name = "libtechmino-vlq"
+version = "0.1.0"
+dependencies = [
+ "fastrand",
+ "thiserror",
 ]
 
 [[package]]
@@ -261,14 +269,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "trt-vlq"
-version = "0.1.0"
-dependencies = [
- "fastrand",
- "thiserror",
 ]
 
 [[package]]

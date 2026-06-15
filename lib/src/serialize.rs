@@ -100,12 +100,12 @@ use crate::{
     types::{
         GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplaySerializeError,
     },
-    vlq::VlqData,
 };
 use alloc::vec::Vec;
 use ascii::AsciiString;
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use core::ops::ControlFlow;
+use libtechmino_vlq::VlqData;
 use miniz_oxide::{
     deflate::{
         core::{compress, CompressorOxide, TDEFLFlush, TDEFLStatus},

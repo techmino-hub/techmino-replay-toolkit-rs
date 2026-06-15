@@ -1,6 +1,6 @@
 //! General types and structs to represent metadata and other trivial data.
 
-use crate::{vlq::VlqDecodeError, InputAction, InputActionKey, InputActionKind};
+use crate::{InputAction, InputActionKey, InputActionKind};
 use alloc::{
     borrow::Cow,
     fmt::{self},
@@ -10,6 +10,7 @@ use alloc::{
 };
 use base64::DecodeError;
 use core::fmt::Debug;
+use libtechmino_vlq::VlqDecodeError;
 use miniz_oxide::{deflate::core::TDEFLStatus, inflate::TINFLStatus, MZError};
 use semver::Version;
 use serde::{Deserialize, Serialize};
