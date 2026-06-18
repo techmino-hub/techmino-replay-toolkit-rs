@@ -17,11 +17,19 @@ std_instead_of_core = { level = "warn" }
 # Either std or alloc must be enabled, but not both
 default = ["std"]
 # Either std or alloc must be enabled, but not both
-std = ["serde/std", "strum/std", "thiserror/std"]
+std = ["serde/std", "serde_json/std", "strum/std", "thiserror/std"]
 # Either std or alloc must be enabled, but not both
-alloc = []
+alloc = ["serde/alloc", "serde_json/alloc"]
 # Adds strum utilities for certain enums
 strum = ["dep:strum"]
+# Preserves the order of elements in the metadata.
+preserve_metadata_order = ["serde_json/preserve_order"]
+# Enables serde's `float_roundtrip` feature.
+#
+# > Use sufficient precision when parsing fixed precision floats from JSON to ensure that they maintain accuracy when round-tripped through JSON. This comes at an approximately 2x performance cost for parsing floats compared to the default best-effort precision.
+#
+# This only affect metadata.
+float_roundtrip = ["serde_json/float_roundtrip"]
 
 [dependencies]
 libtechmino-vlq = { path = "../vlq" }
@@ -40,11 +48,9 @@ miniz_oxide = { version = "0.9.1", default-features = false, features = [
 ] }
 semver = { version = "1.0.25", default-features = false, features = ["serde"] }
 serde = { version = "1.0.214", features = [
-    "alloc",
     "derive",
 ], default-features = false }
 serde_json = { version = "1.0.132", default-features = false, features = [
-    "alloc",
 ] }
 strum = { version = "0.28.0", optional = true, default-features = false, features = [
     "derive",
