@@ -1,5 +1,15 @@
 //! General types and structs to represent metadata and other trivial data.
 
+#[cfg(feature = "arbitrary")]
+use arbitrary::{Arbitrary, Unstructured};
+#[cfg(feature = "arbitrary")]
+use arbitrary_json::ArbitraryValue;
+
+#[cfg(feature = "alloc")]
+use hashbrown::HashMap;
+#[cfg(feature = "std")]
+use std::collections::HashMap;
+
 use crate::{InputAction, InputActionKey, InputActionKind};
 use alloc::{
     borrow::Cow,
@@ -15,11 +25,6 @@ use miniz_oxide::{deflate::core::TDEFLStatus, inflate::TINFLStatus, MZError};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-#[cfg(feature = "alloc")]
-use hashbrown::HashMap;
-#[cfg(feature = "std")]
-use std::collections::HashMap;
 
 /// A packed struct representing a single input event in the game.
 ///
@@ -120,6 +125,20 @@ impl GameInputEvent {
     }
 }
 
+#[cfg(feature = "arbitrary")]
+impl<'a> Arbitrary<'a> for GameInputEvent {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let frame = u.int_in_range(0..=Self::MAX_FRAME)?;
+        let action: InputAction = u.arbitrary()?;
+
+        Self::new(frame, action).map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
+
+    fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+        (9, Some(9))
+    }
+}
+
 impl Debug for GameInputEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("GameInputEvent")
@@ -153,6 +172,34 @@ pub struct GameReplayData {
     pub inputs: Vec<GameInputEvent>,
     /// Metadata contained within the replay data.
     pub metadata: GameReplayMetadata,
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> Arbitrary<'a> for GameReplayData {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let metadata = GameReplayMetadata::arbitrary(u)?;
+
+        let mut inputs = Vec::new();
+
+        let mut keep_going = u.arbitrary().unwrap_or(false);
+        let mut prev_frame = 0u64;
+
+        while keep_going {
+            let frame = u.int_in_range(prev_frame..=GameInputEvent::MAX_FRAME)?;
+            let action: InputAction = u.arbitrary()?;
+
+            let input = GameInputEvent::new(frame, action)
+                .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+
+            prev_frame = frame;
+
+            inputs.push(input);
+
+            keep_going = u.arbitrary().unwrap_or(false);
+        }
+
+        Ok(Self { inputs, metadata })
+    }
 }
 
 // TODO: Find more version info for these entries
@@ -310,6 +357,49 @@ pub struct PlayerSettings {
     pub nonstandard: HashMap<String, serde_json::Value>,
 }
 
+#[cfg(feature = "arbitrary")]
+impl<'a> Arbitrary<'a> for PlayerSettings {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let settings = Self {
+            atk_fx: u.arbitrary()?,
+            clear_fx: u.arbitrary()?,
+            drop_fx: u.arbitrary()?,
+            lock_fx: u.arbitrary()?,
+            move_fx: u.arbitrary()?,
+            shake_fx: u.arbitrary()?,
+            splash_fx: u.arbitrary()?,
+            das: u.arbitrary()?,
+            arr: u.arbitrary()?,
+            sddas: u.arbitrary()?,
+            sdarr: u.arbitrary()?,
+            dascut: u.arbitrary()?,
+            irscut: u.arbitrary()?,
+            dropcut: u.arbitrary()?,
+            irs: u.arbitrary()?,
+            ihs: u.arbitrary()?,
+            ims: u.arbitrary()?,
+            rs: u.arbitrary()?,
+            bag_line: u.arbitrary()?,
+            block: u.arbitrary()?,
+            center: u.arbitrary()?,
+            face: u.arbitrary()?,
+            ghost: u.arbitrary()?,
+            grid: u.arbitrary()?,
+            high_cam: u.arbitrary()?,
+            next_pos: u.arbitrary()?,
+            score: u.arbitrary()?,
+            skin: u.arbitrary()?,
+            smooth: u.arbitrary()?,
+            text: u.arbitrary()?,
+            warn: u.arbitrary()?,
+            ft_lock: u.arbitrary()?,
+            nonstandard: arbitrary_nonstandard(u)?,
+        };
+
+        Ok(settings)
+    }
+}
+
 /// A struct representing the metadata stored within the replay.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -360,6 +450,36 @@ pub struct GameReplayMetadata {
     /// Additional replay metadata, if any, that may not be standard.
     #[serde(flatten)]
     pub nonstandard: HashMap<String, serde_json::Value>,
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> Arbitrary<'a> for GameReplayMetadata {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let private: Option<ArbitraryValue> = u.arbitrary()?;
+        let private: Option<serde_json::Value> = private.map(core::convert::Into::into);
+
+        let has_mods: bool = u.arbitrary().unwrap_or(false);
+        let mods = if has_mods {
+            Some(arbitrary_modlist(u)?)
+        } else {
+            None
+        };
+
+        let metadata = GameReplayMetadata {
+            tas_used: u.arbitrary()?,
+            private,
+            player: u.arbitrary()?,
+            seed: u.arbitrary()?,
+            version: u.arbitrary()?,
+            date: u.arbitrary()?,
+            mods,
+            mode: u.arbitrary()?,
+            setting: u.arbitrary()?,
+            nonstandard: arbitrary_nonstandard(u)?,
+        };
+
+        Ok(metadata)
+    }
 }
 
 /// An error from parsing the replay data.
@@ -516,6 +636,7 @@ impl From<TDEFLStatus> for ReplaySerializeError {
 /// Replays made before version 0.17.22 of the game (i.e., 0.17.21 and before it)
 /// use relative timing for its inputs.\
 /// However, starting from version 0.17.22 of the game, absolute timing is used.
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum InputParseMode {
     /// Relative timing.
@@ -685,6 +806,47 @@ impl StringOrBytes<'_> {
             Self::Bytes(b) => b,
         }
     }
+}
+
+#[cfg(feature = "arbitrary")]
+fn arbitrary_modlist(u: &mut Unstructured) -> arbitrary::Result<Vec<(u64, serde_json::Value)>> {
+    let mut mods = Vec::new();
+
+    loop {
+        let keep_going = u.arbitrary().unwrap_or(false);
+
+        if !keep_going {
+            break;
+        }
+
+        let mod_id: u64 = u.arbitrary()?;
+        let mod_value: ArbitraryValue = u.arbitrary()?;
+        let mod_value: serde_json::Value = mod_value.into();
+
+        mods.push((mod_id, mod_value));
+    }
+
+    Ok(mods)
+}
+
+#[cfg(feature = "arbitrary")]
+fn arbitrary_nonstandard(
+    u: &mut Unstructured,
+) -> arbitrary::Result<HashMap<String, serde_json::Value>> {
+    let mut map = HashMap::new();
+
+    let mut keep_going = u.arbitrary().unwrap_or(false);
+
+    while keep_going {
+        let entry: (String, ArbitraryValue) = u.arbitrary()?;
+        let (k, v) = (entry.0, entry.1.into());
+
+        map.insert(k, v);
+
+        keep_going = u.arbitrary().unwrap_or(false);
+    }
+
+    Ok(map)
 }
 
 #[cfg(test)]

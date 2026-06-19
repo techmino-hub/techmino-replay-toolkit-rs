@@ -16,6 +16,8 @@
 //! - `B` denotes the [input action key][InputActionKey], where `0` is
 //!   mapped to [`MoveLeft`][InputActionKey::MoveLeft], etc.
 
+#[cfg(feature = "arbitrary")]
+use arbitrary::{Arbitrary, Unstructured};
 use core::{
     fmt::{self, Display},
     num::TryFromIntError,
@@ -71,6 +73,20 @@ impl InputAction {
     }
 }
 
+#[cfg(feature = "arbitrary")]
+impl<'a> Arbitrary<'a> for InputAction {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let byte: u8 = u.arbitrary()?;
+
+        Self::try_from_byte(byte).map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
+
+    #[inline]
+    fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+        (1, Some(1))
+    }
+}
+
 impl TryFrom<u8> for InputAction {
     type Error = <InputActionKey as TryFrom<u8>>::Error;
 
@@ -86,6 +102,7 @@ impl From<InputAction> for u8 {
 }
 
 /// Whether this is a press action or a release action.
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum InputActionKind {
@@ -145,8 +162,9 @@ impl From<InputActionKind> for bool {
 }
 
 /// Represents the key/button that was acted upon.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 #[cfg_attr(feature = "strum", derive(strum::EnumIter))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[allow(missing_docs)]
 #[repr(u8)]
 pub enum InputActionKey {

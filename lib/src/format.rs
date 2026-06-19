@@ -5,6 +5,7 @@
 /// The most common ones are [`Base64`][Self::Base64] for copy-pasteable text from the
 /// "Replays" menu and the [`Compressed`][Self::Compressed] from the `.rep` files in the
 /// save directory.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ReplayBufferKind {
     /// Base64-encoding of zlib-compressed bytes.
