@@ -18,16 +18,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arbitrary-json"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08117a235f4bfba33f065e5f6941838fa9f77436c1823fca9c93c9b4a34a40e0"
-dependencies = [
- "arbitrary",
- "serde_json",
-]
-
-[[package]]
 name = "ascii"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -178,7 +168,6 @@ name = "libtechmino-replay"
 version = "0.1.0"
 dependencies = [
  "arbitrary",
- "arbitrary-json",
  "ascii",
  "base64",
  "fastrand",
@@ -198,7 +187,6 @@ name = "libtechmino-replay-fuzz"
 version = "0.0.0"
 dependencies = [
  "arbitrary",
- "arbitrary-json",
  "libfuzzer-sys",
  "libtechmino-replay",
  "serde_json",

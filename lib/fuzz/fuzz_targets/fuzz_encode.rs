@@ -1,3 +1,5 @@
+//! Fuzzing focused on the encoder, with a single decode step at the end to make
+//! sure it roundtrips correctly.
 #![no_main]
 
 use libfuzzer_sys::{
@@ -38,19 +40,27 @@ impl EncodeStream {
 
     fn test(&self) -> Result<Vec<u8>, libtechmino_replay::ReplaySerializeError> {
         let mut encoder = ReplayEncoder::new(self.rep_kind, self.compression_level);
-        let mut output = encoder.feed_metadata(self.metadata(), self.input_mode_override)?;
+        let mut serialized = encoder.feed_metadata(self.metadata(), self.input_mode_override)?;
 
         for pass in 0..self.indices.len() {
             let lower_bound = pass.checked_sub(1).map(|p| self.indices[p]).unwrap_or(0);
             let upper_bound = self.indices[pass];
             let input_slice = &self.inputs()[lower_bound..upper_bound];
 
-            encoder.feed_input_data(input_slice, &mut output)?;
+            encoder.feed_input_data(input_slice, &mut serialized)?;
         }
 
-        encoder.finish(&mut output)?;
+        encoder.finish(&mut serialized)?;
 
-        todo!();
+        drop(encoder);
+
+        let decoded =
+            GameReplayData::parse_replay(&serialized, self.rep_kind, self.input_mode_override)
+                .expect("decode failed");
+
+        assert_eq!(self.total_game_data, decoded);
+
+        Ok(serialized)
     }
 }
 

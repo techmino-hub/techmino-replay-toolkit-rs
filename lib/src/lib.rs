@@ -25,6 +25,9 @@ compile_error!("You must enable either the `std` feature or the `alloc` feature"
 
 extern crate alloc;
 
+#[cfg(feature = "arbitrary")]
+mod arbitrary;
+
 mod action;
 pub mod deserialize;
 pub mod format;

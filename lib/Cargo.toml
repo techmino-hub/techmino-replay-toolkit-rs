@@ -17,7 +17,7 @@ std_instead_of_core = { level = "warn" }
 # Either std or alloc must be enabled, but not both
 default = ["std"]
 # Implements `Arbitrary` on structs. Used mainly for testing.
-arbitrary = ["dep:arbitrary", "dep:arbitrary-json"]
+arbitrary = ["dep:arbitrary"]
 # Either std or alloc must be enabled, but not both
 std = ["serde/std", "serde_json/std", "strum/std", "thiserror/std"]
 # Either std or alloc must be enabled, but not both
@@ -59,7 +59,6 @@ strum = { version = "0.28.0", optional = true, default-features = false, feature
 ] }
 thiserror = { version = "2.0.18", default-features = false }
 arbitrary = { version = "1.4.2", optional = true, features = ["derive"] }
-arbitrary-json = { version = "0.1.1", optional = true }
 
 [dev-dependencies]
 fastrand = "2.4.1"
