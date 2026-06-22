@@ -3,6 +3,7 @@ name = "libtechmino-replay-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
+default-run = "runner"
 
 [package.metadata]
 cargo-fuzz = true
@@ -12,6 +13,7 @@ arbitrary = { version = "1.4.2", features = ["derive"] }
 libfuzzer-sys = { version = "0.4", features = ["arbitrary-derive"] }
 serde_json = "1.0.150"
 strum = "0.28.0"
+strum_macros = "0.28.0"
 
 [dependencies.libtechmino-replay]
 path = ".."
@@ -20,6 +22,13 @@ features = ["strum", "preserve_metadata_order", "float_roundtrip", "arbitrary"]
 [[bin]]
 name = "fuzz_encode"
 path = "fuzz_targets/fuzz_encode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "runner"
+path = "src/main.rs"
 test = false
 doc = false
 bench = false

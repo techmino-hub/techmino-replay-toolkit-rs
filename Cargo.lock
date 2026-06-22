@@ -191,6 +191,7 @@ dependencies = [
  "libtechmino-replay",
  "serde_json",
  "strum",
+ "strum_macros",
 ]
 
 [[package]]

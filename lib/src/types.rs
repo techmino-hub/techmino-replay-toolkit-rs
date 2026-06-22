@@ -168,86 +168,103 @@ pub struct PlayerSettings {
     ///
     /// Normal values: integer from 0 to 5
     #[serde(rename = "atkFX")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub atk_fx: Option<u64>,
     /// The clear FX slider in the video settings.
     ///
     /// Normal values: integer from 0 to 5
     #[serde(rename = "clearFX")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub clear_fx: Option<u64>,
     /// The drop FX slider in the video settings.
     ///
     /// Normal values: integer from 0 to 5
     #[serde(rename = "dropFX")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub drop_fx: Option<u64>,
     /// The lock FX slider in the video settings.
     ///
     /// Normal values: integer from 0 to 5
     #[serde(rename = "lockFX")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub lock_fx: Option<u64>,
     /// The move FX slider in the video settings.
     ///
     /// Normal values: integer from 0 to 5
     #[serde(rename = "moveFX")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub move_fx: Option<u64>,
     /// The field sway slider in the video settings.
     ///
     /// Normal values: integer from 0 to 5
     #[serde(rename = "shakeFX")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub shake_fx: Option<u64>,
     /// The splash FX slider in the video settings.
     ///
     /// Normal values: integer from 0 to 5
     #[serde(rename = "splashFX")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub splash_fx: Option<u64>,
 
     /// The DAS (delayed auto-shift) slider in the control settings.
     ///
     /// Normal values: integer from 0 to 20, measured in frames\
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub das: Option<u64>,
     /// The ARR (auto-repeat rate) slider in the control settings.
     ///
     /// Normal values: integer from 0 to 15, measured in frames\
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub arr: Option<u64>,
     /// The soft-drop DAS (delayed auto-shift) slider in the control settings.
     ///
     /// Normal values: integer from 0 to 10, measured in frames\
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sddas: Option<u64>,
     /// The soft-drop ARR (auto-repeat rate) slider in the control settings.
     ///
     /// Normal values: integer from 0 to 4, measured in frames\
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sdarr: Option<u64>,
     /// The DAS (delayed auto-shift) cut slider in the control settings.
     ///
     /// Normal values: integer from 0 to 20, measured in frames\
     /// Learn more about DAS: <https://tetris.wiki/DAS>
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub dascut: Option<u64>,
     /// The IRS (initial rotation system) cut slider in the control settings.
     ///
     /// Normal values: integer from 0 to 20, measured in frames\
     /// Learn more about IRS: <https://tetris.wiki/IRS>\
     /// Version info: This is only available on game versions >=0.17.22
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub irscut: Option<u64>,
     /// The auto-lock cut slider in the control settings.
     ///
     /// Normal values: integer from 0 to 10, measured in frames
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub dropcut: Option<u64>,
 
     /// The IRS (initial rotation system) checkbox in the control settings.
     ///
     /// Learn more about IRS: <https://tetris.wiki/IRS>
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub irs: Option<bool>,
     /// The IHS (initial hold system) checkbox in the control settings.
     ///
     /// Learn more about IHS: <https://tetris.wiki/IHS>
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ihs: Option<bool>,
     /// The IMS (initial movement system) checkbox in the control settings.
     ///
     /// Analogous to [IRS][<https://tetris.wiki/IRS>] and [IHS][<https://tetris.wiki/IHS>],
     /// but for movement instead of rotating and holding, respectively.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ims: Option<bool>,
     /// The rotation system used in the replay.
     ///
@@ -270,47 +287,65 @@ pub struct PlayerSettings {
     /// - `None`
     /// - `None_plus`
     #[serde(rename = "RS")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rs: Option<String>,
 
     /// The bag separator option in the video settings.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bag_line: Option<bool>,
     /// The "draw active piece" option in the video settings.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub block: Option<bool>,
     /// The rotation center opacity option in the video settings.
+    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_optional_finite))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub center: Option<f64>,
     /// The starting orientations of all the pieces.
     ///
     /// Normally contains 29 elements: 7 tetrominoes, 18 pentominoes, 2 trominoes, 1 domino, and 1 monomino, in that order.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub face: Option<Vec<u64>>,
     /// The ghost piece opacity option in the video settings.
+    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_optional_finite))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ghost: Option<f64>,
     /// The grid opacity option in the video settings.
+    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_optional_finite))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub grid: Option<f64>,
     /// The screen scrolling option in the video settings.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub high_cam: Option<bool>,
     /// The spawn preview option in the video settings.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub next_pos: Option<bool>,
     /// The "score pop-ups" option in the video settings.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<bool>,
     /// The colors of all the pieces.
     ///
     /// Normally contains 29 elements: 7 tetrominoes, 18 pentominoes, 2 trominoes, 1 domino, and 1 monomino, in that order.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub skin: Option<Vec<u64>>,
     /// The smooth falling option option in the video settings.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub smooth: Option<bool>,
     /// The line clear popups option in the video settings.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<bool>,
     /// The danger alerts option in the video settings.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub warn: Option<bool>,
 
     /// The "Frame skip" option in the video settings.
     ///
     /// This option was removed in version 0.17.2 of the game.
     #[serde(rename = "FTLock")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ft_lock: Option<bool>,
 
     /// Additional settings that may not be standard.
-    #[arbitrary(with = crate::arbitrary::arbitrary_nonstandard)]
+    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_nonstandard))]
     #[serde(flatten)]
     pub nonstandard: HashMap<String, serde_json::Value>,
 }
@@ -321,13 +356,17 @@ pub struct PlayerSettings {
 #[serde(rename_all = "camelCase")]
 pub struct GameReplayMetadata {
     /// Whether or not the replay is marked as a TAS.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tas_used: Option<bool>,
 
     /// The 'private' field of the replay, used to store mode-specific data.\
     /// Its contents differ based on the mode played.\
     /// Currently, only the `custom_clear` and `custom_puzzle` modes are known to
     /// store any data here.
-    #[arbitrary(with = crate::arbitrary::arbitrary_optional_value)]
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialize_nullable")]
+    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_optional_value))]
     pub private: Option<serde_json::Value>,
 
     /// The username of the player.
@@ -354,7 +393,8 @@ pub struct GameReplayMetadata {
     /// This probably means nothing to you, since all the serialization and deserialization will
     /// convert between the two forms automatically.
     #[serde(rename = "mod")]
-    #[arbitrary(with = crate::arbitrary::arbitrary_modlist)]
+    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_modlist))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mods: Option<Vec<(u64, serde_json::Value)>>,
 
     /// The name of the mode that was played.
@@ -367,7 +407,7 @@ pub struct GameReplayMetadata {
 
     /// Additional replay metadata, if any, that may not be standard.
     #[serde(flatten)]
-    #[arbitrary(with = crate::arbitrary::arbitrary_nonstandard)]
+    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_nonstandard))]
     pub nonstandard: HashMap<String, serde_json::Value>,
 }
 
@@ -695,6 +735,17 @@ impl StringOrBytes<'_> {
             Self::Bytes(b) => b,
         }
     }
+}
+
+/// Deserialize, keeping `Some(Value::Null)` and `None` distinct.
+///
+/// By default, `serde_json` always deserializes `null` into `None`.
+/// This undoes that.
+fn deserialize_nullable<'de, D>(deserializer: D) -> Result<Option<serde_json::Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    serde_json::Value::deserialize(deserializer).map(Some)
 }
 
 #[cfg(test)]

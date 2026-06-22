@@ -115,3 +115,26 @@ pub(crate) fn arbitrary_optional_value(
 
     Ok(value)
 }
+
+/// Arbitrary finite f64.
+pub(crate) fn arbitrary_finite(u: &mut Unstructured) -> arbitrary::Result<f64> {
+    let float: f64 = u.arbitrary()?;
+
+    if !float.is_finite() {
+        return Err(arbitrary::Error::IncorrectFormat);
+    }
+
+    Ok(float)
+}
+
+/// Arbitrary `None` or some finite f64.
+pub(crate) fn arbitrary_optional_finite(u: &mut Unstructured) -> arbitrary::Result<Option<f64>> {
+    let is_some: bool = u.arbitrary()?;
+
+    if is_some {
+        let finite = arbitrary_finite(u)?;
+        Ok(Some(finite))
+    } else {
+        Ok(None)
+    }
+}
