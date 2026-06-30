@@ -28,9 +28,23 @@ extern crate alloc;
 #[cfg(feature = "arbitrary")]
 mod arbitrary;
 
+/// Module for any constants related to Techmino.
+pub mod consts {
+    /// The total amount of pieces in the current game.
+    ///
+    /// There are currently 29 elements:
+    /// - 1 monomino
+    /// - 1 domino
+    /// - 2 trominoes
+    /// - 7 tetrominoes
+    /// - 18 pentominoes
+    pub const TOTAL_PIECE_COUNT: usize = 29;
+}
+
 mod action;
 pub mod deserialize;
 pub mod format;
+mod macros;
 pub mod serialize;
 mod types;
 

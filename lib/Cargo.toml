@@ -40,11 +40,6 @@ float_roundtrip = ["serde_json/float_roundtrip"]
 libtechmino-vlq = { path = "../vlq" }
 ascii = { version = "1.1.0", default-features = false, features = ["alloc"] }
 base64 = { version = "0.22.1", default-features = false, features = ["alloc"] }
-hashbrown = { version = "0.17.1", default-features = false, features = [
-    "alloc",
-    "default-hasher",
-    "serde",
-] }
 miniz_oxide = { version = "0.9.1", default-features = false, features = [
     "alloc",
     "serde",
@@ -62,6 +57,8 @@ strum = { version = "0.28.0", optional = true, default-features = false, feature
 ] }
 thiserror = { version = "2.0.18", default-features = false }
 arbitrary = { version = "1.4.2", optional = true, features = ["derive"] }
+pastey = "0.2.3"
+derive_more = { version = "2.1.1", default-features = false, features = ["deref", "deref_mut", "from", "into"] }
 
 [dev-dependencies]
 fastrand = "2.4.1"

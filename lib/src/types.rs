@@ -3,12 +3,14 @@
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
 
-#[cfg(feature = "alloc")]
-use hashbrown::HashMap;
-#[cfg(feature = "std")]
-use std::collections::HashMap;
+use derive_more::{From, Into};
+use serde_json::Map;
 
-use crate::{InputAction, InputActionKey, InputActionKind};
+use crate::{
+    consts::TOTAL_PIECE_COUNT,
+    macros::{metadata_getters_setters, setting_getters_setters},
+    InputAction, InputActionKey, InputActionKind,
+};
 use alloc::{
     borrow::Cow,
     fmt::{self},
@@ -133,8 +135,18 @@ impl Debug for GameInputEvent {
     }
 }
 
+/// An entry had an unexpected type and could not be converted into the
+/// standardized type.
+#[derive(Debug, Error)]
+#[error(
+    "An entry had an unexpected type and could not be converted into the \
+    standardized type."
+)]
+pub struct TypeError;
+
 /// The error type for when the game input event couldn't be created.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, Error)]
+#[error("Failed to create GameInputEvent")]
 pub struct GameInputEventError;
 
 /// A struct representing all the data contained within the game replay.
@@ -158,114 +170,242 @@ pub struct GameReplayData {
     pub metadata: GameReplayMetadata,
 }
 
-// TODO: Find more version info for these entries
 /// A struct representing the settings of the player who made the replay.
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, PartialEq, From, Into, Default)]
 pub struct PlayerSettings {
+    /// The inner map that stores the setting entries.
+    pub map: serde_json::Map<String, serde_json::Value>,
+}
+
+impl PlayerSettings {
+    /// Creates a new blank [`PlayerSettings`] struct.
+    ///
+    /// This does not allocate by default.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            map: serde_json::Map::new(),
+        }
+    }
+
+    /// Creates a new blank [`PlayerSettings`] struct with a specified number of
+    /// entries allocated.
+    #[must_use]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            map: serde_json::Map::with_capacity(capacity),
+        }
+    }
+
+    /// Creates a new [`PlayerSettingsRef`] struct pointing to this
+    /// struct's owned map.
+    ///
+    /// This is different than an [`AsRef`][core::convert::AsRef] implementation
+    /// since this function doesn't directly return a reference to a struct, but
+    /// a struct containing a reference.
+    #[must_use]
+    pub fn as_ref(&self) -> PlayerSettingsRef<'_> {
+        PlayerSettingsRef { map: &self.map }
+    }
+
+    /// Creates a new [`PlayerSettingsMut`] struct pointing to this
+    /// struct's owned map.
+    ///
+    /// This is different than an [`AsRef`][core::convert::AsRef] implementation
+    /// since this function doesn't directly return a reference to a struct, but
+    /// a struct containing a reference.
+    #[must_use]
+    pub fn as_mut(&mut self) -> PlayerSettingsMut<'_> {
+        PlayerSettingsMut { map: &mut self.map }
+    }
+}
+
+impl Clone for PlayerSettings {
+    fn clone(&self) -> Self {
+        Self {
+            map: self.map.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.map.clone_from(&source.map);
+    }
+}
+
+impl TryFrom<serde_json::Value> for PlayerSettings {
+    type Error = serde_json::Value;
+
+    fn try_from(value: serde_json::Value) -> Result<Self, serde_json::Value> {
+        let serde_json::Value::Object(map) = value else {
+            return Err(value);
+        };
+
+        Ok(Self { map })
+    }
+}
+
+/// A struct pointing to the settings of the player who made the replay.
+#[derive(Clone, Copy, Debug, PartialEq, From, Into)]
+pub struct PlayerSettingsRef<'a> {
+    /// The inner map that stores the setting entries.
+    pub map: &'a serde_json::Map<String, serde_json::Value>,
+}
+
+impl PlayerSettingsRef<'_> {
+    /// Converts this reference struct into an owned version of the
+    /// `PlayerSettings` struct.
+    ///
+    /// This isn't part of the [`ToOwned`][alloc::borrow::ToOwned] impl since
+    /// this struct itself is a reference to a Map and not to a `PlayerSettings`
+    /// struct, and therefore we can't provide an `Owned` type of `PlayerSettings`
+    /// because `PlayerSettings` does not implement `Borrow<PlayerSettingsMut>`.
+    #[must_use]
+    pub fn to_owned(&self) -> PlayerSettings {
+        let map = self.map.clone();
+        PlayerSettings { map }
+    }
+}
+
+impl<'a> TryFrom<&'a serde_json::Value> for PlayerSettingsRef<'a> {
+    type Error = TypeError;
+
+    fn try_from(value: &'a serde_json::Value) -> Result<Self, Self::Error> {
+        let serde_json::Value::Object(map) = value else {
+            return Err(TypeError);
+        };
+
+        Ok(Self { map })
+    }
+}
+
+/// A struct mutably pointing to the settings of the player who made the replay.
+#[derive(Debug, PartialEq, From, Into)]
+pub struct PlayerSettingsMut<'a> {
+    /// The inner map that stores the setting entries.
+    pub map: &'a mut serde_json::Map<String, serde_json::Value>,
+}
+
+impl PlayerSettingsMut<'_> {
+    /// Gets an immutable-reference–based [`PlayerSettingsRef`] struct based on
+    /// this [`PlayerSettingsMut`] struct.
+    #[must_use]
+    pub fn as_immutable(&self) -> PlayerSettingsRef<'_> {
+        PlayerSettingsRef { map: self.map }
+    }
+
+    /// Converts this reference struct into an owned version of the
+    /// `PlayerSettings` struct.
+    ///
+    /// This isn't part of the [`ToOwned`][alloc::borrow::ToOwned] impl since
+    /// this struct itself is a reference to a Map and not to a `PlayerSettings`
+    /// struct, and therefore we can't provide an `Owned` type of `PlayerSettings`
+    /// because `PlayerSettings` does not implement `Borrow<PlayerSettingsMut>`.
+    #[must_use]
+    pub fn to_owned(&self) -> PlayerSettings {
+        let map = self.map.clone();
+        PlayerSettings { map }
+    }
+}
+
+setting_getters_setters! {
+    {
+        owned_struct: PlayerSettings => map,
+        ref_struct: PlayerSettingsRef<'_> => map,
+        mut_ref_struct: PlayerSettingsMut<'_> => map,
+    };
     /// The attack FX slider in the video settings.
     ///
     /// Normal values: integer from 0 to 5
-    #[serde(rename = "atkFX")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub atk_fx: Option<u64>,
+    "atkFX" atk_fx: u8 where { from_json: json_to_u8 },
+
     /// The clear FX slider in the video settings.
     ///
     /// Normal values: integer from 0 to 5
-    #[serde(rename = "clearFX")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub clear_fx: Option<u64>,
+    "clearFX" clear_fx: u8 where { from_json: json_to_u8 },
+
     /// The drop FX slider in the video settings.
     ///
     /// Normal values: integer from 0 to 5
-    #[serde(rename = "dropFX")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub drop_fx: Option<u64>,
+    "dropFX" drop_fx: u8 where { from_json: json_to_u8 },
+
     /// The lock FX slider in the video settings.
     ///
     /// Normal values: integer from 0 to 5
-    #[serde(rename = "lockFX")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub lock_fx: Option<u64>,
+    "lockFX" lock_fx: u8 where { from_json: json_to_u8 },
+
     /// The move FX slider in the video settings.
     ///
     /// Normal values: integer from 0 to 5
-    #[serde(rename = "moveFX")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub move_fx: Option<u64>,
+    "moveFX" move_fx: u8 where { from_json: json_to_u8 },
+
     /// The field sway slider in the video settings.
     ///
     /// Normal values: integer from 0 to 5
-    #[serde(rename = "shakeFX")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub shake_fx: Option<u64>,
+    "shakeFX" shake_fx: u8 where { from_json: json_to_u8 },
+
     /// The splash FX slider in the video settings.
     ///
     /// Normal values: integer from 0 to 5
-    #[serde(rename = "splashFX")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub splash_fx: Option<u64>,
+    "splashFX" splash_fx: u8 where { from_json: json_to_u8 },
 
     /// The DAS (delayed auto-shift) slider in the control settings.
     ///
     /// Normal values: integer from 0 to 20, measured in frames\
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub das: Option<u64>,
+    "das" das: u8 where { from_json: json_to_u8 },
+
     /// The ARR (auto-repeat rate) slider in the control settings.
     ///
     /// Normal values: integer from 0 to 15, measured in frames\
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub arr: Option<u64>,
+    "arr" arr: u8 where { from_json: json_to_u8 },
+
     /// The soft-drop DAS (delayed auto-shift) slider in the control settings.
     ///
     /// Normal values: integer from 0 to 10, measured in frames\
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sddas: Option<u64>,
+    "sddas" sddas: u8 where { from_json: json_to_u8 },
+
     /// The soft-drop ARR (auto-repeat rate) slider in the control settings.
     ///
     /// Normal values: integer from 0 to 4, measured in frames\
     /// Learn more about DAS and ARR: <https://tetris.wiki/DAS>
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sdarr: Option<u64>,
+    "sdarr" sdarr: u8 where { from_json: json_to_u8 },
+
     /// The DAS (delayed auto-shift) cut slider in the control settings.
     ///
     /// Normal values: integer from 0 to 20, measured in frames\
     /// Learn more about DAS: <https://tetris.wiki/DAS>
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dascut: Option<u64>,
+    "dascut" dascut: u8 where { from_json: json_to_u8 },
+
     /// The IRS (initial rotation system) cut slider in the control settings.
     ///
     /// Normal values: integer from 0 to 20, measured in frames\
     /// Learn more about IRS: <https://tetris.wiki/IRS>\
     /// Version info: This is only available on game versions >=0.17.22
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub irscut: Option<u64>,
+    "irscut" irscut: u8 where { from_json: json_to_u8 },
+
     /// The auto-lock cut slider in the control settings.
     ///
     /// Normal values: integer from 0 to 10, measured in frames
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dropcut: Option<u64>,
+    "dropcut" dropcut: u8 where { from_json: json_to_u8 },
 
     /// The IRS (initial rotation system) checkbox in the control settings.
     ///
     /// Learn more about IRS: <https://tetris.wiki/IRS>
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub irs: Option<bool>,
+    "irs" irs: bool where { from_json: serde_json::Value::as_bool },
+
     /// The IHS (initial hold system) checkbox in the control settings.
     ///
     /// Learn more about IHS: <https://tetris.wiki/IHS>
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ihs: Option<bool>,
+    "ihs" ihs: bool where { from_json: serde_json::Value::as_bool },
+
     /// The IMS (initial movement system) checkbox in the control settings.
     ///
     /// Analogous to [IRS][<https://tetris.wiki/IRS>] and [IHS][<https://tetris.wiki/IHS>],
     /// but for movement instead of rotating and holding, respectively.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ims: Option<bool>,
+    "ims" ims: bool where { from_json: serde_json::Value::as_bool },
+
     /// The rotation system used in the replay.
     ///
     /// Normal values (as of January 2025):
@@ -286,129 +426,282 @@ pub struct PlayerSettings {
     /// - `Classic_plus`
     /// - `None`
     /// - `None_plus`
-    #[serde(rename = "RS")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rs: Option<String>,
+    "RS" rs: &str | String where { from_json: serde_json::Value::as_str },
 
     /// The bag separator option in the video settings.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bag_line: Option<bool>,
+    "bagLine" bag_line: bool where { from_json: serde_json::Value::as_bool },
+
     /// The "draw active piece" option in the video settings.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub block: Option<bool>,
+    "block" block: bool where { from_json: serde_json::Value::as_bool },
+
     /// The rotation center opacity option in the video settings.
-    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_optional_finite))]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub center: Option<f64>,
+    "center" center: f64 where { from_json: serde_json::Value::as_f64 },
+
+    // TODO: Figure out the order of the specific elements
     /// The starting orientations of all the pieces.
     ///
     /// Normally contains 29 elements: 7 tetrominoes, 18 pentominoes, 2 trominoes, 1 domino, and 1 monomino, in that order.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub face: Option<Vec<u64>>,
+    "face" face: [u8; TOTAL_PIECE_COUNT] where { from_json: json_to_piece_bytes },
+
     /// The ghost piece opacity option in the video settings.
-    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_optional_finite))]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ghost: Option<f64>,
+    "ghost" ghost: f64 where { from_json: serde_json::Value::as_f64 },
+
     /// The grid opacity option in the video settings.
-    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_optional_finite))]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub grid: Option<f64>,
+    "grid" grid: f64 where { from_json: serde_json::Value::as_f64 },
+
     /// The screen scrolling option in the video settings.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub high_cam: Option<bool>,
+    "highCam" high_cam: bool where { from_json: serde_json::Value::as_bool },
+
     /// The spawn preview option in the video settings.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub next_pos: Option<bool>,
+    "nextPos" next_pos: bool where { from_json: serde_json::Value::as_bool },
+
     /// The "score pop-ups" option in the video settings.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub score: Option<bool>,
+    "score" score: bool where { from_json: serde_json::Value::as_bool },
+
+    // TODO: Figure out the order of the specific elements
     /// The colors of all the pieces.
     ///
     /// Normally contains 29 elements: 7 tetrominoes, 18 pentominoes, 2 trominoes, 1 domino, and 1 monomino, in that order.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub skin: Option<Vec<u64>>,
+    "skin" skin: [u8; TOTAL_PIECE_COUNT] where { from_json: json_to_piece_bytes },
+
     /// The smooth falling option option in the video settings.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub smooth: Option<bool>,
+    "smooth" smooth: bool where { from_json: serde_json::Value::as_bool },
+
     /// The line clear popups option in the video settings.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub text: Option<bool>,
+    "text" text: bool where { from_json: serde_json::Value::as_bool },
+
     /// The danger alerts option in the video settings.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub warn: Option<bool>,
+    "warn" warn: bool where { from_json: serde_json::Value::as_bool },
 
     /// The "Frame skip" option in the video settings.
     ///
     /// This option was removed in version 0.17.2 of the game.
-    #[serde(rename = "FTLock")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ft_lock: Option<bool>,
-
-    /// Additional settings that may not be standard.
-    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_nonstandard))]
-    #[serde(flatten)]
-    pub nonstandard: HashMap<String, serde_json::Value>,
+    "FTLock" ft_lock: bool where { from_json: serde_json::Value::as_bool },
 }
 
 /// A struct representing the metadata stored within the replay.
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize, From, Into)]
 #[serde(rename_all = "camelCase")]
 pub struct GameReplayMetadata {
-    /// Whether or not the replay is marked as a TAS.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tas_used: Option<bool>,
+    /// The inner map that stores the metadata entries.
+    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_json_map))]
+    pub map: Map<String, serde_json::Value>,
+}
+
+impl GameReplayMetadata {
+    /// Creates a new blank [`GameReplayMetadata`] struct.
+    ///
+    /// This does not allocate by default.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            map: serde_json::Map::new(),
+        }
+    }
+
+    /// Creates a new blank [`GameReplayMetadata`] struct with the given initial
+    /// capacity.
+    #[must_use]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            map: serde_json::Map::with_capacity(capacity),
+        }
+    }
+}
+
+impl GameReplayMetadata {
+    /// Gets the key for the `private` entry in the map (is currently "private").
+    ///
+    /// This is useful for manually indexing into the map to get a
+    /// specific entry. However, usually, the default `get_*` or
+    /// `set_*` methods should be enough for almost all usecases.
+    pub const KEY_PRIVATE: &'static str = "private";
+
+    /// Gets the key for the `settings` entry in the map (is currently "setting").
+    ///
+    /// This is useful for manually indexing into the map to get a
+    /// specific entry. However, usually, the default `get_*` or
+    /// `set_*` methods should be enough for almost all usecases.
+    pub const KEY_SETTINGS: &'static str = "setting";
 
     /// The 'private' field of the replay, used to store mode-specific data.\
     /// Its contents differ based on the mode played.\
     /// Currently, only the `custom_clear` and `custom_puzzle` modes are known to
     /// store any data here.
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialize_nullable")]
-    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_optional_value))]
-    pub private: Option<serde_json::Value>,
+    #[must_use]
+    pub fn get_private(&self) -> Option<&serde_json::Value> {
+        self.map.get(Self::KEY_PRIVATE)
+    }
 
-    /// The username of the player.
-    pub player: String,
+    /// The 'private' field of the replay, used to store mode-specific data.\
+    /// Its contents differ based on the mode played.\
+    /// Currently, only the `custom_clear` and `custom_puzzle` modes are known to
+    /// store any data here.
+    #[must_use]
+    pub fn get_private_mut(&mut self) -> Option<&mut serde_json::Value> {
+        self.map.get_mut(Self::KEY_PRIVATE)
+    }
 
-    /// The seed for the random number generator.
-    pub seed: u64,
-
-    /// The version of the game the replay was made in.
+    /// The 'private' field of the replay, used to store mode-specific data.\
+    /// Its contents differ based on the mode played.\
+    /// Currently, only the `custom_clear` and `custom_puzzle` modes are known to
+    /// store any data here.
     ///
-    /// Usually conforms to semver (major.minor.patch), but some mods
-    /// may use a different or custom format.
-    pub version: String,
+    /// # Returns
+    /// Returns the old value of the field.
+    /// - If there was no old value of the field, returns `None`.
+    /// - If conversion succeeds, returns the strictly typed version
+    ///   (`Some(Ok(T))`).
+    /// - Otherwise, returns the raw JSON value.
+    ///   (`Some(Err(serde_json::Value)))`)
+    pub fn set_private(&mut self, value: Option<serde_json::Value>) -> Option<serde_json::Value> {
+        let Some(value) = value else {
+            return self.map.remove(Self::KEY_PRIVATE);
+        };
 
-    /// The date and time the replay was initially created.
-    pub date: String,
-
-    /// A list of mods applied to the run.
-    ///
-    /// It's in the format of [mod, value], where mod is the mod ID and value is the value given to the mod.
-    ///
-    /// Note: the original metadata JSON has calls this value `mod`, but since it's misleading (not plural)
-    /// and is a special keyword in Rust, this has been renamed to `mods` in the struct.\
-    /// This probably means nothing to you, since all the serialization and deserialization will
-    /// convert between the two forms automatically.
-    #[serde(rename = "mod")]
-    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_modlist))]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mods: Option<Vec<(u64, serde_json::Value)>>,
-
-    /// The name of the mode that was played.
-    ///
-    /// This refers to the internal/codename of the mode, i.e. `sprint_10l` instead of `Sprint 10L`.
-    pub mode: String,
+        if let Some(mutref) = self.map.get_mut(Self::KEY_PRIVATE) {
+            return Some(core::mem::replace(mutref, value));
+        }
+        self.map.insert(Self::KEY_PRIVATE.to_owned(), value)
+    }
 
     /// The settings of the game when the run was played.
-    pub setting: PlayerSettings,
+    #[must_use]
+    pub fn get_settings(&self) -> Option<Result<PlayerSettingsRef<'_>, TypeError>> {
+        let entry = self.map.get(Self::KEY_SETTINGS)?;
 
-    /// Additional replay metadata, if any, that may not be standard.
-    #[serde(flatten)]
-    #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_nonstandard))]
-    pub nonstandard: HashMap<String, serde_json::Value>,
+        let serde_json::Value::Object(map) = entry else {
+            return Some(Err(TypeError));
+        };
+
+        Some(Ok(PlayerSettingsRef { map }))
+    }
+
+    /// The settings of the game when the run was played.
+    #[must_use]
+    pub fn get_settings_mut(&mut self) -> Option<Result<PlayerSettingsMut<'_>, TypeError>> {
+        let entry = self.map.get_mut(Self::KEY_SETTINGS)?;
+
+        let serde_json::Value::Object(map) = entry else {
+            return Some(Err(TypeError));
+        };
+
+        Some(Ok(PlayerSettingsMut { map }))
+    }
+
+    /// The settings of the game when the run was played.
+    #[must_use]
+    pub fn get_settings_or_raw(&self) -> Option<Result<PlayerSettingsRef<'_>, &serde_json::Value>> {
+        let entry = self.map.get(Self::KEY_SETTINGS)?;
+
+        let serde_json::Value::Object(map) = entry else {
+            return Some(Err(entry));
+        };
+
+        Some(Ok(PlayerSettingsRef { map }))
+    }
+
+    /// The settings of the game when the run was played.
+    #[must_use]
+    pub fn get_settings_mut_or_raw(
+        &mut self,
+    ) -> Option<Result<PlayerSettingsMut<'_>, &mut serde_json::Value>> {
+        let entry = self.map.get_mut(Self::KEY_SETTINGS)?;
+
+        let serde_json::Value::Object(map) = entry else {
+            return Some(Err(entry));
+        };
+
+        Some(Ok(PlayerSettingsMut { map }))
+    }
+
+    /// The settings of the game when the run was played.
+    #[must_use]
+    pub fn get_settings_raw(&self) -> Option<&serde_json::Value> {
+        self.map.get(Self::KEY_SETTINGS)
+    }
+
+    /// The settings of the game when the run was played.
+    #[must_use]
+    pub fn get_settings_raw_mut(&mut self) -> Option<&mut serde_json::Value> {
+        self.map.get_mut(Self::KEY_SETTINGS)
+    }
+
+    /// The settings of the game when the run was played.
+    ///
+    /// # Returns
+    /// Returns the old value of the field.
+    /// - If there was no old value of the field, returns `None`.
+    /// - If conversion succeeds, returns the strictly typed version
+    ///   (`Some(Ok(T))`).
+    /// - Otherwise, returns the raw JSON value.
+    ///   (`Some(Err(serde_json::Value)))`)
+    pub fn set_settings(
+        &mut self,
+        value: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Option<Result<PlayerSettings, serde_json::Value>> {
+        let Some(value) = value else {
+            let json = self.map.remove(Self::KEY_SETTINGS)?;
+            return match PlayerSettings::try_from(json) {
+                Ok(ps) => Some(Ok(ps)),
+                Err(json) => Some(Err(json)),
+            };
+        };
+
+        if let Some(dest) = self.map.get_mut(Self::KEY_SETTINGS) {
+            if let serde_json::Value::Object(dest) = dest {
+                let old = core::mem::replace(dest, value);
+                Some(Ok(PlayerSettings { map: old }))
+            } else {
+                let src = serde_json::Value::Object(value);
+                let old = core::mem::replace(dest, src);
+                Some(Err(old))
+            }
+        } else {
+            self.map.insert(
+                Self::KEY_SETTINGS.to_owned(),
+                serde_json::Value::Object(value),
+            );
+            None
+        }
+    }
+
+    metadata_getters_setters! {
+        (map);
+        /// Whether or not the replay is marked as a TAS.
+        "tasUsed" tas_used: bool where { from_json: serde_json::Value::as_bool },
+
+        /// The username of the player.
+        "player" player: &str | String where { from_json: serde_json::Value::as_str },
+
+        /// The seed for the random number generator.
+        "seed" seed: u64 where { from_json: serde_json::Value::as_u64 },
+
+        /// The version of the game the replay was made in.
+        ///
+        /// Usually conforms to semver (major.minor.patch), but some mods
+        /// may use a different or custom format.
+        "version" version: &str | String where { from_json: serde_json::Value::as_str },
+
+        /// The date and time the replay was initially created.
+        "date" date: &str | String where { from_json: serde_json::Value::as_str },
+
+        /// A list of mods applied to the run.
+        ///
+        /// It's in the format of [mod, value], where mod is the mod ID and value is the value given to the mod.
+        "mod" mods: Vec<(u64, serde_json::Value)> where {
+            from_json: json_to_modlist,
+            to_json: modlist_to_json,
+        },
+
+        /// The name of the mode that was played.
+        ///
+        /// This refers to the internal/codename of the mode, i.e. `sprint_10l` instead of `Sprint 10L`.
+        "mode" mode: &str | String where { from_json: serde_json::Value::as_str },
+
+        // "setting" settings: PlayerSettings where { from_json: serde_json::Value::as_object },
+    }
 }
 
 /// An error from parsing the replay data.
@@ -452,11 +745,12 @@ pub enum ReplayParseError {
 
     /// The mode in which to parse the inputs could not be inferred from the version string.
     ///
-    /// Contains a [`String`] containing the version string.
+    /// Contains the [`String`] or the [`serde_json::Value`] of the version
+    /// entry if it was found.
     ///
     /// To fix this error, consider passing in the input parse mode explicitly.
     #[error("could not infer input parse mode from version metadata")]
-    UnknownInputParseMode(String),
+    UnknownInputParseMode(Option<Result<String, serde_json::Value>>),
 
     /// The input data was malformed and could not be decoded from the VLQ stream.
     #[error("input data contains invalid vlq")]
@@ -503,10 +797,12 @@ impl From<DecodeError> for ReplayParseError {
 pub enum ReplaySerializeError {
     /// The mode in which to serialize the inputs could not be inferred from the version string.
     ///
-    /// Contains a [`String`] containing the version string.
+    /// Contains the [`String`] or the [`serde_json::Value`] of the version
+    /// entry if it was found.
     ///
     /// To fix this error, consider passing in the input parse mode explicitly.
-    UnknownInputParseMode(String),
+    // #[error("could not infer input parse mode from version metadata")]
+    UnknownInputParseMode(Option<Result<String, serde_json::Value>>),
 
     /// There was an attempt to call a function at the wrong state.
     ///
@@ -672,6 +968,56 @@ pub enum StringOrBytes<'a> {
     Bytes(Cow<'a, [u8]>),
 }
 
+fn json_to_u8(value: &serde_json::Value) -> Option<u8> {
+    value.as_number()?.as_u64()?.try_into().ok()
+}
+
+/// Attempts to convert a JSON value into a byte array for every piece in the game.
+fn json_to_piece_bytes(value: &serde_json::Value) -> Option<[u8; TOTAL_PIECE_COUNT]> {
+    let arr: &[_; TOTAL_PIECE_COUNT] = value.as_array()?.as_array()?;
+
+    let mut bytes = [0u8; TOTAL_PIECE_COUNT];
+
+    for i in 0..TOTAL_PIECE_COUNT {
+        bytes[i] = json_to_u8(&arr[i])?;
+    }
+
+    Some(bytes)
+}
+
+/// Attempts to convert a JSON value into a mod list type.
+fn json_to_modlist(value: &serde_json::Value) -> Option<Vec<(u64, serde_json::Value)>> {
+    let source = value.as_array()?;
+
+    let mut processed_list = Vec::with_capacity(source.len());
+
+    for entry in source {
+        let entry = entry.as_array()?;
+        let [mod_id, mod_value] = entry.as_array()?;
+        let mod_id = mod_id.as_u64()?;
+        let mod_value = mod_value.clone();
+
+        processed_list.push((mod_id, mod_value));
+    }
+
+    Some(processed_list)
+}
+
+/// Converts a modlist into JSON format.
+fn modlist_to_json(modlist: Vec<(u64, serde_json::Value)>) -> serde_json::Value {
+    let values: Vec<serde_json::Value> = modlist
+        .into_iter()
+        .map(|(mod_id, mod_value)| {
+            serde_json::Value::Array(vec![
+                serde_json::Value::Number(serde_json::Number::from(mod_id)),
+                mod_value,
+            ])
+        })
+        .collect();
+
+    serde_json::Value::Array(values)
+}
+
 impl StringOrBytes<'_> {
     /// Checks if this enum instance is the [`String`][Self::String] variant.
     #[must_use]
@@ -735,17 +1081,6 @@ impl StringOrBytes<'_> {
             Self::Bytes(b) => b,
         }
     }
-}
-
-/// Deserialize, keeping `Some(Value::Null)` and `None` distinct.
-///
-/// By default, `serde_json` always deserializes `null` into `None`.
-/// This undoes that.
-fn deserialize_nullable<'de, D>(deserializer: D) -> Result<Option<serde_json::Value>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    serde_json::Value::deserialize(deserializer).map(Some)
 }
 
 #[cfg(test)]

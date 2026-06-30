@@ -2,10 +2,7 @@ use crate::{GameInputEvent, GameReplayData, GameReplayMetadata, InputAction};
 
 use arbitrary::{Arbitrary, Unstructured};
 
-#[cfg(feature = "alloc")]
-use hashbrown::HashMap;
-#[cfg(feature = "std")]
-use std::collections::HashMap;
+use serde_json::Map;
 
 mod json;
 
@@ -60,38 +57,10 @@ impl<'a> Arbitrary<'a> for GameReplayData {
     }
 }
 
-pub(crate) fn arbitrary_modlist(
+pub(crate) fn arbitrary_json_map(
     u: &mut Unstructured,
-) -> arbitrary::Result<Option<Vec<(u64, serde_json::Value)>>> {
-    let is_some: bool = u.arbitrary()?;
-
-    if !is_some {
-        return Ok(None);
-    }
-
-    let mut mods = Vec::new();
-
-    loop {
-        let keep_going = u.arbitrary().unwrap_or(false);
-
-        if !keep_going {
-            break;
-        }
-
-        let mod_id: u64 = u.arbitrary()?;
-        let mod_value: ArbitraryValue = u.arbitrary()?;
-        let mod_value: serde_json::Value = mod_value.into();
-
-        mods.push((mod_id, mod_value));
-    }
-
-    Ok(Some(mods))
-}
-
-pub(crate) fn arbitrary_nonstandard(
-    u: &mut Unstructured,
-) -> arbitrary::Result<HashMap<String, serde_json::Value>> {
-    let mut map = HashMap::new();
+) -> arbitrary::Result<Map<String, serde_json::Value>> {
+    let mut map = Map::new();
 
     let mut keep_going = u.arbitrary().unwrap_or(false);
 
@@ -105,36 +74,4 @@ pub(crate) fn arbitrary_nonstandard(
     }
 
     Ok(map)
-}
-
-pub(crate) fn arbitrary_optional_value(
-    u: &mut Unstructured,
-) -> arbitrary::Result<Option<serde_json::Value>> {
-    let value: Option<ArbitraryValue> = u.arbitrary()?;
-    let value: Option<serde_json::Value> = value.map(core::convert::Into::into);
-
-    Ok(value)
-}
-
-/// Arbitrary finite f64.
-pub(crate) fn arbitrary_finite(u: &mut Unstructured) -> arbitrary::Result<f64> {
-    let float: f64 = u.arbitrary()?;
-
-    if !float.is_finite() {
-        return Err(arbitrary::Error::IncorrectFormat);
-    }
-
-    Ok(float)
-}
-
-/// Arbitrary `None` or some finite f64.
-pub(crate) fn arbitrary_optional_finite(u: &mut Unstructured) -> arbitrary::Result<Option<f64>> {
-    let is_some: bool = u.arbitrary()?;
-
-    if is_some {
-        let finite = arbitrary_finite(u)?;
-        Ok(Some(finite))
-    } else {
-        Ok(None)
-    }
 }

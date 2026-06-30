@@ -222,12 +222,28 @@ impl ReplayDecoderState {
                     });
                 };
 
-                let Some(parse_mode) = override_input_mode
-                    .or_else(|| InputParseMode::try_infer_from_version(&metadata.version))
-                else {
-                    {
-                        return Err(ReplayParseError::UnknownInputParseMode(metadata.version));
+                let parse_mode = 'a: {
+                    if let Some(mode) = override_input_mode {
+                        break 'a *mode;
                     }
+
+                    let version = match metadata.get_version_or_raw() {
+                        Some(Ok(v)) => v,
+                        Some(Err(v)) => {
+                            return Err(ReplayParseError::UnknownInputParseMode(Some(Err(
+                                v.clone()
+                            ))));
+                        }
+                        None => return Err(ReplayParseError::UnknownInputParseMode(None)),
+                    };
+
+                    let Some(inferred) = InputParseMode::try_infer_from_version(version) else {
+                        return Err(ReplayParseError::UnknownInputParseMode(Some(Ok(
+                            version.to_owned()
+                        ))));
+                    };
+
+                    inferred
                 };
 
                 let mut input_decoder = InputDecoderState::new(parse_mode);

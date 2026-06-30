@@ -71,6 +71,10 @@ impl<'a> Arbitrary<'a> for EncodeStream {
         let mut prev_index = 0;
 
         while prev_index < input_count {
+            if u.is_empty() {
+                return Err(arbitrary::Error::NotEnoughData);
+            }
+
             let next_index = u.int_in_range(prev_index..=input_count)?;
             indices.push(next_index);
             prev_index = next_index;

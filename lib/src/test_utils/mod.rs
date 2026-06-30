@@ -27,7 +27,7 @@ use core::ops::Deref;
 use fastrand::Rng;
 #[cfg(test)]
 use ron::ser::PrettyConfig;
-use std::{collections::HashMap, fs, sync::LazyLock};
+use std::{fs, sync::LazyLock};
 
 pub mod cases;
 
@@ -38,56 +38,61 @@ pub const STREAMING_INPUTS_PER_ROUND: usize = 1_048_576;
 pub const TEST_DATA_UNCOMPRESSED_LEN: usize = 65536;
 pub const TEST_CHUNK_MAX_SIZE: usize = 48;
 
-pub static SAMPLE_METADATA: LazyLock<GameReplayMetadata> = LazyLock::new(|| GameReplayMetadata {
-    date: String::from("2026-01-01 01:23:45"),
-    mode: String::from("sprint_10l"),
-    mods: None,
-    player: String::from("Stacker"),
-    nonstandard: HashMap::new(),
-    private: None,
-    seed: 0,
-    setting: PLAYER_SETTINGS.clone(),
-    tas_used: Some(false),
-    version: String::from("V0.17.21"),
+pub static SAMPLE_METADATA: LazyLock<GameReplayMetadata> = LazyLock::new(|| {
+    let mut metadata = GameReplayMetadata::new();
+
+    metadata.set_date("2026-01-01 01:23:45".into());
+    metadata.set_mode("sprint_10l".into());
+    metadata.set_mods(Some(Vec::new()));
+    metadata.set_player("Stacker".into());
+    metadata.set_seed(0.into());
+    metadata.set_settings(Some(PLAYER_SETTINGS.clone().map));
+    metadata.set_tas_used(Some(false));
+    metadata.set_version("V0.17.21".into());
+
+    metadata
 });
 
-pub static PLAYER_SETTINGS: LazyLock<PlayerSettings> = LazyLock::new(|| PlayerSettings {
-    das: Some(4),
-    arr: Some(0),
-    atk_fx: Some(0),
-    bag_line: Some(true),
-    block: Some(true),
-    center: Some(1.0),
-    clear_fx: Some(0),
-    dascut: Some(2),
-    drop_fx: Some(0),
-    dropcut: Some(0),
-    face: Some(vec![0; 29]),
-    ft_lock: None,
-    ghost: Some(0.8),
-    grid: Some(0.5),
-    high_cam: Some(true),
-    ihs: Some(true),
-    ims: Some(true),
-    irs: Some(true),
-    irscut: Some(2),
-    lock_fx: Some(1),
-    move_fx: Some(0),
-    next_pos: Some(true),
-    nonstandard: HashMap::new(),
-    rs: Some(String::from("TRS")),
-    score: Some(true),
-    sdarr: Some(0),
-    sddas: Some(0),
-    shake_fx: Some(0),
-    skin: Some(vec![
+pub static PLAYER_SETTINGS: LazyLock<PlayerSettings> = LazyLock::new(|| {
+    let mut settings = PlayerSettings::new();
+
+    settings.set_das(Some(4));
+    settings.set_arr(Some(0));
+    settings.set_atk_fx(Some(0));
+    settings.set_bag_line(Some(true));
+    settings.set_block(Some(true));
+    settings.set_center(Some(1.0));
+    settings.set_clear_fx(Some(0));
+    settings.set_dascut(Some(2));
+    settings.set_drop_fx(Some(0));
+    settings.set_dropcut(Some(0));
+    settings.set_face(Some([0; 29]));
+    settings.set_ft_lock(None);
+    settings.set_ghost(Some(0.8));
+    settings.set_grid(Some(0.5));
+    settings.set_high_cam(Some(true));
+    settings.set_ihs(Some(true));
+    settings.set_ims(Some(true));
+    settings.set_irs(Some(true));
+    settings.set_irscut(Some(2));
+    settings.set_lock_fx(Some(1));
+    settings.set_move_fx(Some(0));
+    settings.set_next_pos(Some(true));
+    settings.set_rs(Some("TRS"));
+    settings.set_score(Some(true));
+    settings.set_sdarr(Some(0));
+    settings.set_sddas(Some(0));
+    settings.set_shake_fx(Some(0));
+    settings.set_skin(Some([
         1, 7, 11, 3, 14, 4, 9, 1, 7, 2, 6, 10, 2, 13, 5, 9, 15, 4, 11, 3, 12, 2, 16, 8, 4, 10, 13,
         2, 8,
-    ]),
-    smooth: Some(true),
-    splash_fx: Some(0),
-    text: Some(true),
-    warn: Some(true),
+    ]));
+    settings.set_smooth(Some(true));
+    settings.set_splash_fx(Some(0));
+    settings.set_text(Some(true));
+    settings.set_warn(Some(true));
+
+    settings
 });
 
 macro_rules! const_unwrap_result {

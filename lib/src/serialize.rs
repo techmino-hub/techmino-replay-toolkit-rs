@@ -410,11 +410,29 @@ impl ReplayEncoderState {
             return Err(ReplaySerializeError::InvalidOperation);
         }
 
-        let parse_mode = match parse_mode_override {
-            Some(m) => m,
-            None => InputParseMode::try_infer_from_version(&metadata.version).ok_or_else(|| {
-                ReplaySerializeError::UnknownInputParseMode(metadata.version.clone())
-            })?,
+        let parse_mode = if let Some(m) = parse_mode_override {
+            m
+        } else {
+            let Some(result) = metadata.get_version_or_raw() else {
+                return Err(ReplaySerializeError::UnknownInputParseMode(None));
+            };
+
+            let version = match result {
+                Ok(v) => v,
+                Err(raw) => {
+                    return Err(ReplaySerializeError::UnknownInputParseMode(Some(Err(
+                        raw.clone()
+                    ))))
+                }
+            };
+
+            let Some(mode) = InputParseMode::try_infer_from_version(version) else {
+                return Err(ReplaySerializeError::UnknownInputParseMode(Some(Ok(
+                    version.to_string(),
+                ))));
+            };
+
+            mode
         };
 
         *self = Self::InputData {
