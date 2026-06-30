@@ -1,8 +1,13 @@
+use std::collections::VecDeque;
+
 use libfuzzer_sys::arbitrary::{unstructured::Unstructured, Arbitrary};
 use libtechmino_replay::{
     serialize::ReplayEncoder, GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode,
     ReplayBufferKind,
 };
+use serde_json::{Map as JsonMap, Value as JsonValue};
+
+pub const MAX_METADATA_DEPTH: usize = 120;
 
 #[derive(Debug)]
 pub struct EncodeStream {
@@ -65,6 +70,11 @@ impl<'a> Arbitrary<'a> for EncodeStream {
 
         let total_game_data = GameReplayData::arbitrary(u)?;
 
+        // Would get decode failure otherwise (recursion depth exceeded)
+        if get_metadata_max_depth(&total_game_data.metadata) > MAX_METADATA_DEPTH {
+            return Err(arbitrary::Error::IncorrectFormat);
+        }
+
         let input_count = total_game_data.inputs.len();
 
         let mut indices = Vec::new();
@@ -88,4 +98,83 @@ impl<'a> Arbitrary<'a> for EncodeStream {
             input_mode_override,
         })
     }
+}
+
+enum RecursibleJson<'a> {
+    Object(&'a JsonMap<String, JsonValue>),
+    Array(&'a [JsonValue]),
+}
+
+enum RecursibleJsonIter<'a> {
+    Object(serde_json::map::Values<'a>),
+    Array(core::slice::Iter<'a, JsonValue>),
+}
+
+impl<'a> IntoIterator for RecursibleJson<'a> {
+    type IntoIter = RecursibleJsonIter<'a>;
+    type Item = &'a JsonValue;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            Self::Object(m) => RecursibleJsonIter::Object(m.values()),
+            Self::Array(arr) => RecursibleJsonIter::Array(arr.iter()),
+        }
+    }
+}
+
+impl<'a> Iterator for RecursibleJsonIter<'a> {
+    type Item = &'a JsonValue;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::Object(m) => m.next(),
+            Self::Array(arr) => arr.next(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            Self::Object(m) => m.size_hint(),
+            Self::Array(arr) => arr.size_hint(),
+        }
+    }
+}
+
+impl ExactSizeIterator for RecursibleJsonIter<'_> {}
+
+impl<'a> TryFrom<&'a JsonValue> for RecursibleJson<'a> {
+    type Error = &'a JsonValue;
+
+    fn try_from(value: &'a JsonValue) -> Result<Self, Self::Error> {
+        match value {
+            JsonValue::Array(a) => Ok(Self::Array(a)),
+            JsonValue::Object(m) => Ok(Self::Object(m)),
+            value => Err(value),
+        }
+    }
+}
+
+pub fn get_metadata_max_depth(metadata: &GameReplayMetadata) -> usize {
+    let mut max_depth = 0;
+
+    // to_visit contains a list of things to visit and its depth
+    let mut to_visit = VecDeque::new();
+
+    to_visit.push_back((RecursibleJson::Object(&metadata.map), 0usize));
+
+    while let Some((visitable, depth)) = to_visit.pop_front() {
+        let iter = visitable.into_iter();
+
+        for entry in iter {
+            let Ok(to_add) = RecursibleJson::try_from(entry) else {
+                continue;
+            };
+
+            to_visit.push_back((to_add, depth + 1));
+        }
+
+        max_depth = max_depth.max(depth);
+    }
+
+    max_depth
 }
