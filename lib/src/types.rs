@@ -794,7 +794,7 @@ impl From<DecodeError> for ReplayParseError {
 }
 
 /// An error from serializing the replay data, e.g. to base64.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ReplaySerializeError {
     /// The mode in which to serialize the inputs could not be inferred from the version string.
     ///
@@ -802,13 +802,14 @@ pub enum ReplaySerializeError {
     /// entry if it was found.
     ///
     /// To fix this error, consider passing in the input parse mode explicitly.
-    // #[error("could not infer input parse mode from version metadata")]
+    #[error("could not infer input parse mode from version metadata")]
     UnknownInputParseMode(Option<Result<String, serde_json::Value>>),
 
     /// There was an attempt to call a function at the wrong state.
     ///
     /// For example, if the replay encoder expects metadata, but input data
     /// was given instead (or vice versa), this error will be returned.
+    #[error("attempted to call a function at the wrong state")]
     InvalidOperation,
 
     /// The input [`Vec`] isn't sorted.
@@ -818,6 +819,7 @@ pub enum ReplaySerializeError {
     ///
     /// To fix this error, consider calling [`sort_inputs`][GameReplayData::sort_inputs] on the
     /// [`GameReplayData`] before serializing it.
+    #[error("unsorted input data: found input for frame {unsorted_time} after input for frame {prev_time}")]
     UnsortedInput {
         /// The frame number of the previous data point.
         prev_time: u64,
@@ -828,15 +830,18 @@ pub enum ReplaySerializeError {
     /// The metadata could not be serialized into JSON.
     ///
     /// See [`serde_json`'s Error type][serde_json::Error] for more information.
+    #[error("failed to serialize metadata as JSON")]
     MetadataSerializeError(serde_json::Error),
 
     /// There was an attempt to encode an oversized `u64` into the VLQ format.
+    #[error("could not fit {number} into the VLQ format")]
     VlqOverflow {
         /// The `u64` value that couldn't be encoded into the VLQ format.
         number: u64,
     },
 
     /// Something went wrong relating to compression.
+    #[error("compression error")]
     ZlibError {
         /// The TDEFL status returned from the compressor.
         tdefl_status: TDEFLStatus,
