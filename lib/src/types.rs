@@ -171,7 +171,8 @@ pub struct GameReplayData {
 }
 
 /// A struct representing the settings of the player who made the replay.
-#[derive(Debug, PartialEq, From, Into, Default)]
+#[derive(Debug, PartialEq, From, Into, Default, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct PlayerSettings {
     /// The inner map that stores the setting entries.
     pub map: serde_json::Map<String, serde_json::Value>,
@@ -482,7 +483,7 @@ setting_getters_setters! {
 /// A struct representing the metadata stored within the replay.
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize, From, Into)]
-#[serde(rename_all = "camelCase")]
+#[serde(transparent)]
 pub struct GameReplayMetadata {
     /// The inner map that stores the metadata entries.
     #[cfg_attr(feature = "arbitrary", arbitrary(with = crate::arbitrary::arbitrary_json_map))]
