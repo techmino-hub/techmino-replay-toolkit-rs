@@ -224,8 +224,15 @@ fn get_ron_config() -> PrettyConfig {
 
 #[test]
 #[ignore = "This test is only for regenerating test cases.\
-    Run with `cargo test regenerate_cases -- --ignored`"]
+    Run with `cargo test regenerate_cases --features preserve_metadata_order -- --ignored`"]
 fn regenerate_cases() {
+    const {
+        assert!(
+            cfg!(feature = "preserve_metadata_order"),
+            "metadata order should be preserved when creating initial RONs"
+        );
+    };
+
     let cases = get_test_cases();
 
     let ron_config = get_ron_config();
@@ -288,8 +295,6 @@ fn regenerate_cases() {
             }
         }
     }
-
-    todo!("implement hash checks");
 }
 
 pub fn random_action(rng: &mut Rng) -> InputAction {
