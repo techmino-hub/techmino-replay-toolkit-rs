@@ -52,12 +52,14 @@
 //! }
 //! ```
 
+use core::ops::ControlFlow;
+
 use crate::{
     format::ReplayBufferKind,
     types::{GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplayParseError},
     InputAction,
 };
-use alloc::{borrow::Cow, boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use base64::Engine;
 use libtechmino_vlq::VlqReader;
 use miniz_oxide::{
@@ -169,13 +171,15 @@ impl ReplayDecoder {
     /// - Incorrect replay buffer kind
     /// - Malformed replay data
     pub fn update(&mut self, bytes: &[u8]) -> Result<Decoded, ReplayParseError> {
-        let uncompressed = match self.preprocessor.preprocess(bytes) {
-            Ok(b) => b,
+        let mut uncompressed = Vec::with_capacity(bytes.len());
+
+        match self.preprocessor.preprocess(bytes, &mut uncompressed) {
+            Ok(()) => (),
             Err(FormatError::Base64Error(e)) => return Err(ReplayParseError::Base64DecodeError(e)),
             Err(FormatError::ZlibError { status, mz_error }) => {
                 return Err(ReplayParseError::ZlibDecompressError { status, mz_error })
             }
-        };
+        }
 
         self.state.update(&uncompressed)
     }
@@ -477,7 +481,7 @@ enum ReplayDecoderPreprocessor {
 }
 
 impl ReplayDecoderPreprocessor {
-    const DECOMP_BUFFER_SIZE: usize = 4096;
+    const SCRATCH_BUFFER_SIZE: usize = 4096;
 
     fn new(kind: ReplayBufferKind) -> Self {
         match kind {
@@ -493,19 +497,33 @@ impl ReplayDecoderPreprocessor {
         }
     }
 
-    fn preprocess<'a>(&mut self, unprocessed: &'a [u8]) -> Result<Cow<'a, [u8]>, FormatError> {
+    /// Preprocesses the unprocessed data.
+    ///
+    /// This function only ever appends into `out_buf` and never reads or
+    /// overwrites it.
+    fn preprocess(&mut self, unprocessed: &[u8], out_buf: &mut Vec<u8>) -> Result<(), FormatError> {
         match self {
-            Self::Uncompressed => Ok(Cow::Borrowed(unprocessed)),
+            Self::Uncompressed => {
+                out_buf.extend_from_slice(unprocessed);
+                Ok(())
+            }
             Self::Compressed { decompressor } => {
-                Self::preprocess_compressed(decompressor, unprocessed)
+                Self::preprocess_compressed(decompressor, unprocessed, out_buf)?;
+                Ok(())
             }
             Self::Base64 {
                 b64_buffer,
                 b64_buffer_len,
                 decompressor,
             } => {
-                let compressed = Self::preprocess_b64(b64_buffer, b64_buffer_len, unprocessed)?;
-                Self::preprocess_compressed(decompressor, &compressed)
+                Self::preprocess_b64(
+                    b64_buffer,
+                    b64_buffer_len,
+                    decompressor,
+                    unprocessed,
+                    out_buf,
+                )?;
+                Ok(())
             }
         }
     }
@@ -513,9 +531,9 @@ impl ReplayDecoderPreprocessor {
     fn preprocess_compressed(
         decompressor: &mut InflateState,
         compressed_bytes: &[u8],
-    ) -> Result<Cow<'static, [u8]>, FormatError> {
-        let mut out_vec = Vec::new();
-        let mut out_buf = [0u8; Self::DECOMP_BUFFER_SIZE];
+        out_buf: &mut Vec<u8>,
+    ) -> Result<(), FormatError> {
+        let mut scratch_buf = [0u8; Self::SCRATCH_BUFFER_SIZE];
 
         let mut compressed_bytes = compressed_bytes;
 
@@ -523,17 +541,17 @@ impl ReplayDecoderPreprocessor {
             let res = miniz_oxide::inflate::stream::inflate(
                 decompressor,
                 compressed_bytes,
-                &mut out_buf,
+                &mut scratch_buf,
                 miniz_oxide::MZFlush::None,
             );
 
             compressed_bytes = &compressed_bytes[res.bytes_consumed..];
 
-            out_vec.extend_from_slice(&out_buf[..res.bytes_written]);
+            out_buf.extend_from_slice(&scratch_buf[..res.bytes_written]);
 
             match res.status {
                 Ok(miniz_oxide::MZStatus::StreamEnd) => {
-                    return Ok(Cow::Owned(out_vec));
+                    return Ok(());
                 }
                 Ok(_) => {
                     // We may have more output, so continue
@@ -542,7 +560,7 @@ impl ReplayDecoderPreprocessor {
                 Err(miniz_oxide::MZError::Buf)
                     if decompressor.last_status() == TINFLStatus::NeedsMoreInput =>
                 {
-                    return Ok(Cow::Owned(out_vec));
+                    return Ok(());
                 }
                 Err(e) => {
                     return Err(FormatError::ZlibError {
@@ -554,79 +572,115 @@ impl ReplayDecoderPreprocessor {
         }
     }
 
-    /// Preprocess base64 into compressed bytes.
+    /// Preprocess compressed-then-base64 into processed bytes.
+    ///
+    /// This uses interleaving to reduce intermediate heap allocations.
     fn preprocess_b64(
         b64_buffer: &mut [u8; 3],
         b64_buffer_len: &mut u8,
-        unprocessed: &[u8],
-    ) -> Result<Vec<u8>, FormatError> {
+        decompressor: &mut InflateState,
+        mut unprocessed: &[u8],
+        out_buf: &mut Vec<u8>,
+    ) -> Result<(), FormatError> {
+        const PREDECOMP_SCRATCH_SIZE: usize =
+            ReplayDecoderPreprocessor::SCRATCH_BUFFER_SIZE / 4 * 3;
+        const B64_CONSUMED_PER_ITER: usize =
+            base64::encoded_len(PREDECOMP_SCRATCH_SIZE, true).unwrap();
         let engine = base64::engine::general_purpose::STANDARD;
 
-        let total_len = unprocessed.len() + (*b64_buffer_len as usize);
-        let processable_len = if total_len.is_multiple_of(4) {
-            total_len
+        let total_b64_len = unprocessed.len() + (*b64_buffer_len as usize);
+        let processable_b64_len = if total_b64_len.is_multiple_of(4) {
+            total_b64_len
         } else {
-            total_len.next_multiple_of(4) - 4
+            total_b64_len.next_multiple_of(4) - 4
         };
 
-        if processable_len == 0 {
+        if processable_b64_len == 0 {
             for byte in unprocessed.iter().copied() {
                 b64_buffer[*b64_buffer_len as usize] = byte;
                 *b64_buffer_len += 1;
             }
 
-            return Ok(Vec::new());
+            return Ok(());
         }
 
-        let mut compressed: Vec<u8> =
-            Vec::with_capacity(base64::decoded_len_estimate(processable_len));
+        // First b64 chunk, unlike the rest, may contain mix of b64
+        // data from `b64_buffer` and `unprocessed`.
+        // This variable contains the first b64 chunk decoded from b64.
+        let first_compressed = {
+            let mut first_b64 = [0u8; 4];
 
-        // The first chunk may contain a mix of `b64_buffer` and `unprocessed`
-        let first_chunk: [u8; 4] = core::array::from_fn(|i| {
-            #[expect(clippy::cast_possible_truncation, reason = "4 is below u8::MAX")]
-            let i = i as u8;
-            if let Some(unprocessed_idx) = i.checked_sub(*b64_buffer_len) {
-                unprocessed[unprocessed_idx as usize]
+            let b64_buffer_len = *b64_buffer_len as usize;
+            first_b64[..b64_buffer_len].clone_from_slice(&b64_buffer[..b64_buffer_len]);
+
+            let new_data_len = 4 - b64_buffer_len;
+
+            first_b64[b64_buffer_len..].clone_from_slice(&unprocessed[..new_data_len]);
+            unprocessed = &unprocessed[new_data_len..];
+
+            let mut first_compressed = [0u8; 3];
+            engine.decode_slice_unchecked(first_b64.as_slice(), first_compressed.as_mut_slice())?;
+
+            first_compressed
+        };
+
+        let mut predecomp_scratch = [0u8; PREDECOMP_SCRATCH_SIZE];
+        let mut decompressed_scratch = [0u8; Self::SCRATCH_BUFFER_SIZE];
+
+        // Process first b64 chunk
+        if let ControlFlow::Break(res) = inflate_step(
+            decompressor,
+            first_compressed.as_slice(),
+            decompressed_scratch.as_mut_slice(),
+            out_buf,
+        ) {
+            // Since we're either done or errored, we need not update
+            // b64 buffers other than if we want to say we're done
+            if res.is_ok() {
+                *b64_buffer_len = 0;
+            }
+            return res;
+        }
+
+        // Process the rest of the b64 chunks
+        loop {
+            let predecomp_len = if unprocessed.is_empty() {
+                0
             } else {
-                b64_buffer[i as usize]
+                let mut consumed_len = B64_CONSUMED_PER_ITER.min(unprocessed.len());
+
+                if !consumed_len.is_multiple_of(4) {
+                    consumed_len = consumed_len.next_multiple_of(4) - 4;
+                }
+                debug_assert!(consumed_len.is_multiple_of(4));
+                debug_assert!(consumed_len <= unprocessed.len());
+
+                // SAFETY: We just bounded consumed_len to be at most unprocessed.len()
+                let (consumed, unproc_bind) =
+                    unsafe { unprocessed.split_at_unchecked(consumed_len) };
+                unprocessed = unproc_bind;
+
+                engine.decode_slice_unchecked(consumed, predecomp_scratch.as_mut_slice())?
+            };
+
+            if let ControlFlow::Break(res) = inflate_step(
+                decompressor,
+                &predecomp_scratch[..predecomp_len],
+                decompressed_scratch.as_mut_slice(),
+                out_buf,
+            ) {
+                // Since we're either done or errored, we need not update
+                // b64 buffers other than if we want to say we're done
+                if res.is_ok() {
+                    *b64_buffer_len = 0;
+                }
+                return res;
             }
-        });
 
-        if let Err(e) = engine.decode_vec(first_chunk, &mut compressed) {
-            return Err(FormatError::Base64Error(e));
-        }
-
-        if processable_len == 4 {
-            let unused_len = total_len - processable_len;
-            debug_assert!(unused_len < 4);
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "unused_len is always less than 4"
-            )]
-            {
-                *b64_buffer_len = unused_len as u8;
+            // We're out of input but the stream ain't over yet!
+            if unprocessed.len() < 4 {
+                break;
             }
-
-            for (i, item) in b64_buffer.iter_mut().enumerate().take(unused_len) {
-                let unprocessed_idx = unprocessed.len() + i - unused_len;
-                *item = unprocessed[unprocessed_idx];
-            }
-
-            return Ok(compressed);
-        }
-
-        // The rest may contain only `unprocessed`'s bytes
-        let rest_length = processable_len - 4;
-        let rest_start = usize::from(4 - *b64_buffer_len);
-        let rest_end = rest_start + rest_length;
-
-        let rest = &unprocessed[rest_start..rest_end];
-
-        debug_assert!(rest.len().is_multiple_of(4));
-        debug_assert!(unprocessed.len() >= rest_end);
-
-        if let Err(e) = engine.decode_vec(rest, &mut compressed) {
-            return Err(FormatError::Base64Error(e));
         }
 
         #[expect(
@@ -634,7 +688,7 @@ impl ReplayDecoderPreprocessor {
             reason = "total_len is at most 3 more than processable_len"
         )]
         {
-            *b64_buffer_len = (total_len - processable_len) as u8;
+            *b64_buffer_len = (total_b64_len - processable_b64_len) as u8;
         }
 
         for (idx, item) in b64_buffer
@@ -642,10 +696,10 @@ impl ReplayDecoderPreprocessor {
             .take(*b64_buffer_len as usize)
             .enumerate()
         {
-            *item = unprocessed[idx + rest_end];
+            *item = unprocessed[idx];
         }
 
-        Ok(compressed)
+        Ok(())
     }
 
     /// Returns false if this struct has some leftover
@@ -663,6 +717,52 @@ impl ReplayDecoderPreprocessor {
     }
 }
 
+/// Decompress from the `predecomp_scratch` buffer temporarily into the
+/// `decompression_scratch` buffer, ultimately appending it to the `out_buf` Vec.
+///
+/// # Returns
+/// Returns `Continue` if the step finished, `Break(Ok(()))` if the stream ended,
+/// or `Break(Err(e))` if an error occurred.
+fn inflate_step(
+    decompressor: &mut InflateState,
+    mut predecomp_scratch: &[u8],
+    decompression_scratch: &mut [u8],
+    out_buf: &mut Vec<u8>,
+) -> ControlFlow<Result<(), FormatError>> {
+    loop {
+        let res = miniz_oxide::inflate::stream::inflate(
+            decompressor,
+            predecomp_scratch,
+            decompression_scratch,
+            miniz_oxide::MZFlush::None,
+        );
+
+        out_buf.extend_from_slice(&decompression_scratch[..res.bytes_written]);
+        predecomp_scratch = &predecomp_scratch[res.bytes_consumed..];
+
+        match res.status {
+            Ok(miniz_oxide::MZStatus::StreamEnd) => {
+                return ControlFlow::Break(Ok(()));
+            }
+            Ok(_) => {
+                // We may have more output, so continue
+            }
+            // We need more input
+            Err(miniz_oxide::MZError::Buf)
+                if decompressor.last_status() == TINFLStatus::NeedsMoreInput =>
+            {
+                return ControlFlow::Continue(());
+            }
+            Err(e) => {
+                return ControlFlow::Break(Err(FormatError::ZlibError {
+                    status: decompressor.last_status(),
+                    mz_error: e,
+                }));
+            }
+        }
+    }
+}
+
 /// Something is wrong with the format of the given replay data.
 #[derive(Debug)]
 enum FormatError {
@@ -676,6 +776,12 @@ enum FormatError {
     },
     /// The given data is not valid base64.
     Base64Error(base64::DecodeError),
+}
+
+impl From<base64::DecodeError> for FormatError {
+    fn from(value: base64::DecodeError) -> Self {
+        Self::Base64Error(value)
+    }
 }
 
 impl From<FormatError> for ReplayParseError {
@@ -732,10 +838,9 @@ mod tests {
             let mut preprocessor = ReplayDecoderPreprocessor::new(ReplayBufferKind::Uncompressed);
 
             while !feeder.is_empty() {
-                let out = preprocessor
-                    .preprocess(feeder.bite(&mut rng))
+                preprocessor
+                    .preprocess(feeder.bite(&mut rng), &mut result_data)
                     .expect("preprocessor should not error");
-                result_data.extend_from_slice(&out);
             }
 
             assert_eq!(&*init_data, result_data.as_slice());
@@ -765,10 +870,9 @@ mod tests {
             let mut preprocessor = ReplayDecoderPreprocessor::new(ReplayBufferKind::Compressed);
 
             while !feeder.is_empty() {
-                let out = preprocessor
-                    .preprocess(feeder.bite(&mut rng))
+                preprocessor
+                    .preprocess(feeder.bite(&mut rng), &mut result_data)
                     .expect("preprocessor should not error");
-                result_data.extend_from_slice(&out);
             }
 
             let ReplayDecoderPreprocessor::Compressed { decompressor, .. } = preprocessor else {
@@ -799,8 +903,8 @@ mod tests {
 
         for _ in 0..PREPROCESSOR_TRIALS {
             let init_data = slightly_random_data(&mut rng);
-
-            let encoded = base64::engine::general_purpose::STANDARD.encode(&init_data);
+            let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&init_data, 1);
+            let encoded = base64::engine::general_purpose::STANDARD.encode(&compressed);
 
             let mut feeder = ByteFeeder::new(encoded.as_bytes());
             let mut result_data = Vec::new();
@@ -812,15 +916,17 @@ mod tests {
                     ReplayDecoderPreprocessor::Base64 {
                         ref mut b64_buffer,
                         ref mut b64_buffer_len,
+                        ref mut decompressor,
                         ..
                     } => {
-                        let out = ReplayDecoderPreprocessor::preprocess_b64(
+                        ReplayDecoderPreprocessor::preprocess_b64(
                             b64_buffer,
                             b64_buffer_len,
+                            decompressor,
                             feeder.bite(&mut rng),
+                            &mut result_data,
                         )
                         .expect("preprocessor should not error");
-                        result_data.extend_from_slice(&out);
                     }
                     _ => unreachable!(),
                 }
@@ -846,10 +952,9 @@ mod tests {
             let mut preprocessor = ReplayDecoderPreprocessor::new(ReplayBufferKind::Base64);
 
             while !feeder.is_empty() {
-                let out = preprocessor
-                    .preprocess(feeder.bite(&mut rng))
+                preprocessor
+                    .preprocess(feeder.bite(&mut rng), &mut result_data)
                     .expect("preprocessor should not error");
-                result_data.extend_from_slice(&out);
             }
 
             assert_eq!(&*init_data, result_data.as_slice());

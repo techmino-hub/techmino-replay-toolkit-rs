@@ -222,17 +222,19 @@ fn get_ron_config() -> PrettyConfig {
     PrettyConfig::new().struct_names(true)
 }
 
+#[cfg(all(test, not(feature = "preserve_metadata_order")))]
 #[test]
 #[ignore = "This test is only for regenerating test cases.\
     Run with `cargo test regenerate_cases --features preserve_metadata_order -- --ignored`"]
 fn regenerate_cases() {
-    const {
-        assert!(
-            cfg!(feature = "preserve_metadata_order"),
-            "metadata order should be preserved when creating initial RONs"
-        );
-    };
+    panic!("metadata order should be preserved when creating initial RONs");
+}
 
+#[cfg(all(test, feature = "preserve_metadata_order"))]
+#[test]
+#[ignore = "This test is only for regenerating test cases.\
+    Run with `cargo test regenerate_cases --features preserve_metadata_order -- --ignored`"]
+fn regenerate_cases() {
     let cases = get_test_cases();
 
     let ron_config = get_ron_config();
