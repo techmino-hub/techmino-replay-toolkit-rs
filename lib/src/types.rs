@@ -12,7 +12,6 @@ use crate::{
     InputAction, InputActionKey, InputActionKind,
 };
 use alloc::{
-    borrow::Cow,
     fmt::{self},
     format,
     string::{FromUtf8Error, String},
@@ -965,15 +964,6 @@ impl InputParseMode {
     }
 }
 
-/// A [`Cow`] of either strings or bytes.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum StringOrBytes<'a> {
-    /// A [`Cow`] of UTF-8 bytes.
-    String(Cow<'a, str>),
-    /// A [`Cow`] of arbitrary bytes.
-    Bytes(Cow<'a, [u8]>),
-}
-
 fn json_to_u8(value: &serde_json::Value) -> Option<u8> {
     value.as_number()?.as_u64()?.try_into().ok()
 }
@@ -1022,71 +1012,6 @@ fn modlist_to_json(modlist: Vec<(u64, serde_json::Value)>) -> serde_json::Value 
         .collect();
 
     serde_json::Value::Array(values)
-}
-
-impl StringOrBytes<'_> {
-    /// Checks if this enum instance is the [`String`][Self::String] variant.
-    #[must_use]
-    pub fn is_string(&self) -> bool {
-        matches!(self, Self::String(..))
-    }
-
-    /// Checks if this enum instance is the [`Bytes`][Self::Bytes] variant.
-    #[must_use]
-    pub fn is_bytes(&self) -> bool {
-        matches!(self, Self::Bytes(..))
-    }
-
-    /// Returns the string interpretation of this, if any.
-    ///
-    /// *No attempt is made trying to convert the bytes into a valid UTF-8 string.*
-    ///
-    /// If this instance is of the [`String`][Self::String] variant, return that.\
-    /// If this instance is of the [`Bytes`][Self::Bytes] variant, return [`None`].
-    ///
-    /// # Example
-    /// ```
-    /// use std::borrow::Cow;
-    /// use techmino_replay_toolkit::StringOrBytes;
-    ///
-    /// # fn main() {
-    /// let string = StringOrBytes::String(Cow::Borrowed("hello"));
-    /// assert_eq!(string.as_string(), Some("hello"));
-    ///
-    /// let bytes = StringOrBytes::Bytes(Cow::Borrowed(b"hello".as_slice()));
-    /// assert_eq!(bytes.as_string(), None);
-    /// # }
-    /// ```
-    #[must_use]
-    pub fn as_string(&self) -> Option<&str> {
-        let Self::String(s) = self else { return None };
-
-        Some(s)
-    }
-
-    /// Return the byte representation.
-    ///
-    /// If this instance is of the [`String`][Self::String] variant, return its bytes.\
-    /// If this instance is of the [`Bytes`][Self::Bytes] variant, return its bytes.
-    ///
-    /// # Example
-    /// ```
-    /// use std::borrow::Cow;
-    /// use techmino_replay_toolkit::StringOrBytes;
-    ///
-    /// let string = StringOrBytes::String(Cow::Borrowed("hello"));
-    /// assert_eq!(string.as_bytes(), b"hello".as_slice());
-    ///
-    /// let bytes = StringOrBytes::Bytes(Cow::Borrowed(b"hello".as_slice()));
-    /// assert_eq!(bytes.as_bytes(), b"hello".as_slice());
-    /// ```
-    #[must_use]
-    pub fn as_bytes(&self) -> &[u8] {
-        match self {
-            Self::String(s) => s.as_bytes(),
-            Self::Bytes(b) => b,
-        }
-    }
 }
 
 #[cfg(test)]

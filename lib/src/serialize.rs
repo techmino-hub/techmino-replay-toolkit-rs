@@ -100,9 +100,9 @@ use crate::{
     types::{
         GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplaySerializeError,
     },
+    SerializedReplay,
 };
 use alloc::vec::Vec;
-use ascii::AsciiString;
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use core::ops::ControlFlow;
 use libtechmino_vlq::VlqData;
@@ -121,6 +121,54 @@ impl GameReplayData {
     /// requires that the inputs are sorted for the algorithm to work properly.
     pub fn sort_inputs(&mut self) {
         self.inputs.sort_by_key(|i| i.frame());
+    }
+
+    /// Serialize into a specified game-related format.
+    ///
+    /// This function serializes the `GameReplayData` into the specified format.
+    ///
+    /// For more information on the different formats,
+    /// see the [`ReplayBufferKind`] documentation.
+    ///
+    /// Note that the serialization algorithm requires that the inputs in the
+    /// replay are sorted to time.\
+    /// If this isn't always the case, consider calling
+    /// [`sort_inputs`][GameReplayData::sort_inputs] before calling this
+    /// function, otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput]
+    /// error will be returned.
+    ///
+    /// # Input Parse Mode
+    /// This function takes in an input parse mode override. This is often not required, but can be useful
+    /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
+    ///
+    /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
+    /// best to give a `None`.
+    ///
+    /// # Compression Level
+    /// For the [`Compressed`][ReplayBufferKind::Compressed] and
+    /// [`Base64`][ReplayBufferKind::Base64] formats, you can choose how hard
+    /// to try to compress the output using zlib. The default is usually 7.
+    ///
+    /// This argument is completely ignored when serializing with the
+    /// [`Uncompressed`] format.
+    ///
+    /// For more information, see [`miniz_oxide::deflate::CompressionLevel`].
+    ///
+    /// # Errors
+    /// For more information, refer to [`ReplaySerializeError`].
+    pub fn serialize(
+        &self,
+        format: ReplayBufferKind,
+        input_mode: Option<InputParseMode>,
+        compression_level: u8,
+    ) -> Result<SerializedReplay, ReplaySerializeError> {
+        match format {
+            ReplayBufferKind::Uncompressed => self.serialize_to_raw(input_mode),
+            ReplayBufferKind::Compressed => {
+                self.serialize_to_compressed(input_mode, compression_level)
+            }
+            ReplayBufferKind::Base64 => self.serialize_to_base64(input_mode, compression_level),
+        }
     }
 
     /// Serialize into a raw, uncompressed byte array.
@@ -146,17 +194,17 @@ impl GameReplayData {
     ///
     /// # Errors
     /// For more information, refer to [`ReplaySerializeError`]
-    pub fn serialize_to_raw(
+    fn serialize_to_raw(
         &self,
         input_mode: Option<InputParseMode>,
-    ) -> Result<Vec<u8>, ReplaySerializeError> {
+    ) -> Result<SerializedReplay, ReplaySerializeError> {
         let mut encoder = ReplayEncoder::new(ReplayBufferKind::Uncompressed, 0);
-
         let mut output = encoder.feed_metadata(&self.metadata, input_mode)?;
-
         encoder.feed_input_data(&self.inputs, &mut output)?;
 
-        Ok(output)
+        let serialized = SerializedReplay::Bytes(output);
+
+        Ok(serialized)
     }
 
     /// Serialize into a compressed byte array used by the game.
@@ -185,18 +233,18 @@ impl GameReplayData {
     ///
     /// # Errors
     /// For more information, refer to [`ReplaySerializeError`]
-    pub fn serialize_to_compressed(
+    fn serialize_to_compressed(
         &self,
         input_mode: Option<InputParseMode>,
         compression_level: u8,
-    ) -> Result<Vec<u8>, ReplaySerializeError> {
+    ) -> Result<SerializedReplay, ReplaySerializeError> {
         let mut encoder = ReplayEncoder::new(ReplayBufferKind::Compressed, compression_level);
-
         let mut output = encoder.feed_metadata(&self.metadata, input_mode)?;
-
         encoder.feed_input_data(&self.inputs, &mut output)?;
 
-        Ok(output)
+        let serialized = SerializedReplay::Bytes(output);
+
+        Ok(serialized)
     }
 
     /// Serialize into a copiable text-based base64 format.
@@ -224,19 +272,19 @@ impl GameReplayData {
     ///
     /// # Errors
     /// For more information, refer to [`ReplaySerializeError`]
-    pub fn serialize_to_base64(
+    fn serialize_to_base64(
         &self,
         input_mode: Option<InputParseMode>,
         compression_level: u8,
-    ) -> Result<AsciiString, ReplaySerializeError> {
+    ) -> Result<SerializedReplay, ReplaySerializeError> {
         let mut encoder = ReplayEncoder::new(ReplayBufferKind::Base64, compression_level);
-
         let mut output = encoder.feed_metadata(&self.metadata, input_mode)?;
-
         encoder.feed_input_data(&self.inputs, &mut output)?;
 
-        // SAFETY: Base64 is always valid ASCII
-        Ok(unsafe { AsciiString::from_ascii_unchecked(output) })
+        // SAFETY: Base64 is always valid UTF-8
+        let string = unsafe { String::from_utf8_unchecked(output) };
+
+        Ok(SerializedReplay::Base64(string))
     }
 }
 
@@ -1144,8 +1192,8 @@ mod tests {
                 .finish_into_vec(&mut out)
                 .expect("postprocessor should finish");
 
-            let string =
-                AsciiString::from_ascii(out).expect("postprocessor output should be valid ascii");
+            let string = ascii::AsciiString::from_ascii(out)
+                .expect("postprocessor output should be valid ascii");
 
             B64.decode(string.as_bytes())
                 .expect("postprocessor output should be valid base64");

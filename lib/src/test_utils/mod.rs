@@ -18,16 +18,20 @@
 
 extern crate std;
 use crate::{
-    format::ReplayBufferKind, GameInputEvent, GameReplayData, GameReplayMetadata, InputAction,
-    InputActionKey, InputActionKind, PlayerSettings,
+    GameInputEvent, GameReplayMetadata, InputAction, InputActionKey, InputActionKind,
+    PlayerSettings,
 };
+#[allow(
+    unused_imports,
+    reason = "this module is being imported in both unit tests and integration tests"
+)]
 use cases::*;
 use core::ops::Deref;
 #[cfg(test)]
 use fastrand::Rng;
 #[cfg(test)]
 use ron::ser::PrettyConfig;
-use std::{fs, sync::LazyLock};
+use std::sync::LazyLock;
 
 pub mod cases;
 
@@ -235,6 +239,7 @@ fn regenerate_cases() {
 #[ignore = "This test is only for regenerating test cases.\
     Run with `cargo test regenerate_cases --features preserve_metadata_order -- --ignored`"]
 fn regenerate_cases() {
+    use crate::{format::ReplayBufferKind, GameReplayData};
     let cases = get_test_cases();
 
     let ron_config = get_ron_config();
@@ -264,10 +269,6 @@ fn regenerate_cases() {
 
         let ron = ron::ser::to_string_pretty(&res, ron_config.clone());
 
-        //
-        // // Hello this is a wakatime test for testing purposes if you're seeing this please ignore
-        // Hello this is a wakatime test for testing purposes if you're seeing this please ignore
-
         let ron = match ron {
             Ok(r) => r,
             Err(e) => {
@@ -288,7 +289,7 @@ fn regenerate_cases() {
 
         let file_path = &format!("{root}/{key}.ron", root = cases::TESTCASE_PATH);
 
-        match fs::write(file_path, ron) {
+        match std::fs::write(file_path, ron) {
             Ok(()) => {
                 println!("Successfully written RON to {file_path}");
             }

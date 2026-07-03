@@ -19,16 +19,19 @@ fn test_serialize_deserialize_noop() {
         println!("Testing for testcase {key}");
 
         let serialized = data
-            .serialize_to_raw(None)
+            .serialize(ReplayBufferKind::Uncompressed, None, 0)
             .expect("Error while serializing replay");
 
-        let deserialized =
-            match GameReplayData::parse_replay(&serialized, ReplayBufferKind::Uncompressed, None) {
-                Ok(r) => r,
-                Err(e) => {
-                    panic!("Error while deserializing replay {key}: {e:?}");
-                }
-            };
+        let deserialized = match GameReplayData::parse_replay(
+            serialized.as_ref(),
+            ReplayBufferKind::Uncompressed,
+            None,
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                panic!("Error while deserializing replay {key}: {e:?}");
+            }
+        };
 
         // Separate assertions to get more narrow assertion failures
         assert_eq!(
