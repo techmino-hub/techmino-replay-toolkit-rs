@@ -1,6 +1,6 @@
 //! # Techmino Replay Toolkit
 //!
-//! A library for [parsing and serializing] Techmino replays.
+//! A library for parsing and serializing Techmino replays.
 //!
 //! ## Overview of Main Data Structures
 //! - [`GameReplayData`] contains all the data in a replay.
@@ -12,7 +12,10 @@
 //!             - [`InputActionKind`] tells whether or not it was a key press or a key release.
 //!             - [`InputActionKey`] tells which key was acted upon.
 //!
-//! [parsing and serializing]: <https://en.wikipedia.org/wiki/Serialization>
+//! # Serialization and Parsing
+//!
+//! For more information about how to serialize and deserialize (parse) Techmino replays,
+//! check the [`deserialize`] and [`serialize`] module-level documentation.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]

@@ -153,7 +153,10 @@ pub struct GameInputEventError;
 /// # A note on the `serde` implementations
 /// Although this struct derives `Serialize` and `Deserialize`, these
 /// impls do not serialize or deserialize to/from the format used by
-/// the game. For that, use the inherent parse and serialize methods.
+/// the game.
+///
+/// Please use the inherent parse and serialize methods for interacting
+/// with the game's expected formats.
 ///
 /// This struct derives `Serialize` and `Deserialize` mainly if you want
 /// to serialize/deserialize to your own format, e.g. RON or CBOR.

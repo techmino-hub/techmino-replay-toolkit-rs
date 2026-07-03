@@ -71,7 +71,7 @@ impl SerializedReplay {
     /// assert_eq!(serialized.as_bytes(), &[1, 2, 3]);
     ///
     /// let serialized = SerializedReplay::Base64("VGVjaG1pbm8gaXMgZnVuIQo=".into());
-    /// assert_eq!(serialized.as_bytes(), &b"VGVjaG1pbm8gaXMgZnVuIQo=");
+    /// assert_eq!(serialized.as_bytes(), b"VGVjaG1pbm8gaXMgZnVuIQo=".as_slice());
     /// ```
     #[must_use]
     pub const fn as_bytes(&self) -> &[u8] {

@@ -8,12 +8,12 @@
 //! ## Example
 //! ```
 //! # use std::collections::HashMap;
-//! # use techmino_replay_toolkit::{
-//! #   GameReplayData, format::ReplayBufferKind, serialize::ReplayEncoder, GameReplayMetadata,
-//! #   GameInputEvent, PlayerSettings, InputParseMode
-//! # };
-//! # struct Stream;
-//! # impl Stream {
+//! use libtechmino_replay::{
+//!    GameReplayData, format::ReplayBufferKind, serialize::ReplayEncoder, GameReplayMetadata,
+//!    GameInputEvent, PlayerSettings, InputParseMode
+//! };
+//! # struct MyStream;
+//! # impl MyStream {
 //! #   fn new() -> Self {
 //! #       Self
 //! #   }
@@ -27,63 +27,25 @@
 //!
 //! let metadata = GameReplayMetadata {
 //!     // ...
-//! #   date: "".into(),
-//! #   mode: "".into(),
-//! #   mods: None,
-//! #   player: "".into(),
-//! #   nonstandard: HashMap::new(),
-//! #   private: None,
-//! #   seed: 0,
-//! #   setting: PlayerSettings {
-//! #       das: None,
-//! #       arr: None,
-//! #       atk_fx: None,
-//! #       bag_line: None,
-//! #       block: None,
-//! #       center: None,
-//! #       clear_fx: None,
-//! #       dascut: None,
-//! #       drop_fx: None,
-//! #       dropcut: None,
-//! #       face: None,
-//! #       ft_lock: None,
-//! #       ghost: None,
-//! #       grid: None,
-//! #       high_cam: None,
-//! #       ihs: None,
-//! #       ims: None,
-//! #       irs: None,
-//! #       irscut: None,
-//! #       lock_fx: None,
-//! #       move_fx: None,
-//! #       next_pos: None,
-//! #       nonstandard: HashMap::new(),
-//! #       rs: None,
-//! #       score: None,
-//! #       sdarr: None,
-//! #       sddas: None,
-//! #       shake_fx: None,
-//! #       skin: None,
-//! #       smooth: None,
-//! #       splash_fx: None,
-//! #       text: None,
-//! #       warn: None,
-//! #   },
-//! #   tas_used: None,
-//! #   version: "".into(),
+//! #   map: serde_json::Map::new(),
 //! };
 //! let inputs: Vec<GameInputEvent> = vec![
 //!     // ...
 //! ];
 //!
-//! // Default serialization
+//! // Example: Default serialization
+//! // This is the simplest method and covers most usecases.
 //! let replay = GameReplayData { inputs, metadata: metadata.clone() };
 //!
-//! let rep_file = replay.serialize_to_compressed(Some(InputParseMode::Relative), 1);
-//! let copiable_b64 = replay.serialize_to_base64(Some(InputParseMode::Relative), 1);
+//! let rep_file = replay.serialize(ReplayBufferKind::Compressed, Some(InputParseMode::Relative), 1);
+//! let copiable_b64 = replay.serialize(ReplayBufferKind::Base64, Some(InputParseMode::Relative), 1);
 //!
-//! // Streaming serialization
-//! let mut input_stream = Stream::new();
+//! // You can then write the `rep_file` into a .rep file or put the
+//! // `copiable_b64` into the clipboard
+//!
+//! // Example: Streaming serialization
+//! // This is useful if the input stream is extremely long.
+//! let mut input_stream = MyStream::new();
 //! let mut encoder = ReplayEncoder::new(ReplayBufferKind::Compressed, 1);
 //! let mut replay_bytes: Vec<u8> = encoder.feed_metadata(&metadata, Some(InputParseMode::Relative)).unwrap();
 //!

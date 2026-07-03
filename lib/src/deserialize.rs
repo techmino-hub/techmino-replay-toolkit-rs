@@ -1,5 +1,5 @@
 //! # Deserialization
-//! Deserialize or parse an existing replay file.
+//! Deserialize or parse an existing replay file or string.
 //!
 //! The default [`GameReplayData`] struct provides simple deserialization defaults and should
 //! cover most usecases. But for e.g. streaming, use the [`ReplayDecoder`] struct instead and pass in
@@ -7,7 +7,7 @@
 //!
 //! ## Example
 //! ```
-//! # use techmino_replay_toolkit::{
+//! # use libtechmino_replay::{
 //! #   GameReplayData, format::ReplayBufferKind, deserialize::ReplayDecoder, GameReplayMetadata,
 //! #   GameInputEvent,
 //! # };
@@ -26,6 +26,9 @@
 //! #   }
 //! # }
 //!
+//! // Example 1: One-off parsing
+//! // This is the simplest method to parse code and covers most usecases
+//!
 //! // .rep files are of compressed form
 //! let replay_data: &[u8] = read_file("my_replay.rep");
 //! let result = GameReplayData::parse_replay(replay_data, ReplayBufferKind::Compressed, None);
@@ -34,8 +37,8 @@
 //! let replay_string: &str = read_clipboard();
 //! let result = GameReplayData::parse_replay(replay_string.as_bytes(), ReplayBufferKind::Base64, None);
 //!
-//! // Streaming example, using an arbitrary stream
-//! // We will gradually fill in the details at it comes in
+//! // Example 2: Streaming parsing, using an arbitrary stream
+//! // Useful for extremely long replays
 //! let mut metadata: Option<GameReplayMetadata> = None;
 //! let mut inputs: Vec<GameInputEvent> = Vec::new();
 //! let mut my_stream = Stream::new();
