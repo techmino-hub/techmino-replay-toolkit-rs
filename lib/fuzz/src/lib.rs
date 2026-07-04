@@ -146,8 +146,8 @@ pub enum DecodeStreamExpectation {
 }
 
 impl DecodeStreamExpectation {
-    /// What to expect only from looking at parse modes.
-    pub fn from_parse_modes(
+    /// What to expect only from looking at parse modes and metadata.
+    pub fn infer(
         encode_mode: InputParseMode,
         decode_override: Option<InputParseMode>,
         metadata: &GameReplayMetadata,
@@ -164,7 +164,7 @@ impl DecodeStreamExpectation {
             mode
         };
 
-        match (encode_mode, inferred_decode_mode) {
+        let mismatch_expectation = match (encode_mode, inferred_decode_mode) {
             (InputParseMode::Absolute, InputParseMode::Relative)
             | (InputParseMode::Relative, InputParseMode::Absolute) => {
                 DecodeStreamExpectation::NoExpectation
@@ -173,7 +173,15 @@ impl DecodeStreamExpectation {
             | (InputParseMode::Relative, InputParseMode::Relative) => {
                 DecodeStreamExpectation::Roundtrips
             }
-        }
+        };
+
+        let recursion_expectation = if get_metadata_max_depth(metadata) > MAX_METADATA_DEPTH {
+            DecodeStreamExpectation::NoExpectation
+        } else {
+            DecodeStreamExpectation::Roundtrips
+        };
+
+        recursion_expectation.min(mismatch_expectation)
     }
 
     pub fn minimize(&mut self, rhs: Self) {
@@ -258,7 +266,7 @@ impl<'a> Arbitrary<'a> for DecodeStream {
 
         let decode_override: Option<InputParseMode> = u.arbitrary()?;
 
-        expectation.minimize(DecodeStreamExpectation::from_parse_modes(
+        expectation.minimize(DecodeStreamExpectation::infer(
             encode_mode,
             decode_override,
             &source_data.metadata,
