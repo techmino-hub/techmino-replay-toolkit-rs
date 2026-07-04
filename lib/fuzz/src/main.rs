@@ -58,7 +58,7 @@ fn main() {
 
 mod runner {
     use arbitrary::{Arbitrary, Unstructured};
-    use libtechmino_replay_fuzz::EncodeStream;
+    use libtechmino_replay_fuzz::{DecodeStream, EncodeStream};
     use std::{ffi::OsString, fs, io::prelude::Write, path::PathBuf};
     use strum::{FromRepr, IntoStaticStr, VariantArray};
 
@@ -72,6 +72,7 @@ mod runner {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, VariantArray, IntoStaticStr, FromRepr)]
     pub enum Target {
         FuzzEncode,
+        FuzzDecode,
     }
 
     impl Target {
@@ -79,6 +80,7 @@ mod runner {
         pub const fn subdir_name(self) -> &'static str {
             match self {
                 Self::FuzzEncode => "fuzz_encode",
+                Self::FuzzDecode => "fuzz_decode",
             }
         }
 
@@ -195,6 +197,7 @@ mod runner {
 
         match target {
             Target::FuzzEncode => run_encode_case(data),
+            Target::FuzzDecode => run_decode_case(data),
         }
 
         println!("test succeeded");
@@ -207,5 +210,14 @@ mod runner {
             .expect("arbitrary data should be valid encode stream");
 
         stream.test().expect("stream test should succeed");
+    }
+
+    fn run_decode_case(data: &[u8]) {
+        let mut unstructured = Unstructured::new(data);
+
+        let stream = DecodeStream::arbitrary(&mut unstructured)
+            .expect("arbitrary data should be valid decode stream");
+
+        stream.test();
     }
 }

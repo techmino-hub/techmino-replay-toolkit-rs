@@ -163,6 +163,7 @@ impl GameReplayData {
         let mut encoder = ReplayEncoder::new(ReplayBufferKind::Uncompressed, 0);
         let mut output = encoder.feed_metadata(&self.metadata, input_mode)?;
         encoder.feed_input_data(&self.inputs, &mut output)?;
+        encoder.finish(&mut output)?;
 
         let serialized = SerializedReplay::Bytes(output);
 
@@ -203,6 +204,7 @@ impl GameReplayData {
         let mut encoder = ReplayEncoder::new(ReplayBufferKind::Compressed, compression_level);
         let mut output = encoder.feed_metadata(&self.metadata, input_mode)?;
         encoder.feed_input_data(&self.inputs, &mut output)?;
+        encoder.finish(&mut output)?;
 
         let serialized = SerializedReplay::Bytes(output);
 
@@ -242,6 +244,7 @@ impl GameReplayData {
         let mut encoder = ReplayEncoder::new(ReplayBufferKind::Base64, compression_level);
         let mut output = encoder.feed_metadata(&self.metadata, input_mode)?;
         encoder.feed_input_data(&self.inputs, &mut output)?;
+        encoder.finish(&mut output)?;
 
         // SAFETY: Base64 is always valid UTF-8
         let string = unsafe { String::from_utf8_unchecked(output) };

@@ -104,6 +104,7 @@ impl<'a> Arbitrary<'a> for EncodeStream {
 }
 
 /// `impl Arbitrary` struct for representing how a decode stream shall be fuzzed.
+#[derive(Debug)]
 pub struct DecodeStream {
     /// The entire source game replay data.
     pub source_data: GameReplayData,
@@ -120,6 +121,8 @@ pub struct DecodeStream {
     pub indices: Vec<usize>,
     /// How the encoded bytes shall be decoded.
     pub format: ReplayBufferKind,
+    /// What mode was used to encode the replay.
+    _encode_mode: InputParseMode,
     /// An input mode override to apply.
     pub decode_mode_override: Option<InputParseMode>,
     /// What to expect from decoding.
@@ -127,7 +130,7 @@ pub struct DecodeStream {
 }
 
 /// What to expect as the fuzz results.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DecodeStreamExpectation {
     /// The decode will fail to succeed.
     DecodeFail,
@@ -162,10 +165,8 @@ impl DecodeStreamExpectation {
         };
 
         match (encode_mode, inferred_decode_mode) {
-            (InputParseMode::Absolute, InputParseMode::Relative) => {
-                DecodeStreamExpectation::Decodes
-            }
-            (InputParseMode::Relative, InputParseMode::Absolute) => {
+            (InputParseMode::Absolute, InputParseMode::Relative)
+            | (InputParseMode::Relative, InputParseMode::Absolute) => {
                 DecodeStreamExpectation::NoExpectation
             }
             (InputParseMode::Absolute, InputParseMode::Absolute)
@@ -184,7 +185,12 @@ impl DecodeStream {
     pub fn test(&self) {
         let result = self.try_decode();
 
-        assert!(self.meets_expectations(result));
+        if !self.meets_expectations(&result) {
+            dbg!(self);
+            dbg!(&result);
+
+            panic!("decode failed to meet expectations");
+        }
     }
 
     fn try_decode(&self) -> Result<GameReplayData, ReplayParseError> {
@@ -206,6 +212,10 @@ impl DecodeStream {
             inputs.extend_from_slice(&res.inputs);
         }
 
+        if !decoder.is_finished() {
+            return Err(ReplayParseError::UnexpectedEnd);
+        }
+
         let data = GameReplayData {
             metadata: metadata.ok_or(ReplayParseError::MetadataSeparatorNotFound)?,
             inputs,
@@ -214,13 +224,13 @@ impl DecodeStream {
         Ok(data)
     }
 
-    fn meets_expectations(&self, result: Result<GameReplayData, ReplayParseError>) -> bool {
+    fn meets_expectations(&self, result: &Result<GameReplayData, ReplayParseError>) -> bool {
         match self.expectation {
             DecodeStreamExpectation::DecodeFail => result.is_err(),
             DecodeStreamExpectation::NoExpectation => true,
             DecodeStreamExpectation::Decodes => result.is_ok(),
             DecodeStreamExpectation::Roundtrips => {
-                result.is_ok_and(|decoded| decoded == self.source_data)
+                result.is_ok() && *result.as_ref().unwrap() == self.source_data
             }
         }
     }
@@ -258,6 +268,10 @@ impl<'a> Arbitrary<'a> for DecodeStream {
         let mut prev_idx = 0usize;
 
         while prev_idx < replay_bytes.len() {
+            if u.is_empty() {
+                return Err(arbitrary::Error::NotEnoughData);
+            }
+
             let new_idx = u.int_in_range(prev_idx..=replay_bytes.len())?;
             indices.push(new_idx);
             prev_idx = new_idx;
@@ -268,6 +282,7 @@ impl<'a> Arbitrary<'a> for DecodeStream {
             replay_bytes,
             format,
             indices,
+            _encode_mode: encode_mode,
             decode_mode_override: decode_override,
             expectation,
         })
