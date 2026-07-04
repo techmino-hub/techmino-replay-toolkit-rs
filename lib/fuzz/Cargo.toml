@@ -10,6 +10,8 @@ cargo-fuzz = true
 
 [dependencies]
 arbitrary = { version = "1.4.2", features = ["derive"] }
+blake3 = "1.8.5"
+glob = "0.3.3"
 libfuzzer-sys = { version = "0.4", features = ["arbitrary-derive"] }
 serde_json = "1.0.150"
 strum = "0.28.0"

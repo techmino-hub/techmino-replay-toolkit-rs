@@ -12,7 +12,7 @@ pub const MAX_METADATA_DEPTH: usize = 120;
 #[derive(Debug)]
 pub struct EncodeStream {
     /// The entire game replay data to encode
-    total_game_data: GameReplayData,
+    pub total_game_data: GameReplayData,
     /// The list of indices to encode in each pass.
     ///
     /// Each `.update()` pass will insert a certain slice of the
@@ -21,10 +21,10 @@ pub struct EncodeStream {
     /// If we are in pass `p` where `p < indices.len()`, then we will call
     /// `.update()` using `inputs[indices[p - 1]..indices[p]]`,
     /// or if p == 0, then `inputs[..indices[p]]`
-    indices: Vec<usize>,
-    rep_kind: ReplayBufferKind,
-    compression_level: u8,
-    input_mode_override: Option<InputParseMode>,
+    pub indices: Vec<usize>,
+    pub rep_kind: ReplayBufferKind,
+    pub compression_level: u8,
+    pub input_mode_override: Option<InputParseMode>,
 }
 
 impl EncodeStream {
