@@ -136,6 +136,15 @@ impl From<SerializedReplay> for Vec<u8> {
     }
 }
 
+impl From<SerializedReplay> for Box<[u8]> {
+    fn from(val: SerializedReplay) -> Self {
+        match val {
+            SerializedReplay::Bytes(b) => b.into_boxed_slice(),
+            SerializedReplay::Base64(s) => s.into_bytes().into_boxed_slice(),
+        }
+    }
+}
+
 impl TryFrom<SerializedReplay> for String {
     /// The original serialized replay.
     type Error = SerializedReplay;

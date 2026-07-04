@@ -950,6 +950,7 @@ impl InputParseMode {
     ///
     /// Returns [`None`] if the input parse mode could not be inferred.
     #[must_use]
+    #[deprecated = "this doesn't really fit in with the rest of the codebase that uses VlqReader instead"]
     pub fn try_infer_from_input_data(input_slice: &[u64]) -> Option<InputParseMode> {
         // Absolute mode: expects increasing frame times
         let mut prev_time = 0;

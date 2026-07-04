@@ -1,14 +1,17 @@
-use std::collections::VecDeque;
-
 use libfuzzer_sys::arbitrary::{unstructured::Unstructured, Arbitrary};
 use libtechmino_replay::{
-    serialize::ReplayEncoder, GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode,
-    ReplayBufferKind,
+    deserialize::ReplayDecoder,
+    serialize::ReplayEncoder,
+    GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode,
+    ReplayBufferKind::{self},
+    ReplayParseError,
 };
 use serde_json::{Map as JsonMap, Value as JsonValue};
+use std::collections::VecDeque;
 
 pub const MAX_METADATA_DEPTH: usize = 120;
 
+/// Struct for fuzzing streaming encoding.
 #[derive(Debug)]
 pub struct EncodeStream {
     /// The entire game replay data to encode
@@ -96,6 +99,177 @@ impl<'a> Arbitrary<'a> for EncodeStream {
             rep_kind,
             compression_level,
             input_mode_override,
+        })
+    }
+}
+
+/// `impl Arbitrary` struct for representing how a decode stream shall be fuzzed.
+pub struct DecodeStream {
+    /// The entire source game replay data.
+    pub source_data: GameReplayData,
+    /// The encoded game replay data.
+    pub replay_bytes: Box<[u8]>,
+    /// The list of indices to encode in each pass.
+    ///
+    /// Each `.update()` pass will insert a certain slice of the
+    /// total encoded game replay data.
+    ///
+    /// If we are in pass `p` where `p < indices.len()`, then we will call
+    /// `.update()` using `replay_bytes[indices[p - 1]..indices[p]]`,
+    /// or if p == 0, then `replay_bytes[..indices[p]]`
+    pub indices: Vec<usize>,
+    /// How the encoded bytes shall be decoded.
+    pub format: ReplayBufferKind,
+    /// An input mode override to apply.
+    pub decode_mode_override: Option<InputParseMode>,
+    /// What to expect from decoding.
+    pub expectation: DecodeStreamExpectation,
+}
+
+/// What to expect as the fuzz results.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DecodeStreamExpectation {
+    /// The decode will fail to succeed.
+    DecodeFail,
+    /// The decode may not succeed.
+    ///
+    /// No assertions.
+    NoExpectation,
+    /// The decode is expected to succeed, but with no expectations about
+    /// roundtrips.
+    Decodes,
+    /// The decode is expected to succeed and roundtrip properly.
+    Roundtrips,
+}
+
+impl DecodeStreamExpectation {
+    /// What to expect only from looking at parse modes.
+    pub fn from_parse_modes(
+        encode_mode: InputParseMode,
+        decode_override: Option<InputParseMode>,
+        metadata: &GameReplayMetadata,
+    ) -> Self {
+        let inferred_decode_mode = if let Some(mode) = decode_override {
+            mode
+        } else {
+            let Some(Ok(version)) = metadata.get_version() else {
+                return DecodeStreamExpectation::DecodeFail;
+            };
+            let Some(mode) = InputParseMode::try_infer_from_version(version) else {
+                return DecodeStreamExpectation::DecodeFail;
+            };
+            mode
+        };
+
+        match (encode_mode, inferred_decode_mode) {
+            (InputParseMode::Absolute, InputParseMode::Relative) => {
+                DecodeStreamExpectation::Decodes
+            }
+            (InputParseMode::Relative, InputParseMode::Absolute) => {
+                DecodeStreamExpectation::NoExpectation
+            }
+            (InputParseMode::Absolute, InputParseMode::Absolute)
+            | (InputParseMode::Relative, InputParseMode::Relative) => {
+                DecodeStreamExpectation::Roundtrips
+            }
+        }
+    }
+
+    pub fn minimize(&mut self, rhs: Self) {
+        *self = (*self).min(rhs);
+    }
+}
+
+impl DecodeStream {
+    pub fn test(&self) {
+        let result = self.try_decode();
+
+        assert!(self.meets_expectations(result));
+    }
+
+    fn try_decode(&self) -> Result<GameReplayData, ReplayParseError> {
+        let mut decoder = ReplayDecoder::new(self.format, self.decode_mode_override);
+        let mut metadata: Option<GameReplayMetadata> = None;
+        let mut inputs: Vec<GameInputEvent> = Vec::with_capacity(self.source_data.inputs.len());
+
+        for pass in 0..self.indices.len() {
+            let lower_bound = pass.checked_sub(1).map(|p| self.indices[p]).unwrap_or(0);
+            let upper_bound = self.indices[pass];
+            let input_slice = &self.replay_bytes[lower_bound..upper_bound];
+
+            let res = decoder.update(input_slice)?;
+
+            if let Some(meta_output) = res.metadata {
+                metadata = Some(*meta_output);
+            }
+
+            inputs.extend_from_slice(&res.inputs);
+        }
+
+        let data = GameReplayData {
+            metadata: metadata.ok_or(ReplayParseError::MetadataSeparatorNotFound)?,
+            inputs,
+        };
+
+        Ok(data)
+    }
+
+    fn meets_expectations(&self, result: Result<GameReplayData, ReplayParseError>) -> bool {
+        match self.expectation {
+            DecodeStreamExpectation::DecodeFail => result.is_err(),
+            DecodeStreamExpectation::NoExpectation => true,
+            DecodeStreamExpectation::Decodes => result.is_ok(),
+            DecodeStreamExpectation::Roundtrips => {
+                result.is_ok_and(|decoded| decoded == self.source_data)
+            }
+        }
+    }
+}
+
+impl<'a> Arbitrary<'a> for DecodeStream {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let mut expectation = DecodeStreamExpectation::Roundtrips;
+        let source_data = GameReplayData::arbitrary(u)?;
+
+        let format = ReplayBufferKind::arbitrary(u)?;
+
+        let compression_level = if format == ReplayBufferKind::Uncompressed {
+            0
+        } else {
+            u.int_in_range(0u8..=10u8)?
+        };
+
+        let encode_mode: InputParseMode = u.arbitrary()?;
+
+        let replay_bytes: Box<[u8]> = source_data
+            .serialize(format, Some(encode_mode), compression_level)
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?
+            .into();
+
+        let decode_override: Option<InputParseMode> = u.arbitrary()?;
+
+        expectation.minimize(DecodeStreamExpectation::from_parse_modes(
+            encode_mode,
+            decode_override,
+            &source_data.metadata,
+        ));
+
+        let mut indices: Vec<usize> = Vec::with_capacity(1);
+        let mut prev_idx = 0usize;
+
+        while prev_idx < replay_bytes.len() {
+            let new_idx = u.int_in_range(prev_idx..=replay_bytes.len())?;
+            indices.push(new_idx);
+            prev_idx = new_idx;
+        }
+
+        Ok(Self {
+            source_data,
+            replay_bytes,
+            format,
+            indices,
+            decode_mode_override: decode_override,
+            expectation,
         })
     }
 }
