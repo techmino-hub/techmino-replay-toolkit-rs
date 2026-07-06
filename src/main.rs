@@ -1,6 +1,10 @@
 use std::io;
 
-use libtechmino_replay::{format::ReplayBufferKind, GameReplayData};
+use libtechmino_replay::{GameReplayData, format::ReplayBufferKind};
+
+mod cli;
+mod gui;
+mod tui;
 
 fn main() {
     println!(
