@@ -39,4 +39,3 @@ path = "src/main.rs"
 test = false
 doc = false
 bench = false
-default = true

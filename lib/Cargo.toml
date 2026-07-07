@@ -17,7 +17,7 @@ std_instead_of_core = { level = "warn" }
 # Either std or alloc must be enabled, but not both
 default = ["std"]
 # Implements `Arbitrary` on structs. Used mainly for testing.
-arbitrary = ["dep:arbitrary"]
+arbitrary = ["dep:arbitrary", "std"]
 # Either std or alloc must be enabled, but not both
 std = ["serde/std", "serde_json/std", "strum/std", "thiserror/std"]
 # Either std or alloc must be enabled, but not both

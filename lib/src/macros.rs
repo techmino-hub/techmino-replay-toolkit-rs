@@ -590,7 +590,7 @@ macro_rules! setting_getters_setters {
                     return Some($from_json(&json).map(|v| v.into()).ok_or(json));
                 }
 
-                let json = self.$innername.insert(Self::[<KEY_ $name:snake:upper>].to_owned(), value)?;
+                let json = self.$innername.insert(<str as ::alloc::borrow::ToOwned>::to_owned(Self::[<KEY_ $name:snake:upper>]), value)?;
                 return Some($from_json(&json).map(|v| v.into()).ok_or(json));
             }
         }

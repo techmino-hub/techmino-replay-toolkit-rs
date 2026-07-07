@@ -62,7 +62,7 @@ use crate::{
     types::{GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplayParseError},
     InputAction,
 };
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
 use base64::Engine;
 use libtechmino_vlq::VlqReader;
 use miniz_oxide::{

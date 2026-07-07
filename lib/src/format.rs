@@ -1,5 +1,6 @@
 //! Module for representing the three different ways to have inputs/outputs in this library.
 
+use alloc::{boxed::Box, string::String, vec::Vec};
 use core::borrow::Borrow;
 
 /// Represents the different kinds of ways that Techmino replays could be represented.

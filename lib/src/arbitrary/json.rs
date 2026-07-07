@@ -12,7 +12,7 @@ use core::{
 use arbitrary::{size_hint, Arbitrary, Error, Result, Unstructured};
 use serde_json::{Map, Number, Value};
 
-/// [`serde_json::value::Value`] wrapper implementing [`Arbitrary`].
+/// [`serde_json::Value`] wrapper implementing [`Arbitrary`].
 #[derive(Clone)]
 pub struct ArbitraryValue(Value);
 
@@ -48,7 +48,7 @@ impl<'a> Arbitrary<'a> for ArbitraryValue {
     }
 }
 
-/// [`serde_json::number::Number`] implementing [`Arbitrary`].
+/// [`serde_json::value::Number`] implementing [`Arbitrary`].
 #[derive(Clone)]
 pub struct ArbitraryNumber(Number);
 

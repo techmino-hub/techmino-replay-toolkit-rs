@@ -64,7 +64,10 @@ use crate::{
     },
     SerializedReplay,
 };
-use alloc::vec::Vec;
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use core::ops::ControlFlow;
 use libtechmino_vlq::VlqData;
@@ -112,7 +115,7 @@ impl GameReplayData {
     /// to try to compress the output using zlib. The default is usually 7.
     ///
     /// This argument is completely ignored when serializing with the
-    /// [`Uncompressed`] format.
+    /// [`Uncompressed`][ReplayBufferKind::Uncompressed] format.
     ///
     /// For more information, see [`miniz_oxide::deflate::CompressionLevel`].
     ///
@@ -278,8 +281,9 @@ impl ReplayEncoder {
     ///
     /// # Next Steps
     /// After creating the [`ReplayEncoder`], start by feeding it some metadata to serialize \
-    /// using [`feed_metadata`]. Note that that step can only be done once per encoding since
-    /// there's only one metadata segment in the replay structure.
+    /// using [`feed_metadata`][Self::feed_metadata]. Note that that step can
+    /// only be done once per encoding since there's only one metadata segment
+    /// in the replay structure.
     #[must_use]
     pub fn new(rep_kind: ReplayBufferKind, compression_level: u8) -> Self {
         Self {
@@ -309,9 +313,9 @@ impl ReplayEncoder {
     /// (i.e., it's already been given metadata and is now expecting input data).
     ///
     /// # Next Steps
-    /// After feeding the [`ReplayEncoder`] metadata, the last step is to feed it input data
-    /// using [`feed_input_data`]. Note that unlike feeding metadata, you can feed input data
-    /// in multiple batches.
+    /// After feeding the [`ReplayEncoder`] metadata, the last step is to feed it
+    /// input data using [`feed_input_data`][Self::feed_input_data]. Note that
+    /// unlike feeding metadata, you can feed input data in multiple batches.
     pub fn feed_metadata(
         &mut self,
         metadata: &GameReplayMetadata,

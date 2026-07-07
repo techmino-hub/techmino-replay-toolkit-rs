@@ -12,9 +12,11 @@ use crate::{
     InputAction, InputActionKey, InputActionKind,
 };
 use alloc::{
+    borrow::ToOwned,
     fmt::{self},
     format,
     string::{FromUtf8Error, String},
+    vec,
     vec::Vec,
 };
 use base64::DecodeError;
@@ -203,7 +205,7 @@ impl PlayerSettings {
     /// Creates a new [`PlayerSettingsRef`] struct pointing to this
     /// struct's owned map.
     ///
-    /// This is different than an [`AsRef`][core::convert::AsRef] implementation
+    /// This is different than an [`AsRef`] implementation
     /// since this function doesn't directly return a reference to a struct, but
     /// a struct containing a reference.
     #[must_use]
@@ -214,7 +216,7 @@ impl PlayerSettings {
     /// Creates a new [`PlayerSettingsMut`] struct pointing to this
     /// struct's owned map.
     ///
-    /// This is different than an [`AsRef`][core::convert::AsRef] implementation
+    /// This is different than an [`AsRef`] implementation
     /// since this function doesn't directly return a reference to a struct, but
     /// a struct containing a reference.
     #[must_use]
@@ -258,7 +260,7 @@ impl PlayerSettingsRef<'_> {
     /// Converts this reference struct into an owned version of the
     /// `PlayerSettings` struct.
     ///
-    /// This isn't part of the [`ToOwned`][alloc::borrow::ToOwned] impl since
+    /// This isn't part of the [`ToOwned`] impl since
     /// this struct itself is a reference to a Map and not to a `PlayerSettings`
     /// struct, and therefore we can't provide an `Owned` type of `PlayerSettings`
     /// because `PlayerSettings` does not implement `Borrow<PlayerSettingsMut>`.
@@ -299,7 +301,7 @@ impl PlayerSettingsMut<'_> {
     /// Converts this reference struct into an owned version of the
     /// `PlayerSettings` struct.
     ///
-    /// This isn't part of the [`ToOwned`][alloc::borrow::ToOwned] impl since
+    /// This isn't part of the [`ToOwned`] impl since
     /// this struct itself is a reference to a Map and not to a `PlayerSettings`
     /// struct, and therefore we can't provide an `Owned` type of `PlayerSettings`
     /// because `PlayerSettings` does not implement `Borrow<PlayerSettingsMut>`.
@@ -405,7 +407,7 @@ setting_getters_setters! {
 
     /// The IMS (initial movement system) checkbox in the control settings.
     ///
-    /// Analogous to [IRS][<https://tetris.wiki/IRS>] and [IHS][<https://tetris.wiki/IHS>],
+    /// Analogous to [IRS](<https://tetris.wiki/IRS>) and [IHS](<https://tetris.wiki/IHS>),
     /// but for movement instead of rotating and holding, respectively.
     "ims" ims: bool where { from_json: serde_json::Value::as_bool },
 
@@ -413,19 +415,19 @@ setting_getters_setters! {
     ///
     /// Normal values (as of January 2025):
     /// - `TRS`
-    /// - [`SRS`][<https://tetris.wiki/SRS>]
+    /// - [`SRS`](<https://tetris.wiki/SRS>)
     /// - `SRS_plus`
     /// - `SRS_X`
     /// - `BiRS`
-    /// - [`ARS_Z`][<https://tetris.wiki/ARS>]
-    /// - [`DRS_weak`][<https://tetris.wiki/DTET_Rotation_System>]
-    /// - [`ASC`][<https://tetris.wiki/Ascension>]
+    /// - [`ARS_Z`](<https://tetris.wiki/ARS>)
+    /// - [`DRS_weak`](<https://tetris.wiki/DTET_Rotation_System>)
+    /// - [`ASC`](<https://tetris.wiki/Ascension>)
     /// - `ASC_plus`
-    /// - [`C2`][<https://tetris.wiki/Cultris_II>]
+    /// - [`C2`](<https://tetris.wiki/Cultris_II>)
     /// - `C2_sym`
-    /// - [`N64`][<https://tetris.wiki/The_New_Tetris>]
+    /// - [`N64`](<https://tetris.wiki/The_New_Tetris>)
     /// - `N64_plus`
-    /// - [`Classic`][<https://tetris.wiki/Nintendo_Rotation_System>]
+    /// - [`Classic`](<https://tetris.wiki/Nintendo_Rotation_System>)
     /// - `Classic_plus`
     /// - `None`
     /// - `None_plus`
@@ -711,8 +713,6 @@ impl GameReplayMetadata {
 #[derive(Debug, Error)]
 pub enum ReplayParseError {
     /// An error occurred when zlib tried to decompress the replay data.
-    ///
-    /// See [`DecompressError`] for more information.
     #[error("zlib failed to decompress the replay data")]
     ZlibDecompressError {
         /// The internal zlib status.
