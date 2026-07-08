@@ -5,13 +5,12 @@ edition = "2021"
 description = "A serializer and deserializer for Techmino replays"
 repository = "https://github.com/techmino-hub/techmino-replay-toolkit-rs"
 license = "GPL-3.0-or-later"
+keywords = ["techmino", "parser"]
+categories = ["no-std", "parser-implementations"]
+include = ["/src", "/README.md"]
 
-[lints.clippy]
-all = { level = "deny", priority = -1 }
-pedantic = { level = "warn" }
-alloc_instead_of_core = { level = "warn" }
-std_instead_of_alloc = { level = "warn" }
-std_instead_of_core = { level = "warn" }
+[lints]
+workspace = true
 
 [features]
 # Either std or alloc must be enabled, but not both

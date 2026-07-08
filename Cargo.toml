@@ -3,10 +3,23 @@
 resolver = "3"
 members = ["lib", "lib/fuzz", "vlq"]
 
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn" }
+alloc_instead_of_core = { level = "warn" }
+std_instead_of_alloc = { level = "warn" }
+std_instead_of_core = { level = "warn" }
+
 [package]
 name = "techmino-replay-toolkit"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "An all-in-one binary containing tools for Techmino replays"
+repository = "https://github.com/techmino-hub/techmino-replay-toolkit-rs"
+license = "GPL-3.0-or-later"
+keywords = ["techmino"]
+publish = false
+rust-version = "1.96"
 
 [dependencies]
 clap = "4.6.1"

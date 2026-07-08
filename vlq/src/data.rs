@@ -50,6 +50,7 @@ impl VlqData {
 
     /// Converts a u64 value into a VLQ-encoded value.
     ///
+    /// # Errors
     /// An `Err` is returned when `value` exceeds [`Self::MAX_REPRESENTABLE`]
     /// and cannot be represented as a VLQ.
     pub const fn from_value(mut value: u64) -> Result<Self, VlqEncodeError> {
@@ -136,7 +137,11 @@ impl VlqData {
     /// Get the VLQ-encoded bytes as a slice.
     #[must_use]
     pub fn as_slice(&self) -> &[u8] {
-        self.bytes.get(..self.len().get() as usize).unwrap()
+        let len = self.len().get() as usize;
+
+        debug_assert!(len <= self.bytes.len());
+
+        &self.bytes[..len]
     }
 }
 

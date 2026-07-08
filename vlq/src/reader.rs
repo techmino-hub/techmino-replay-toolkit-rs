@@ -8,27 +8,34 @@ use thiserror::Error;
 /// of VLQ-encoded bytes.
 #[derive(Clone, Debug)]
 pub struct VlqReader {
-    buf: [u8; (VlqData::MAX_BYTES - 1) as usize],
+    buf: [u8; Self::BUF_SIZE],
     buf_len: u8,
 }
 
 impl VlqReader {
+    const BUF_SIZE: usize = (VlqData::MAX_BYTES - 1) as usize;
+
     /// Create a new instance of a VLQ reader state machine.
+    #[must_use]
     pub const fn new() -> Self {
         Self {
-            buf: [0u8; _],
+            buf: [0u8; Self::BUF_SIZE],
             buf_len: 0,
         }
     }
 
     /// Feed a VLQ-encoded chunk into this state machine and
     /// append the VLQ data points into an existing Vec.
+    ///
+    /// # Errors
+    /// This function errors when a certain value in the input VLQ array exceeds
+    /// the limit for individual VLQ values.
     pub fn update_to_vec(
         &mut self,
         vlq_encoded: &[u8],
         vlq_data_points: &mut Vec<VlqData>,
     ) -> Result<(), VlqDecodeError> {
-        let mut buf = [
+        let mut buf: [u8; Self::BUF_SIZE + 1] = [
             self.buf[0],
             self.buf[1],
             self.buf[2],
@@ -41,7 +48,12 @@ impl VlqReader {
 
         for input in vlq_encoded.iter().copied() {
             if self.buf_len as usize == buf.len() {
-                self.buf = buf[..(VlqData::MAX_BYTES - 1) as usize].try_into().unwrap();
+                debug_assert!(buf.len() >= Self::BUF_SIZE);
+                // SAFETY: We already sliced it to be the size of Self::BUF_SIZE,
+                // so it should already be the correct size
+                let arr: [u8; Self::BUF_SIZE] =
+                    unsafe { buf[..Self::BUF_SIZE].try_into().unwrap_unchecked() };
+                self.buf = arr;
                 return Err(VlqDecodeError { partial_vlq: buf });
             }
 
@@ -55,7 +67,12 @@ impl VlqReader {
             }
         }
 
-        self.buf = buf[..(VlqData::MAX_BYTES - 1) as usize].try_into().unwrap();
+        debug_assert!(buf.len() >= Self::BUF_SIZE);
+        // SAFETY: We already sliced it to be the size of Self::BUF_SIZE,
+        // so it should already be the correct size
+        let arr: [u8; Self::BUF_SIZE] =
+            unsafe { buf[..Self::BUF_SIZE].try_into().unwrap_unchecked() };
+        self.buf = arr;
 
         Ok(())
     }
@@ -77,7 +94,7 @@ impl Default for VlqReader {
 #[derive(Debug, Error)]
 pub struct VlqDecodeError {
     /// Part of the VLQ byte array that couldn't be encoded into the `u64` format.
-    partial_vlq: [u8; VlqData::MAX_BYTES as usize],
+    pub partial_vlq: [u8; VlqData::MAX_BYTES as usize],
 }
 
 impl Display for VlqDecodeError {
