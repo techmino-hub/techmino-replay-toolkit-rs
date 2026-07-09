@@ -18,12 +18,11 @@
 
 #[cfg(feature = "arbitrary")]
 use arbitrary::{Arbitrary, Unstructured};
-use core::{
-    fmt::{self, Display},
-    num::TryFromIntError,
-};
+use core::fmt::{self, Display};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::NotABool;
 
 /// Represents an action associated with a certain input event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -137,9 +136,15 @@ impl InputActionKind {
 }
 
 impl TryFrom<u8> for InputActionKind {
-    type Error = TryFromIntError;
+    type Error = NotABool;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        Ok(Self::from_bool(bool::try_from(value)?))
+        let bool = match value {
+            0 => false,
+            1 => true,
+            _ => return Err(NotABool { value }),
+        };
+
+        Ok(Self::from_bool(bool))
     }
 }
 

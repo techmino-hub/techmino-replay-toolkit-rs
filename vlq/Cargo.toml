@@ -2,6 +2,8 @@
 name = "libtechmino-vlq"
 version = "0.1.0"
 edition = "2021"
+# When changing, change the readme too!
+rust-version = "1.84.1"
 description = "VLQ state machines for use in `libtechmino-replay`"
 repository = "https://github.com/techmino-hub/techmino-replay-toolkit-rs"
 license = "GPL-3.0-or-later"
@@ -13,6 +15,7 @@ include = ["/src", "/README.md"]
 workspace = true
 
 [features]
+default = ["std"]
 std = ["thiserror/std"]
 
 [dependencies]

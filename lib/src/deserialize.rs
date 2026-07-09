@@ -802,6 +802,7 @@ impl From<FormatError> for ReplayParseError {
 ///
 /// Not cumulative; if you want a full replay, you have to build it yourself.
 #[must_use = "the newly-decoded data is in the `Decoded` struct"]
+#[non_exhaustive]
 pub struct Decoded {
     /// The metadata, if it was decoded in this update call.
     ///

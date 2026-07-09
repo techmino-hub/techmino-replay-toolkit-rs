@@ -160,7 +160,7 @@ macro_rules! metadata_getters_setters {
                 let value: &::serde_json::Value = self.$innername.get(Self::[<KEY_ $name:snake:upper>])?;
 
                 let retval: ::core::option::Option<$type> = $from_json(value);
-                let retval = retval.ok_or($crate::types::TypeError);
+                let retval = retval.ok_or($crate::types::TypeError(()));
 
                 Some(retval)
             }
@@ -500,7 +500,7 @@ macro_rules! setting_getters_setters {
                 let value: &::serde_json::Value = self.$innername.get(Self::[<KEY_ $name:snake:upper>])?;
 
                 let retval: ::core::option::Option<$type> = $from_json(value);
-                let retval = retval.ok_or($crate::types::TypeError);
+                let retval = retval.ok_or($crate::types::TypeError(()));
 
                 Some(retval)
             }

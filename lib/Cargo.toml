@@ -2,6 +2,8 @@
 name = "libtechmino-replay"
 version = "0.1.0"
 edition = "2021"
+# Don't forget to update the readme!
+rust-version = "1.87.0"
 description = "A serializer and deserializer for Techmino replays"
 repository = "https://github.com/techmino-hub/techmino-replay-toolkit-rs"
 license = "GPL-3.0-or-later"
@@ -18,7 +20,7 @@ default = ["std"]
 # Implements `Arbitrary` on structs. Used mainly for testing.
 arbitrary = ["dep:arbitrary", "std"]
 # Either std or alloc must be enabled, but not both
-std = ["serde/std", "serde_json/std", "strum/std", "thiserror/std"]
+std = ["serde/std", "serde_json/std", "strum/std", "thiserror/std", "libtechmino-vlq/std"]
 # Either std or alloc must be enabled, but not both
 alloc = ["serde/alloc", "serde_json/alloc"]
 # Adds strum utilities for certain enums

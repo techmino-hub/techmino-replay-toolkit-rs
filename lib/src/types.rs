@@ -66,7 +66,7 @@ impl GameInputEvent {
     /// This will return an error if this condition is not met.
     pub const fn new(frame: u64, action: InputAction) -> Result<Self, GameInputEventError> {
         if frame > Self::MAX_FRAME {
-            return Err(GameInputEventError);
+            return Err(GameInputEventError(()));
         }
 
         let InputAction { kind, key } = action;
@@ -143,12 +143,20 @@ impl Debug for GameInputEvent {
     "An entry had an unexpected type and could not be converted into the \
     standardized type."
 )]
-pub struct TypeError;
+pub struct TypeError(pub(crate) ());
 
 /// The error type for when the game input event couldn't be created.
 #[derive(Debug, Error)]
 #[error("Failed to create GameInputEvent")]
-pub struct GameInputEventError;
+pub struct GameInputEventError(pub(crate) ());
+
+/// The error type for when a u8 greater than 1 tried to be converted
+/// into a bool.
+#[derive(Debug, Error)]
+#[error("Expected value of either 0 or 1, found {value}")]
+pub struct NotABool {
+    pub(crate) value: u8,
+}
 
 /// A struct representing all the data contained within the game replay.
 ///
@@ -276,7 +284,7 @@ impl<'a> TryFrom<&'a serde_json::Value> for PlayerSettingsRef<'a> {
 
     fn try_from(value: &'a serde_json::Value) -> Result<Self, Self::Error> {
         let serde_json::Value::Object(map) = value else {
-            return Err(TypeError);
+            return Err(TypeError(()));
         };
 
         Ok(Self { map })
@@ -577,7 +585,7 @@ impl GameReplayMetadata {
         let entry = self.map.get(Self::KEY_SETTINGS)?;
 
         let serde_json::Value::Object(map) = entry else {
-            return Some(Err(TypeError));
+            return Some(Err(TypeError(())));
         };
 
         Some(Ok(PlayerSettingsRef { map }))
@@ -589,7 +597,7 @@ impl GameReplayMetadata {
         let entry = self.map.get_mut(Self::KEY_SETTINGS)?;
 
         let serde_json::Value::Object(map) = entry else {
-            return Some(Err(TypeError));
+            return Some(Err(TypeError(())));
         };
 
         Some(Ok(PlayerSettingsMut { map }))
@@ -711,6 +719,7 @@ impl GameReplayMetadata {
 
 /// An error from parsing the replay data.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum ReplayParseError {
     /// An error occurred when zlib tried to decompress the replay data.
     #[error("zlib failed to decompress the replay data")]
@@ -797,6 +806,7 @@ impl From<DecodeError> for ReplayParseError {
 
 /// An error from serializing the replay data, e.g. to base64.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum ReplaySerializeError {
     /// The mode in which to serialize the inputs could not be inferred from the version string.
     ///
@@ -974,7 +984,8 @@ fn json_to_u8(value: &serde_json::Value) -> Option<u8> {
 
 /// Attempts to convert a JSON value into a byte array for every piece in the game.
 fn json_to_piece_bytes(value: &serde_json::Value) -> Option<[u8; TOTAL_PIECE_COUNT]> {
-    let arr: &[_; TOTAL_PIECE_COUNT] = value.as_array()?.as_array()?;
+    let values: &[serde_json::Value] = value.as_array()?.as_slice();
+    let arr = <&[serde_json::Value; TOTAL_PIECE_COUNT]>::try_from(values).ok()?;
 
     let mut bytes = [0u8; TOTAL_PIECE_COUNT];
 
@@ -992,8 +1003,8 @@ fn json_to_modlist(value: &serde_json::Value) -> Option<Vec<(u64, serde_json::Va
     let mut processed_list = Vec::with_capacity(source.len());
 
     for entry in source {
-        let entry = entry.as_array()?;
-        let [mod_id, mod_value] = entry.as_array()?;
+        let entry = entry.as_array()?.as_slice();
+        let [mod_id, mod_value] = <&[serde_json::Value; 2]>::try_from(entry).ok()?;
         let mod_id = mod_id.as_u64()?;
         let mod_value = mod_value.clone();
 
