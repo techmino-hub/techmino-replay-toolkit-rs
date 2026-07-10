@@ -32,9 +32,5 @@ jobs:
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-    # TODO: Run testall.sh
-    # - name: Run testall.sh
-    #   run: scripts/testall.sh
-
-    - name: Run workspace tests
-      run: cargo test --workspace
+    - name: Run testall.sh
+      run: scripts/testall.sh
