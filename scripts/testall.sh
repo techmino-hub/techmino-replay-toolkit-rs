@@ -65,4 +65,13 @@ if [ "$exitcode" != 0 ]; then
     exit "$exitcode"
 fi
 
+echo "[][][][][] cargo-audit [][][][][]"
+cargo audit --deny=warnings
+
+exitcode="$?"
+if [ "$exitcode" != 0 ]; then
+    echo "////////// audit exited with code $exitcode //////////"
+    exit "$exitcode"
+fi
+
 echo "[][][][][] all good! [][][][][]"
