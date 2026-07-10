@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: taiki-e/install-action@v2
       with:
         tool: cargo-audit,cargo-deny,cargo-msrv
@@ -31,5 +31,9 @@ jobs:
     #       target
     #     key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Run testall.sh
-      run: scripts/testall.sh
+    # TODO: Run testall.sh
+    # - name: Run testall.sh
+    #   run: scripts/testall.sh
+
+    - name: Run workspace tests
+      run: cargo test --workspace
