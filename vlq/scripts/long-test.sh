@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-# A script to thoroughly test libtechmino-replay.
+# A script to thoroughly test libtechmino-vlq.
 
 echo "checking dependencies..."
 
 deps_met=1
 
-if ! command -v cargo >/dev/null; then
+if ! command -v cargo; then
     echo "cargo: command not found"
     deps_met=0
 fi
@@ -21,9 +21,8 @@ if [ $deps_met == 0 ]; then
     exit 1
 fi
 
-# e.g. ~/Code/techmino-replay-toolkit-rs
 scripts_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-lib_dir=$(dirname "$scripts_dir")
+vlq_dir=$(dirname "$scripts_dir")
 
 # Start many scripts asynchronously
 echo "running tests..."
@@ -40,7 +39,7 @@ pids=($!)
 
 while read featureset; do
     (
-        clippy_result="$(cargo clippy --lib -p libtechmino-replay --no-default-features --features "$featureset" --keep-going -- -D warnings 2>&1)";
+        clippy_result="$(cargo clippy --lib -p libtechmino-vlq --no-default-features $featureset --keep-going -- -D warnings 2>&1)";
         exitcode="$?"
         if [ "$exitcode" != 0 ]; then
             echo -e "===== Clippy failure with featureset $featureset exited with code $exitcode =====\n$clippy_result"
@@ -49,7 +48,7 @@ while read featureset; do
 
         # Tests assume std, so skip if we use alloc instead
         if [[ "$featureset" != alloc* ]]; then
-            test_result="$(cargo test --lib -p libtechmino-replay --no-default-features --features "$featureset" --no-fail-fast 2>&1)";
+            test_result="$(cargo test --lib -p libtechmino-vlq --no-default-features $featureset --no-fail-fast 2>&1)";
             exitcode="$?"
             if [ "$exitcode" != 0 ]; then
                 echo -e "===== Test failure with featureset $featureset exited with code $exitcode =====\n$test_result"
@@ -58,14 +57,14 @@ while read featureset; do
         fi
 
         export RUSTDOCFLAGS="$RUSTDOCFLAGS -D warnings"
-        doc_result="$(cargo doc --lib -p libtechmino-replay --no-default-features --features "$featureset" --no-deps --document-private-items --keep-going 2>&1)";
+        doc_result="$(cargo doc --lib -p libtechmino-vlq --no-default-features $featureset --no-deps --document-private-items --keep-going 2>&1)";
         exitcode="$?"
         if [ "$exitcode" != 0 ]; then
             echo -e "===== Doc failure with featureset $featureset exited with code $exitcode =====\n$doc_result"
             exit 1
         fi
 
-        msrv_result="$(cargo msrv --path "$lib_dir" verify --no-default-features --features "$featureset" 2>&1)"
+        msrv_result="$(cargo msrv --path "$vlq_dir" verify --no-default-features $featureset 2>&1)"
         exitcode="$?"
         if [ "$exitcode" != 0 ]; then
             echo -e "===== MSRV failure with featureset $featureset exited with code $exitcode =====\n$msrv_result"
@@ -75,14 +74,8 @@ while read featureset; do
 
     pids+=("$!")
 done << FEATURES_END
-std
-std,arbitrary
-std,strum
-std,strum,preserve_metadata_order,float_roundtrip
-std,arbitrary,strum,preserve_metadata_order,float_roundtrip
-alloc
-alloc,strum
-alloc,strum,preserve_metadata_order,float_roundtrip
+
+--features std
 FEATURES_END
 
 echo "all tests launched, awaiting completion..."
