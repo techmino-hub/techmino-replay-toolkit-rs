@@ -270,7 +270,7 @@ dependencies = [
  "base64",
  "derive_more",
  "fastrand",
- "libtechmino-vlq",
+ "libtechmino-vlq 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "miniz_oxide",
  "pastey",
  "ron",
@@ -298,6 +298,15 @@ name = "libtechmino-vlq"
 version = "0.1.0"
 dependencies = [
  "fastrand",
+ "thiserror",
+]
+
+[[package]]
+name = "libtechmino-vlq"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6639f0c56fe5b5610ccd14d72c7cd51acaeeb344c39303ffd05c1543cc9f30df"
+dependencies = [
  "thiserror",
 ]
 
