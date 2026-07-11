@@ -21,13 +21,27 @@ if ! cargo deny --version >/dev/null; then
     deps_met=0
 fi
 
+script_dir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+repo_dir=$(dirname "$script_dir")
+
+# Preinstall rustup MSRV toolchains
+crate_subdirs=("lib" "vlq")
+rust_versions=()
+
+for crate_subdir in "${crate_subdirs[@]}"; do
+    rust_versions+=("$(cargo msrv --path "$repo_dir/$crate_subdir" --output-format minimal show)")
+done
+echo "preparing rust versions: ${rust_versions[@]}"
+
+for v in "${rust_versions[@]}"; do
+    echo "...$v:"
+    rustup toolchain install "$v"
+done
+
 if [ $deps_met == 0 ]; then
     echo "////////// one or more dependencies missing //////////"
     exit 1
 fi
-
-script_dir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-repo_dir=$(dirname "$script_dir")
 
 echo "[][][][][] Testing libtechmino-vlq [][][][][]"
 bash "$repo_dir/vlq/scripts/long-test.sh"
