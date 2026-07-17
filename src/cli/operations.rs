@@ -3,11 +3,11 @@
 use crate::cli::{
     clap::{CliOperation, CliReplayFormat},
     io::{ReadFileOrStdin, WriteFileOrStdout},
-    types::{CliOpError, ExtractArguments},
+    types::{CliOpError, ExtractArguments, UnpackedInputEvent},
 };
 use libtechmino_replay::{ReplayBufferKind, deserialize::ReplayDecoder};
 
-pub(crate) fn handle_cli_op(operation: &CliOperation) -> Result<(), CliOpError> {
+pub fn handle_cli_op(operation: &CliOperation) -> Result<(), CliOpError> {
     match operation {
         CliOperation::Extract {
             extract_mode,
@@ -99,9 +99,14 @@ fn extract(args: ExtractArguments) -> Result<(), CliOpError> {
         }
 
         if read_inputs {
-            let mut buf = Vec::with_capacity(br#"{"frame":1653,"type":1,"key":3},"#.len());
+            /// How big to make the buffer.
+            const PREALLOC_BUFFER_SIZE: usize = br#"{"frame":9999,"type":1,"key":3},"#.len();
+
+            let mut buf = Vec::with_capacity(PREALLOC_BUFFER_SIZE);
             for input in res.inputs {
-                if let Err(e) = serde_json::to_writer(&mut buf, &input) {
+                let unpacked = UnpackedInputEvent::from_packed(input);
+
+                if let Err(e) = serde_json::to_writer(&mut buf, &unpacked) {
                     return Err(CliOpError::InputSerializeError { input, inner: e });
                 }
                 buf.push(b',');

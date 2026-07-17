@@ -21,6 +21,14 @@ keywords = ["techmino"]
 publish = false
 rust-version = "1.96"
 
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+incremental = false
+debug = "line-tables-only"
+# strip = true
+
 [features]
 gui = ["dep:slint"]
 tui = ["dep:ratatui"]

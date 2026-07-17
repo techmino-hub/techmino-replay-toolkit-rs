@@ -19,14 +19,14 @@ This program and library is licensed under the GNU General Public License versio
 For more information, see <https://www.gnu.org/licenses/>.
 "
 )]
-pub(crate) struct CliParser {
+pub struct CliParser {
     #[command(subcommand)]
-    pub(crate) command: CliCommand,
+    pub command: CliCommand,
 }
 
 /// The specific command to run.
 #[derive(Clone, Debug, Subcommand)]
-pub(crate) enum CliCommand {
+pub enum CliCommand {
     /// Do a one-off operation in the CLI.
     Cli {
         /// The operation to do.
@@ -42,7 +42,7 @@ pub(crate) enum CliCommand {
 }
 
 #[derive(Clone, Debug, Subcommand)]
-pub(crate) enum CliOperation {
+pub enum CliOperation {
     /// Extract information about a replay into JSON form.
     ///
     /// Format is meant to be backwards compatible with
@@ -124,7 +124,7 @@ pub struct RetryArguments {
     /// Negative values for infinite retries.
     ///
     /// Defaults to never retrying.
-    #[arg(short = 'r', long = "retries", value_parser = MaxRetryCount::from_str, default_value_t = MaxRetryCount::NEVER)]
+    #[arg(short = 'r', long = "retries", value_parser = MaxRetryCount::try_from_str, default_value_t = MaxRetryCount::NEVER)]
     pub max_retries: MaxRetryCount,
     /// Retry ALL I/O errors, not just "resumable" ones.
     #[arg(long)]
@@ -152,7 +152,7 @@ impl MaxRetryCount {
     ///
     /// All valid nonnegative values map into `Self::Finite(u32)`.
     /// Overflowing values or strings that begin with `-` map into `Self::Infinite`.
-    pub fn from_str(s: &str) -> Result<Self, String> {
+    pub fn try_from_str(s: &str) -> Result<Self, String> {
         if s.starts_with('-') {
             return Ok(Self::Infinite);
         };
@@ -190,7 +190,7 @@ impl Display for MaxRetryCount {
 
 /// What format of replay to treat the input as.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, ValueEnum)]
-pub(crate) enum CliReplayFormat {
+pub enum CliReplayFormat {
     /// Treat the input as the binary representation of the replay.
     ///
     /// The binary replay format is the format used by the `.rep` files in the game's
@@ -214,7 +214,7 @@ impl From<CliReplayFormat> for ReplayBufferKind {
 
 /// How the inputs of the replay are to be parsed and created.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, ValueEnum)]
-pub(crate) enum CliInputMode {
+pub enum CliInputMode {
     /// Uses relative timing for input data (0.17.22+).
     ///
     /// Replays made before version 0.17.22 of the game (i.e., 0.17.21 and before it)
@@ -247,7 +247,7 @@ impl From<CliInputMode> for InputParseMode {
 
 /// Extract something from the replay.
 #[derive(Clone, Debug, Subcommand)]
-pub(crate) enum ExtractMode {
+pub enum ExtractMode {
     /// Extract everything from the replay; the metadata and the input data.
     ///
     /// Example: {"metadata":{...},"inputs":[...]}

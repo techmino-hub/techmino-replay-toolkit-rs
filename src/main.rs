@@ -1,15 +1,9 @@
 use clap::Parser;
 
-use crate::cli::{
+use techmino_replay_toolkit::cli::{
     clap::{CliCommand, CliParser},
     operations::handle_cli_op,
 };
-
-mod cli;
-#[cfg(feature = "gui")]
-mod gui;
-#[cfg(feature = "tui")]
-mod tui;
 
 fn main() {
     let cli_cmd = CliParser::parse();
