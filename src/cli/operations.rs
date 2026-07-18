@@ -5,7 +5,7 @@ use crate::cli::{
     io::{ReadFileOrStdin, WriteFileOrStdout},
     types::{CliOpError, ExtractArguments, UnpackedInputEvent},
 };
-use libtechmino_replay::{ReplayBufferKind, deserialize::ReplayDecoder};
+use libtechmino_replay::{deserialize::ReplayDecoder, ReplayBufferKind};
 
 pub fn handle_cli_op(operation: &CliOperation) -> Result<(), CliOpError> {
     match operation {
@@ -68,7 +68,10 @@ fn extract(args: ExtractArguments) -> Result<(), CliOpError> {
     loop {
         let res = decoder.update(input_chunk)?;
 
-        if read_metadata && let Some(metadata) = res.metadata {
+        // HACK: We need to support Rust 2021 because one of our internal crate
+        // has that as MSRV. And 2021 doesn't support let chains, so this is a
+        // hacky way to go about it
+        if let (Some(metadata), true) = (res.metadata, read_metadata) {
             let serialized_metadata = match serde_json::to_string(&*metadata) {
                 Ok(m) => m,
                 Err(e) => {
