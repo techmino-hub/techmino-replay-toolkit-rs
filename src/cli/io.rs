@@ -3,8 +3,9 @@ use core::time::Duration;
 use std::{
     fs::{File, OpenOptions},
     io::{
-        self, BufReader, BufWriter, ErrorKind, Stdin, Stdout,
+        self,
         prelude::{BufRead as _, Write as _},
+        BufReader, BufWriter, ErrorKind, Stdin, Stdout,
     },
     path::{Path, PathBuf},
 };
