@@ -12,7 +12,7 @@ use std::path::PathBuf;
     long_about = "
 ╭~~~~~~~~~~~~~╮
 ┊ ▀▀█▀▀    █  ┊  Techmino Replay Toolkit
-┊   █  █▀█ █▀ ┊  v{version}
+┊   █  █▀█ █▀ ┊  We don't condone misusing this for nefarious purposes!
 ┊   █  █   █▄ ┊  https://github.com/techmino-hub/techmino-replay-toolkit-rs
 ╰~~~~~~~~~~~~~╯
 This program and library is licensed under the GNU General Public License version 3.
