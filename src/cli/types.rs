@@ -50,6 +50,8 @@ pub enum CliOpError {
         input: libtechmino_replay::GameInputEvent,
         inner: serde_json::Error,
     },
+    #[error("Unexpected end of file")]
+    UnexpectedEof,
 }
 
 /// The unpacked input event, ready for serialization/deserialization.
@@ -79,14 +81,21 @@ impl UnpackedInputEvent {
         }
     }
 
-    // /// Attempts to convert this unpacked input event back into the packed [`GameInputEvent`] format.
-    // pub fn try_into_packed(self) -> Option<GameInputEvent> {
-    //     let kind = InputActionKind::try_from(self.r#type).ok()?;
-    //     let key = InputActionKey::try_from_byte(self.key).ok()?;
-    //     let action = InputAction { kind, key };
+    /// Attempts to convert this unpacked input event back into the packed [`GameInputEvent`] format.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "This is planned to be used later when we serialize"
+        )
+    )]
+    pub fn try_into_packed(self) -> Option<GameInputEvent> {
+        let kind = InputActionKind::try_from(self.r#type).ok()?;
+        let key = InputActionKey::try_from_byte(self.key).ok()?;
+        let action = InputAction { kind, key };
 
-    //     GameInputEvent::new(self.frame, action).ok()
-    // }
+        GameInputEvent::new(self.frame, action).ok()
+    }
 }
 
 #[cfg(test)]

@@ -4,7 +4,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{
         self,
-        prelude::{BufRead as _, Write as _},
+        prelude::{BufRead, Write},
         BufReader, BufWriter, ErrorKind, Stdin, Stdout,
     },
     path::{Path, PathBuf},
@@ -80,11 +80,14 @@ impl ReadFileOrStdin {
 
     /// Read the next chunk of bytes, retrying according to the retry arguments.
     ///
-    /// Returns bytes from the source and advances the cursor.
+    /// Returns bytes from the source.
+    ///
+    /// This does not advance the cursor! This is meant to be used with
+    /// [`Self::consume`].
     ///
     /// # Errors
     /// See [`std::io::Error`] for more information.
-    pub(super) fn advance_with_retry(
+    pub(super) fn buffer_with_retry(
         &mut self,
         retry_counter: &mut u32,
         retry_args: RetryArguments,
@@ -92,9 +95,7 @@ impl ReadFileOrStdin {
         loop {
             let res = self.fill_buf();
             let e = match res {
-                Ok(b) => {
-                    let len = b.len();
-                    self.consume(len);
+                Ok(_) => {
                     return Ok(self.buffer());
                 }
                 Err(e) => e,
@@ -141,7 +142,7 @@ impl ReadFileOrStdin {
     }
 
     /// Calls the internal [`BufRead::consume`] function.
-    fn consume(&mut self, amount: usize) {
+    pub(super) fn consume(&mut self, amount: usize) {
         match self {
             Self::File { file } => file.consume(amount),
             Self::Stdin { stdin } => stdin.consume(amount),

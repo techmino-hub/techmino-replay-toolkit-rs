@@ -10,6 +10,9 @@ alloc_instead_of_core = { level = "warn" }
 std_instead_of_alloc = { level = "warn" }
 std_instead_of_core = { level = "warn" }
 
+[workspace.lints.rustdoc]
+unescaped_backticks = "deny"
+
 [package]
 name = "techmino-replay-toolkit"
 version = "0.1.0"
@@ -35,7 +38,7 @@ tui = ["dep:ratatui"]
 
 [dependencies]
 clap = { version = "4.6.1", features = ["derive"] }
-libtechmino-replay = "0.1.0"
+libtechmino-replay = { version = "0.1.0", features = ["preserve_metadata_order", "float_roundtrip"]}
 ratatui = { version = "0.30.2", optional = true }
 serde = "1.0.228"
 serde_json = "1.0.150"

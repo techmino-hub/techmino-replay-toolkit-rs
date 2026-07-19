@@ -1,11 +1,15 @@
 //! Handles specifically CLI operations and one-off commands.
 
+use core::ops::ControlFlow;
+
 use crate::cli::{
-    clap::{CliOperation, CliReplayFormat},
+    clap::{CliOperation, CliReplayFormat, RetryArguments},
     io::{ReadFileOrStdin, WriteFileOrStdout},
     types::{CliOpError, ExtractArguments, UnpackedInputEvent},
 };
-use libtechmino_replay::{deserialize::ReplayDecoder, ReplayBufferKind};
+use libtechmino_replay::{
+    deserialize::ReplayDecoder, GameInputEvent, GameReplayMetadata, ReplayBufferKind,
+};
 
 pub fn handle_cli_op(operation: &CliOperation) -> Result<(), CliOpError> {
     match operation {
@@ -53,13 +57,15 @@ fn extract(args: ExtractArguments) -> Result<(), CliOpError> {
 
     eprintln!("> starting read from input stream...");
 
-    let input_chunk = input_stream.advance_with_retry(&mut retry_counter, args.retry_args)?;
+    let mut input_chunk = input_stream.buffer_with_retry(&mut retry_counter, args.retry_args)?;
     let replay_kind = infer_replay_kind(args.replay_format, input_chunk)?;
     eprintln!("> replay kind: {replay_kind:?}");
 
     let mut decoder = ReplayDecoder::new(replay_kind, args.override_input_mode.map(Into::into));
 
     let (read_metadata, read_inputs) = args.extract_mode.to_keeps();
+
+    let mut is_first_input = true;
 
     if let Some(header) = args.extract_mode.header() {
         output_stream.append_with_retry(header, &mut retry_counter, args.retry_args)?;
@@ -68,56 +74,40 @@ fn extract(args: ExtractArguments) -> Result<(), CliOpError> {
     loop {
         let res = decoder.update(input_chunk)?;
 
-        // HACK: We need to support Rust 2021 because one of our internal crate
-        // has that as MSRV. And 2021 doesn't support let chains, so this is a
-        // hacky way to go about it
-        if let (Some(metadata), true) = (res.metadata, read_metadata) {
-            let serialized_metadata = match serde_json::to_string(&*metadata) {
-                Ok(m) => m,
-                Err(e) => {
-                    return Err(CliOpError::MetadataSerializeError {
-                        metadata: *metadata,
-                        inner: e,
-                    });
-                }
-            };
+        let chunk_len = input_chunk.len();
+        input_stream.consume(chunk_len);
 
-            output_stream.append_with_retry(
-                serialized_metadata.as_bytes(),
+        if read_metadata {
+            let cf = extract_metadata(
+                res.metadata,
+                &mut output_stream,
+                read_inputs,
                 &mut retry_counter,
                 args.retry_args,
-            )?;
-
-            if read_inputs {
-                // Cap off metadata section, start inputs section
-                output_stream.append_with_retry(
-                    br#","inputs":["#,
-                    &mut retry_counter,
-                    args.retry_args,
-                )?;
-            } else {
-                // We only care about metadata, we're done!
-                break;
+            );
+            if let ControlFlow::Break(res) = cf {
+                return res;
             }
         }
 
         if read_inputs {
-            /// How big to make the buffer.
-            const PREALLOC_BUFFER_SIZE: usize = br#"{"frame":9999,"type":1,"key":3},"#.len();
+            extract_inputs(
+                &res.inputs,
+                &mut output_stream,
+                &mut is_first_input,
+                &mut retry_counter,
+                args.retry_args,
+            )?;
+        }
 
-            let mut buf = Vec::with_capacity(PREALLOC_BUFFER_SIZE);
-            for input in res.inputs {
-                let unpacked = UnpackedInputEvent::from_packed(input);
+        input_chunk = input_stream.buffer_with_retry(&mut retry_counter, args.retry_args)?;
 
-                if let Err(e) = serde_json::to_writer(&mut buf, &unpacked) {
-                    return Err(CliOpError::InputSerializeError { input, inner: e });
-                }
-                buf.push(b',');
-
-                output_stream.append_with_retry(&buf, &mut retry_counter, args.retry_args)?;
-
-                buf.clear();
+        if input_chunk.is_empty() {
+            if !decoder.is_finished() {
+                return Err(CliOpError::UnexpectedEof);
             }
+
+            break;
         }
     }
 
@@ -128,6 +118,81 @@ fn extract(args: ExtractArguments) -> Result<(), CliOpError> {
     output_stream.flush_with_retry(&mut retry_counter, args.retry_args)
 }
 
+/// Inner function of [`extract`].
+fn extract_metadata(
+    metadata: Option<Box<GameReplayMetadata>>,
+    output_stream: &mut WriteFileOrStdout,
+    read_inputs: bool,
+    retry_counter: &mut u32,
+    retry_args: RetryArguments,
+) -> ControlFlow<Result<(), CliOpError>> {
+    let Some(metadata) = metadata else {
+        return ControlFlow::Continue(());
+    };
+
+    let serialized_metadata = match serde_json::to_string(&*metadata) {
+        Ok(m) => m,
+        Err(e) => {
+            return ControlFlow::Break(Err(CliOpError::MetadataSerializeError {
+                metadata: *metadata,
+                inner: e,
+            }));
+        }
+    };
+
+    if let Err(e) =
+        output_stream.append_with_retry(serialized_metadata.as_bytes(), retry_counter, retry_args)
+    {
+        return ControlFlow::Break(Err(e));
+    }
+
+    if read_inputs {
+        // Cap off metadata section, start inputs section
+        let res = output_stream.append_with_retry(br#","inputs":["#, retry_counter, retry_args);
+        if let Err(e) = res {
+            return ControlFlow::Break(Err(e));
+        }
+    } else {
+        // We only care about metadata, we're done!
+        return ControlFlow::Break(Ok(()));
+    }
+
+    ControlFlow::Continue(())
+}
+
+fn extract_inputs(
+    inputs: &[GameInputEvent],
+    output_stream: &mut WriteFileOrStdout,
+    is_first_input: &mut bool,
+    retry_counter: &mut u32,
+    retry_args: RetryArguments,
+) -> Result<(), CliOpError> {
+    /// How big to make the buffer.
+    const PREALLOC_BUFFER_SIZE: usize = br#"{"frame":9999,"type":1,"key":3},"#.len();
+
+    let mut buf = Vec::with_capacity(PREALLOC_BUFFER_SIZE);
+
+    for input in inputs {
+        let input = *input;
+        let unpacked = UnpackedInputEvent::from_packed(input);
+
+        if let Err(e) = serde_json::to_writer(&mut buf, &unpacked) {
+            return Err(CliOpError::InputSerializeError { input, inner: e });
+        }
+
+        output_stream.append_with_retry(&buf, retry_counter, retry_args)?;
+
+        buf.clear();
+
+        if !*is_first_input {
+            buf.push(b',');
+        }
+
+        *is_first_input = false;
+    }
+
+    Ok(())
+}
 /// Infers the replay kind from the first byte of the encoded replay.
 fn infer_replay_kind(
     fmt_override: Option<CliReplayFormat>,
