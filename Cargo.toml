@@ -24,6 +24,10 @@ keywords = ["techmino"]
 publish = false
 rust-version = "1.96"
 
+[profile.dev.package."*"]
+opt-level = 3
+codegen-units = 1
+
 [profile.release]
 opt-level = 3
 lto = "fat"
