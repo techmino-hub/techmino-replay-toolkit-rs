@@ -21,26 +21,17 @@ pub fn handle_cli_op(operation: &CliOperation) -> Result<(), CliOpError> {
             output_file,
             retry_args,
         } => extract(ExtractArguments {
-            retry_args: *retry_args,
             extract_mode,
             replay_format: *replay_format,
             override_input_mode: *override_input_mode,
             input_file,
             output_json: output_file,
+            retry_args: *retry_args,
         }),
-        CliOperation::Create {
-            replay_format: _,
-            input_json_file: _,
-            output_file: _,
-        } => todo!(),
-        CliOperation::Base64ify {
-            input_file: _,
-            output_file: _,
-        } => todo!(),
-        CliOperation::Binaryify {
-            input_file: _,
-            output_file: _,
-        } => todo!(),
+        CliOperation::Create { .. } => todo!(),
+        CliOperation::Base64ify { .. } => todo!(),
+        CliOperation::Binaryify { .. } => todo!(),
+        CliOperation::Shrink { .. } => todo!(),
     }
 }
 

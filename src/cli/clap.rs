@@ -86,14 +86,38 @@ pub enum CliOperation {
         /// What format to create the replay in.
         #[arg(short = 'f', long)]
         replay_format: CliReplayFormat,
+        /// How much to compress the replay.
+        ///
+        /// This is passed into zlib; higher values generally result in
+        /// smaller replays.
+        ///
+        /// Valid values are between 0 and 10, inclusively.
+        #[arg(short = 'c', long, value_parser = clap::value_parser!(u8).range(0..=10), default_value_t = 7)]
+        compression_level: u8,
+        /// An override for the input mode.
+        ///
+        /// If omitted, the input mode is inferred from the replay's
+        /// metadata's version string.
+        ///
+        /// Inference is usually pretty accurate, but this
+        /// override is useful if inference failed and you KNOW which mode you
+        /// want to use. An example usecase is if you're using a mod of the game
+        /// that changes up the version string and this library fails to parse it.
+        ///
+        /// Note that misuse may cause malformed replays that fail to play back
+        /// properly. Handle with care!
+        #[arg(long)]
+        override_input_mode: Option<CliInputMode>,
         /// The file to get the JSON input from. If omitted, reads from stdin.
         #[arg(short = 'i', long)]
-        input_json_file: Option<PathBuf>,
+        input_file: Option<PathBuf>,
         /// The file to write the replay into. If omitted, writes to stdout.
         #[arg(short = 'o', long)]
         output_file: Option<PathBuf>,
+        #[command(flatten)]
+        retry_args: RetryArguments,
     },
-    /// Turn a `.rep` file data stream into a base64 pasteable text stream.
+    /// Turn a `.rep` file into a base64 pasteable text.
     Base64ify {
         /// The file to get the `.rep` file data from. If omitted, reads from
         /// stdin.
@@ -104,7 +128,7 @@ pub enum CliOperation {
         #[arg(short = 'o', long)]
         output_file: Option<PathBuf>,
     },
-    /// Turn a base64 pasteable text stream into a `.rep` file data stream.
+    /// Turn base64 pasteable text into a `.rep` file.
     Binaryify {
         /// The file to get the base64 replay data from. If omitted, reads from
         /// stdin.
@@ -112,6 +136,17 @@ pub enum CliOperation {
         input_file: Option<PathBuf>,
         /// The file to write the binary formatted replay into. If omitted, writes into
         /// stdout.
+        #[arg(short = 'o', long)]
+        output_file: Option<PathBuf>,
+        /// Allow writing binary to the console.
+        skip_console_check: bool,
+    },
+    /// Recompress a replay to slightly reduce its size.
+    Shrink {
+        /// The replay file to get the replay from. If omitted, reads from stdin.
+        #[arg(short = 'i', long)]
+        input_file: Option<PathBuf>,
+        /// The output file to write the new replay into. If omitted, writes into stdout.
         #[arg(short = 'o', long)]
         output_file: Option<PathBuf>,
     },
