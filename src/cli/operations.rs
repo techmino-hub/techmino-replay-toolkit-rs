@@ -18,7 +18,7 @@ pub fn handle_cli_op(operation: &CliOperation) -> Result<(), CliOpError> {
             replay_format,
             override_input_mode,
             input_file,
-            output_json,
+            output_file,
             retry_args,
         } => extract(ExtractArguments {
             retry_args: *retry_args,
@@ -26,7 +26,7 @@ pub fn handle_cli_op(operation: &CliOperation) -> Result<(), CliOpError> {
             replay_format: *replay_format,
             override_input_mode: *override_input_mode,
             input_file,
-            output_json,
+            output_json: output_file,
         }),
         CliOperation::Create {
             replay_format: _,

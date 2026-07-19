@@ -77,7 +77,7 @@ pub enum CliOperation {
         input_file: Option<PathBuf>,
         /// The output file to write the JSON into. If omitted, writes into stdout.
         #[arg(short = 'o', long)]
-        output_json: Option<PathBuf>,
+        output_file: Option<PathBuf>,
         #[command(flatten)]
         retry_args: RetryArguments,
     },
