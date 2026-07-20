@@ -1,54 +1,34 @@
-//! Handles specifically CLI operations and one-off commands.
-
 use core::ops::ControlFlow;
 
 use crate::cli::{
-    clap::{CliOperation, CliReplayFormat, RetryArguments},
+    clap::{ExtractArguments, RetryArguments},
     io::{ReadFileOrStdin, WriteFileOrStdout},
-    types::{CliOpError, ExtractArguments, UnpackedInputEvent},
+    operations::infer_replay_kind,
+    types::{CliOpError, UnpackedInputEvent},
 };
-use libtechmino_replay::{
-    deserialize::ReplayDecoder, GameInputEvent, GameReplayMetadata, ReplayBufferKind,
-};
-
-pub fn handle_cli_op(operation: &CliOperation) -> Result<(), CliOpError> {
-    match operation {
-        CliOperation::Extract {
-            extract_mode,
-            replay_format,
-            override_input_mode,
-            input_file,
-            output_file,
-            retry_args,
-        } => extract(ExtractArguments {
-            extract_mode,
-            replay_format: *replay_format,
-            override_input_mode: *override_input_mode,
-            input_file,
-            output_json: output_file,
-            retry_args: *retry_args,
-        }),
-        CliOperation::Create { .. } => todo!(),
-        CliOperation::Base64ify { .. } => todo!(),
-        CliOperation::Binaryify { .. } => todo!(),
-        CliOperation::Shrink { .. } => todo!(),
-    }
-}
+use libtechmino_replay::{deserialize::ReplayDecoder, GameInputEvent, GameReplayMetadata};
 
 // TODO: Optimize: Skip unnecessary sections by stabilizing preprocessors
-fn extract(args: ExtractArguments) -> Result<(), CliOpError> {
+pub(super) fn extract(args: &ExtractArguments) -> Result<(), CliOpError> {
     let mut retry_counter = 0u32;
 
     eprintln!("> opening input stream...");
-    let mut input_stream =
-        ReadFileOrStdin::new(args.input_file, &mut retry_counter, args.retry_args)?;
+    let mut input_stream = ReadFileOrStdin::new(
+        &args.io_args.input_file,
+        &mut retry_counter,
+        args.io_args.retry_args,
+    )?;
     eprintln!("> opening output stream...");
-    let mut output_stream =
-        WriteFileOrStdout::new(args.output_json, &mut retry_counter, args.retry_args)?;
+    let mut output_stream = WriteFileOrStdout::new(
+        &args.io_args.output_file,
+        &mut retry_counter,
+        args.io_args.retry_args,
+    )?;
 
     eprintln!("> starting read from input stream...");
 
-    let mut input_chunk = input_stream.buffer_with_retry(&mut retry_counter, args.retry_args)?;
+    let mut input_chunk =
+        input_stream.buffer_with_retry(&mut retry_counter, args.io_args.retry_args)?;
     let replay_kind = infer_replay_kind(args.replay_format, input_chunk)?;
     eprintln!("> replay kind: {replay_kind:?}");
 
@@ -59,7 +39,7 @@ fn extract(args: ExtractArguments) -> Result<(), CliOpError> {
     let mut is_first_input = true;
 
     if let Some(header) = args.extract_mode.header() {
-        output_stream.append_with_retry(header, &mut retry_counter, args.retry_args)?;
+        output_stream.append_with_retry(header, &mut retry_counter, args.io_args.retry_args)?;
     }
 
     loop {
@@ -74,7 +54,7 @@ fn extract(args: ExtractArguments) -> Result<(), CliOpError> {
                 &mut output_stream,
                 read_inputs,
                 &mut retry_counter,
-                args.retry_args,
+                args.io_args.retry_args,
             );
             if let ControlFlow::Break(res) = cf {
                 return res;
@@ -87,11 +67,12 @@ fn extract(args: ExtractArguments) -> Result<(), CliOpError> {
                 &mut output_stream,
                 &mut is_first_input,
                 &mut retry_counter,
-                args.retry_args,
+                args.io_args.retry_args,
             )?;
         }
 
-        input_chunk = input_stream.buffer_with_retry(&mut retry_counter, args.retry_args)?;
+        input_chunk =
+            input_stream.buffer_with_retry(&mut retry_counter, args.io_args.retry_args)?;
 
         if input_chunk.is_empty() {
             if !decoder.is_finished() {
@@ -103,10 +84,10 @@ fn extract(args: ExtractArguments) -> Result<(), CliOpError> {
     }
 
     if let Some(footer) = args.extract_mode.footer() {
-        output_stream.append_with_retry(footer, &mut retry_counter, args.retry_args)?;
+        output_stream.append_with_retry(footer, &mut retry_counter, args.io_args.retry_args)?;
     }
 
-    output_stream.flush_with_retry(&mut retry_counter, args.retry_args)
+    output_stream.flush_with_retry(&mut retry_counter, args.io_args.retry_args)
 }
 
 /// Inner function of [`extract`].
@@ -183,29 +164,4 @@ fn extract_inputs(
     }
 
     Ok(())
-}
-/// Infers the replay kind from the first byte of the encoded replay.
-fn infer_replay_kind(
-    fmt_override: Option<CliReplayFormat>,
-    first_chunk: &[u8],
-) -> Result<ReplayBufferKind, CliOpError> {
-    /// Zlib always begins with 0x78 (`x`): https://en.wikipedia.org/wiki/List_of_file_signatures
-    const ZLIB_HEADER_FIRST_BYTE: u8 = b'x';
-    /// 0x7800 until 0x78FF always starts with an `e` in base64
-    const BASE64_ZLIB_FIRST_BYTE: u8 = b'e';
-    /// Raw uncompressed game data begins with a JSON object, which begins with a `{`
-    const UNCOMPRESSED_FIRST_BYTE: u8 = b'{';
-
-    if let Some(format) = fmt_override {
-        return Ok(format.into());
-    }
-
-    let first_byte = first_chunk.first().copied().ok_or(CliOpError::InputEmpty)?;
-
-    match first_byte {
-        ZLIB_HEADER_FIRST_BYTE => Ok(ReplayBufferKind::Compressed),
-        BASE64_ZLIB_FIRST_BYTE => Ok(ReplayBufferKind::Base64),
-        UNCOMPRESSED_FIRST_BYTE => Ok(ReplayBufferKind::Uncompressed),
-        _ => Err(CliOpError::ReplayKindInferFailed { first_byte }),
-    }
 }

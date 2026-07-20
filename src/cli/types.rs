@@ -1,22 +1,9 @@
 #[cfg(doc)]
 use crate::cli::clap::CliOperation;
-use crate::cli::clap::{CliInputMode, CliReplayFormat, ExtractMode, RetryArguments};
 use libtechmino_replay::{GameInputEvent, InputAction, InputActionKey, InputActionKind};
 use serde::{Deserialize, Serialize};
 use std::{io, path::PathBuf};
 use thiserror::Error;
-
-/// Full argument set for the `extract` command.
-///
-/// For more info see [`CliOperation::Extract`].
-pub(super) struct ExtractArguments<'a> {
-    pub(super) extract_mode: &'a ExtractMode,
-    pub(super) replay_format: Option<CliReplayFormat>,
-    pub(super) override_input_mode: Option<CliInputMode>,
-    pub(super) input_file: &'a Option<PathBuf>,
-    pub(super) output_json: &'a Option<PathBuf>,
-    pub(super) retry_args: RetryArguments,
-}
 
 #[derive(Debug, Error)]
 pub enum CliOpError {

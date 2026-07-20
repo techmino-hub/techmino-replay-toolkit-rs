@@ -48,108 +48,15 @@ pub enum CliOperation {
     /// Format is meant to be backwards compatible with
     /// `techmino-replay-parser@v4`'s output.
     /// (`techmino-replay-parser`: <https://www.npmjs.com/package/techmino-replay-parser>)
-    Extract {
-        /// What to extract from the replay.
-        #[command(subcommand)]
-        extract_mode: ExtractMode,
-        /// The replay format to interpret the input data as.
-        ///
-        /// If not provided, the replay format is inferred from the input stream.
-        /// This is usually pretty accurate.
-        #[arg(short = 'f', long)]
-        replay_format: Option<CliReplayFormat>,
-        /// An override for the input mode.
-        ///
-        /// If omitted, the input mode is inferred from the replay's
-        /// metadata's version string.
-        ///
-        /// Inference is usually pretty accurate, but this
-        /// override is useful if inference failed and you KNOW which mode you
-        /// want to use. An example usecase is if you're using a mod of the game
-        /// that changes up the version string and this library fails to parse it.
-        ///
-        /// Note that misuse may cause malformed replays that fail to play back
-        /// properly. Handle with care!
-        #[arg(long)]
-        override_input_mode: Option<CliInputMode>,
-        /// The replay file to get the replay from. If omitted, reads from stdin.
-        #[arg(short = 'i', long)]
-        input_file: Option<PathBuf>,
-        /// The output file to write the JSON into. If omitted, writes into stdout.
-        #[arg(short = 'o', long)]
-        output_file: Option<PathBuf>,
-        #[command(flatten)]
-        retry_args: RetryArguments,
-    },
+    Extract(ExtractArguments),
     /// Create a replay from a JSON input.
-    Create {
-        /// What format to create the replay in.
-        #[arg(short = 'f', long)]
-        replay_format: CliReplayFormat,
-        /// How much to compress the replay.
-        ///
-        /// This is passed into zlib; higher values generally result in
-        /// smaller replays.
-        ///
-        /// Valid values are between 0 and 10, inclusively.
-        #[arg(short = 'c', long, value_parser = clap::value_parser!(u8).range(0..=10), default_value_t = 7)]
-        compression_level: u8,
-        /// An override for the input mode.
-        ///
-        /// If omitted, the input mode is inferred from the replay's
-        /// metadata's version string.
-        ///
-        /// Inference is usually pretty accurate, but this
-        /// override is useful if inference failed and you KNOW which mode you
-        /// want to use. An example usecase is if you're using a mod of the game
-        /// that changes up the version string and this library fails to parse it.
-        ///
-        /// Note that misuse may cause malformed replays that fail to play back
-        /// properly. Handle with care!
-        #[arg(long)]
-        override_input_mode: Option<CliInputMode>,
-        /// The file to get the JSON input from. If omitted, reads from stdin.
-        #[arg(short = 'i', long)]
-        input_file: Option<PathBuf>,
-        /// The file to write the replay into. If omitted, writes to stdout.
-        #[arg(short = 'o', long)]
-        output_file: Option<PathBuf>,
-        #[command(flatten)]
-        retry_args: RetryArguments,
-    },
+    Create(CreateArguments),
     /// Turn a `.rep` file into a base64 pasteable text.
-    Base64ify {
-        /// The file to get the `.rep` file data from. If omitted, reads from
-        /// stdin.
-        #[arg(short = 'i', long)]
-        input_file: Option<PathBuf>,
-        /// The file to write the base64 formatted replay into. If omitted, writes into
-        /// stdout.
-        #[arg(short = 'o', long)]
-        output_file: Option<PathBuf>,
-    },
+    Base64ify(Base64ifyArguments),
     /// Turn base64 pasteable text into a `.rep` file.
-    Binaryify {
-        /// The file to get the base64 replay data from. If omitted, reads from
-        /// stdin.
-        #[arg(short = 'i', long)]
-        input_file: Option<PathBuf>,
-        /// The file to write the binary formatted replay into. If omitted, writes into
-        /// stdout.
-        #[arg(short = 'o', long)]
-        output_file: Option<PathBuf>,
-        /// Allow writing binary to the console.
-        skip_console_check: bool,
-    },
+    Binaryify(BinaryifyArguments),
     /// Recompress a replay to slightly reduce its size.
-    Shrink {
-        /// The replay file to get the replay from. If omitted, reads from stdin.
-        #[arg(short = 'i', long)]
-        input_file: Option<PathBuf>,
-        /// The output file to write the new replay into. If omitted, writes into stdout.
-        #[arg(short = 'o', long)]
-        output_file: Option<PathBuf>,
-    },
+    Shrink(ShrinkArguments),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Args)]
@@ -278,6 +185,104 @@ impl From<CliInputMode> for InputParseMode {
             CliInputMode::Relative => Self::Relative,
         }
     }
+}
+
+/// General I/O-related arguments.
+#[derive(Args, Debug, Clone)]
+pub(super) struct IoArguments {
+    /// The input file to read from. If omitted, reads from stdin.
+    #[arg(short = 'i', long)]
+    pub(super) input_file: Option<PathBuf>,
+    /// The output file to write into. If omitted, writes into stdout.
+    #[arg(short = 'o', long)]
+    pub(super) output_file: Option<PathBuf>,
+    #[command(flatten)]
+    pub(super) retry_args: RetryArguments,
+}
+
+/// Arguments for the `extract` command.
+#[derive(Args, Debug, Clone)]
+pub struct ExtractArguments {
+    /// What to extract from the replay.
+    #[command(subcommand)]
+    pub(super) extract_mode: ExtractMode,
+    /// The replay format to interpret the input data as.
+    ///
+    /// If not provided, the replay format is inferred from the input stream.
+    /// This is usually pretty accurate.
+    #[arg(short = 'f', long)]
+    pub(super) replay_format: Option<CliReplayFormat>,
+    /// An override for the input mode.
+    ///
+    /// If omitted, the input mode is inferred from the replay's
+    /// metadata's version string.
+    ///
+    /// Inference is usually pretty accurate, but this
+    /// override is useful if inference failed and you KNOW which mode you
+    /// want to use. An example usecase is if you're using a mod of the game
+    /// that changes up the version string and this library fails to parse it.
+    ///
+    /// Note that misuse may cause malformed replays that fail to play back
+    /// properly. Handle with care!
+    #[arg(long)]
+    pub(super) override_input_mode: Option<CliInputMode>,
+    #[command(flatten)]
+    pub(super) io_args: IoArguments,
+}
+
+/// Arguments for the `create` command.
+#[derive(Args, Debug, Clone)]
+pub struct CreateArguments {
+    /// What format to create the replay in.
+    #[arg(short = 'f', long)]
+    pub(super) replay_format: CliReplayFormat,
+    /// How much to compress the replay.
+    ///
+    /// This is passed into zlib; higher values generally result in
+    /// smaller replays.
+    ///
+    /// Valid values are between 0 and 10, inclusively.
+    #[arg(short = 'c', long, value_parser = clap::value_parser!(u8).range(0..=10), default_value_t = 7)]
+    pub(super) compression_level: u8,
+    /// An override for the input mode.
+    ///
+    /// If omitted, the input mode is inferred from the replay's
+    /// metadata's version string.
+    ///
+    /// Inference is usually pretty accurate, but this
+    /// override is useful if inference failed and you KNOW which mode you
+    /// want to use. An example usecase is if you're using a mod of the game
+    /// that changes up the version string and this library fails to parse it.
+    ///
+    /// Note that misuse may cause malformed replays that fail to play back
+    /// properly. Handle with care!
+    #[arg(long)]
+    pub(super) override_input_mode: Option<CliInputMode>,
+    #[command(flatten)]
+    pub(super) io_args: IoArguments,
+}
+
+/// Arguments for the `base64ify` command.
+#[derive(Args, Clone, Debug)]
+pub struct Base64ifyArguments {
+    #[command(flatten)]
+    pub(super) io_args: IoArguments,
+}
+
+/// Arguments for the `binaryify` command.
+#[derive(Args, Clone, Debug)]
+pub struct BinaryifyArguments {
+    #[command(flatten)]
+    pub(super) io_args: IoArguments,
+    /// Allow writing binary to the console.
+    pub(super) skip_console_check: bool,
+}
+
+/// Arguments for the `shrink` command.
+#[derive(Args, Clone, Debug)]
+pub struct ShrinkArguments {
+    #[command(flatten)]
+    pub(super) io_args: IoArguments,
 }
 
 /// Extract something from the replay.
