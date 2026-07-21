@@ -6,15 +6,19 @@ use crate::cli::{
 };
 use libtechmino_replay::ReplayBufferKind;
 
+mod base64ify;
+mod binaryify;
+mod create;
 mod extract;
+mod shrink;
 
 pub fn handle_cli_op(operation: &CliOperation) -> Result<(), CliOpError> {
     match operation {
         CliOperation::Extract(args) => extract::extract(args),
-        CliOperation::Create(_args) => todo!(),
-        CliOperation::Base64ify(_args) => todo!(),
-        CliOperation::Binaryify(_args) => todo!(),
-        CliOperation::Shrink(_args) => todo!(),
+        CliOperation::Create(args) => create::create(args),
+        CliOperation::Base64ify(args) => base64ify::base64ify(args),
+        CliOperation::Binaryify(args) => binaryify::binaryify(args),
+        CliOperation::Shrink(args) => shrink::shrink(args),
     }
 }
 

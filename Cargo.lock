@@ -5022,7 +5022,9 @@ dependencies = [
 name = "techmino-replay-toolkit"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "clap",
+ "fastrand",
  "libtechmino-replay 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ratatui",
  "serde",

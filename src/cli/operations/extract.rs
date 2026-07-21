@@ -1,8 +1,10 @@
+//! Handles the `extract` operation.
+
 use core::ops::ControlFlow;
 
 use crate::cli::{
     clap::{ExtractArguments, RetryArguments},
-    io::{ReadFileOrStdin, WriteFileOrStdout},
+    io::WriteFileOrStdout,
     operations::infer_replay_kind,
     types::{CliOpError, UnpackedInputEvent},
 };
@@ -12,18 +14,7 @@ use libtechmino_replay::{deserialize::ReplayDecoder, GameInputEvent, GameReplayM
 pub(super) fn extract(args: &ExtractArguments) -> Result<(), CliOpError> {
     let mut retry_counter = 0u32;
 
-    eprintln!("> opening input stream...");
-    let mut input_stream = ReadFileOrStdin::new(
-        &args.io_args.input_file,
-        &mut retry_counter,
-        args.io_args.retry_args,
-    )?;
-    eprintln!("> opening output stream...");
-    let mut output_stream = WriteFileOrStdout::new(
-        &args.io_args.output_file,
-        &mut retry_counter,
-        args.io_args.retry_args,
-    )?;
+    let (mut input_stream, mut output_stream) = args.io_args.get_rw(&mut retry_counter)?;
 
     eprintln!("> starting read from input stream...");
 

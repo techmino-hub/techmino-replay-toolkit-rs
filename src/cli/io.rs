@@ -1,4 +1,7 @@
-use crate::cli::{clap::RetryArguments, types::CliOpError};
+use crate::cli::{
+    clap::{IoArguments, RetryArguments},
+    types::CliOpError,
+};
 use core::time::Duration;
 use std::{
     fs::{File, OpenOptions},
@@ -297,5 +300,19 @@ impl WriteFileOrStdout {
             Self::File { file } => file.write_all(buf),
             Self::Stdout { stdout } => stdout.write_all(buf),
         }
+    }
+}
+
+impl IoArguments {
+    /// Get an [`impl Read`] and [`impl Write`] struct based on this I/O argument.
+    pub fn get_rw(
+        &self,
+        retry_counter: &mut u32,
+    ) -> Result<(ReadFileOrStdin, WriteFileOrStdout), CliOpError> {
+        let input_stream = ReadFileOrStdin::new(&self.input_file, retry_counter, self.retry_args)?;
+        let output_stream =
+            WriteFileOrStdout::new(&self.output_file, retry_counter, self.retry_args)?;
+
+        Ok((input_stream, output_stream))
     }
 }
