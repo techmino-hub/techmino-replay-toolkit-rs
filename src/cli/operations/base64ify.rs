@@ -41,6 +41,15 @@ pub(super) fn base64ify(args: &Base64ifyArguments) -> Result<(), CliOpError> {
         input_stream.consume(input_len);
     }
 
+    encoder
+        .finish()
+        .map_err(|e| CliOpError::OutputWriteError { inner: e })?;
+    output_stream.append_with_retry(
+        &encode_buffer.inner().borrow(),
+        &mut retry_counter,
+        args.io_args.retry_args,
+    )?;
+
     output_stream.flush_with_retry(&mut retry_counter, args.io_args.retry_args)?;
 
     Ok(())
