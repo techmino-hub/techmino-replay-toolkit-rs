@@ -63,7 +63,7 @@ struct RefCellBuffer {
 
 impl RefCellBuffer {
     pub fn new() -> Self {
-        let (_, res) = BufWriter::new(std::io::sink()).into_parts();
+        let (_, res) = BufWriter::new(std::io::empty()).into_parts();
         let default_buf_vec = res.expect("uninitialized bufwriter should not have panicked");
 
         Self {

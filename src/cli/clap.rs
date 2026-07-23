@@ -275,6 +275,7 @@ pub struct BinaryifyArguments {
     #[command(flatten)]
     pub(super) io_args: IoArguments,
     /// Allow writing binary to the console.
+    #[arg(long)]
     pub(super) skip_console_check: bool,
 }
 

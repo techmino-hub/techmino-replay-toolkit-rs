@@ -43,6 +43,8 @@ pub enum CliOpError {
     },
     #[error("Unexpected end of file")]
     UnexpectedEof,
+    #[error("Refusing to output binary to the console (use `--skip-console-check` to override)")]
+    BinaryConsoleOutput,
 }
 
 /// The unpacked input event, ready for serialization/deserialization.

@@ -7,7 +7,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{
         self,
-        prelude::{BufRead, Write},
+        prelude::{BufRead, Read, Write},
         BufReader, BufWriter, ErrorKind, Stdin, Stdout,
     },
     path::{Path, PathBuf},
@@ -252,6 +252,55 @@ impl WriteFileOrStdout {
             );
             std::thread::sleep(Duration::from_millis(retry_args.retry_delay_ms));
             continue;
+        }
+
+        Ok(())
+    }
+
+    /// Appends using a `Read` impl as a data source, retrying according to the
+    /// retry arguments.
+    ///
+    /// # Errors
+    /// See [`std::io::Error`] for more information.
+    pub(super) fn copy_with_retry<const BUF_SIZE: usize>(
+        &mut self,
+        src: &mut impl Read,
+        retry_counter: &mut u32,
+        retry_args: RetryArguments,
+    ) -> Result<(), CliOpError> {
+        let mut scratch_buf = [0u8; BUF_SIZE];
+
+        loop {
+            let bytes_read = match src.read(&mut scratch_buf) {
+                Ok(r) => r,
+                Err(e) => {
+                    if !retry_args.retry_all_io && e.kind() != ErrorKind::Interrupted {
+                        return Err(CliOpError::InputReadError { inner: e });
+                    }
+
+                    if retry_args.max_retries.is_at_limit(*retry_counter) {
+                        return Err(CliOpError::InputReadError { inner: e });
+                    }
+
+                    *retry_counter = retry_counter.wrapping_add(1);
+
+                    eprintln!(
+                        "Error writing into output stream: {e}. Waiting {retry_delay_ms} ms before retrying (attempt {retry_counter} of {max_retries}).",
+                        retry_delay_ms = retry_args.retry_delay_ms,
+                        max_retries = retry_args.max_retries
+                    );
+                    std::thread::sleep(Duration::from_millis(retry_args.retry_delay_ms));
+                    continue;
+                }
+            };
+
+            if bytes_read == 0 {
+                break;
+            }
+
+            let buf = &scratch_buf[..bytes_read];
+
+            self.append_with_retry(buf, retry_counter, retry_args)?;
         }
 
         Ok(())
