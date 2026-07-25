@@ -184,7 +184,7 @@ impl WriteFileOrStdout {
     ) -> Result<Self, CliOpError> {
         let options = {
             let mut o = OpenOptions::new();
-            o.create(true).truncate(true).append(true).write(true);
+            o.write(true).create(true).truncate(true);
             o
         };
 

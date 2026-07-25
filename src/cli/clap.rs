@@ -55,8 +55,6 @@ pub enum CliOperation {
     Base64ify(Base64ifyArguments),
     /// Turn base64 pasteable text into a `.rep` file.
     Binaryify(BinaryifyArguments),
-    /// Recompress a replay to slightly reduce its size.
-    Shrink(ShrinkArguments),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Args)]
@@ -277,13 +275,6 @@ pub struct BinaryifyArguments {
     /// Allow writing binary to the console.
     #[arg(long)]
     pub(super) skip_console_check: bool,
-}
-
-/// Arguments for the `shrink` command.
-#[derive(Args, Clone, Debug)]
-pub struct ShrinkArguments {
-    #[command(flatten)]
-    pub(super) io_args: IoArguments,
 }
 
 /// Extract something from the replay.

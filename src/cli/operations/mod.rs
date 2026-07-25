@@ -10,7 +10,6 @@ mod base64ify;
 mod binaryify;
 mod create;
 mod extract;
-mod shrink;
 
 pub fn handle_cli_op(operation: &CliOperation) -> Result<(), CliOpError> {
     match operation {
@@ -18,7 +17,6 @@ pub fn handle_cli_op(operation: &CliOperation) -> Result<(), CliOpError> {
         CliOperation::Create(args) => create::create(args),
         CliOperation::Base64ify(args) => base64ify::base64ify(args),
         CliOperation::Binaryify(args) => binaryify::binaryify(args),
-        CliOperation::Shrink(args) => shrink::shrink(args),
     }
 }
 
