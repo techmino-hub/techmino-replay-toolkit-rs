@@ -58,25 +58,25 @@
 //! ```
 
 use crate::{
+    SerializedReplay,
     format::ReplayBufferKind,
     types::{
         GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplaySerializeError,
     },
-    SerializedReplay,
 };
 use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use core::ops::ControlFlow;
 use libtechmino_vlq::VlqData;
 use miniz_oxide::{
-    deflate::{
-        core::{compress, CompressorOxide, TDEFLFlush, TDEFLStatus},
-        CompressionLevel,
-    },
     DataFormat,
+    deflate::{
+        CompressionLevel,
+        core::{CompressorOxide, TDEFLFlush, TDEFLStatus, compress},
+    },
 };
 
 impl GameReplayData {
@@ -439,7 +439,7 @@ impl ReplayEncoderState {
                 Err(raw) => {
                     return Err(ReplaySerializeError::UnknownInputParseMode(Some(Err(
                         raw.clone()
-                    ))))
+                    ))));
                 }
             };
 
@@ -491,7 +491,7 @@ impl ReplayEncoderState {
     ) -> Result<(usize, usize), ReplaySerializeError> {
         let Self::InputData {
             prev_frame,
-            ref parse_mode,
+            parse_mode,
         } = self
         else {
             return Err(ReplaySerializeError::InvalidOperation);
@@ -939,8 +939,8 @@ impl ReplayEncoderPostprocessor {
 mod tests {
     use super::*;
     use crate::test_utils::{
-        slightly_random_data, ByteFeeder, SAMPLE_INPUT_DATA, SAMPLE_METADATA,
-        SAMPLE_UNSORTED_INPUT_DATA, TEST_CHUNK_MAX_SIZE,
+        ByteFeeder, SAMPLE_INPUT_DATA, SAMPLE_METADATA, SAMPLE_UNSORTED_INPUT_DATA,
+        TEST_CHUNK_MAX_SIZE, slightly_random_data,
     };
     use fastrand::Rng;
 

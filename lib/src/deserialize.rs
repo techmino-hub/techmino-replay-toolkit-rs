@@ -58,16 +58,16 @@
 use core::ops::ControlFlow;
 
 use crate::{
+    InputAction,
     format::ReplayBufferKind,
     types::{GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplayParseError},
-    InputAction,
 };
 use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
 use base64::Engine;
 use libtechmino_vlq::VlqReader;
 use miniz_oxide::{
-    inflate::{stream::InflateState, TINFLStatus},
     MZError,
+    inflate::{TINFLStatus, stream::InflateState},
 };
 
 impl GameReplayData {
@@ -180,7 +180,7 @@ impl ReplayDecoder {
             Ok(()) => (),
             Err(FormatError::Base64Error(e)) => return Err(ReplayParseError::Base64DecodeError(e)),
             Err(FormatError::ZlibError { status, mz_error }) => {
-                return Err(ReplayParseError::ZlibDecompressError { status, mz_error })
+                return Err(ReplayParseError::ZlibDecompressError { status, mz_error });
             }
         }
 
@@ -215,7 +215,7 @@ impl ReplayDecoderState {
     /// **`bytes` is expected to be in uncompressed/raw format.**
     fn update(&mut self, bytes: &[u8]) -> Result<Decoded, ReplayParseError> {
         match self {
-            Self::WaitingForMetadata(metadata_decoder, ref override_input_mode) => {
+            Self::WaitingForMetadata(metadata_decoder, override_input_mode) => {
                 let res = metadata_decoder.update(bytes)?;
 
                 let MetadataDecoderStatus::Done {
@@ -276,7 +276,7 @@ impl ReplayDecoderState {
     /// This does NOT mean that the replay is guaranteed to have finished, this
     /// ONLY means that it's fine if the replay finished at the current state.
     fn is_finished(&self) -> bool {
-        let Self::InputDecode(ref decoder) = self else {
+        let Self::InputDecode(decoder) = self else {
             return false;
         };
 
@@ -818,11 +818,11 @@ pub struct Decoded {
 mod tests {
     use super::*;
     use crate::{
+        GameInputEvent, InputParseMode,
         action::{InputAction, InputActionKey, InputActionKind},
         deserialize::ReplayDecoderPreprocessor,
         format::ReplayBufferKind,
-        test_utils::{slightly_random_data, ByteFeeder},
-        GameInputEvent, InputParseMode,
+        test_utils::{ByteFeeder, slightly_random_data},
     };
     use base64::Engine;
     use fastrand::Rng;

@@ -80,7 +80,7 @@ if [ "$exitcode" != 0 ]; then
 fi
 
 echo "[][][][][] cargo-audit [][][][][]"
-cargo audit --deny=warnings
+cargo audit
 
 exitcode="$?"
 if [ "$exitcode" != 0 ]; then

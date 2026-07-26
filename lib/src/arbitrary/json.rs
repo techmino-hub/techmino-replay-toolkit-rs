@@ -9,7 +9,7 @@ use core::{
     ops::{Deref, DerefMut},
 };
 
-use arbitrary::{size_hint, Arbitrary, Error, Result, Unstructured};
+use arbitrary::{Arbitrary, Error, Result, Unstructured, size_hint};
 use serde_json::{Map, Number, Value};
 
 /// [`serde_json::Value`] wrapper implementing [`Arbitrary`].

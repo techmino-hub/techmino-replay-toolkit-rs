@@ -7,9 +7,9 @@ use derive_more::{From, Into};
 use serde_json::Map;
 
 use crate::{
+    InputAction, InputActionKey, InputActionKind,
     consts::TOTAL_PIECE_COUNT,
     macros::{metadata_getters_setters, setting_getters_setters},
-    InputAction, InputActionKey, InputActionKind,
 };
 use alloc::{
     borrow::ToOwned,
@@ -22,7 +22,7 @@ use alloc::{
 use base64::DecodeError;
 use core::fmt::Debug;
 use libtechmino_vlq::VlqDecodeError;
-use miniz_oxide::{deflate::core::TDEFLStatus, inflate::TINFLStatus, MZError};
+use miniz_oxide::{MZError, deflate::core::TDEFLStatus, inflate::TINFLStatus};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -831,7 +831,9 @@ pub enum ReplaySerializeError {
     ///
     /// To fix this error, consider calling [`sort_inputs`][GameReplayData::sort_inputs] on the
     /// [`GameReplayData`] before serializing it.
-    #[error("unsorted input data: found input for frame {unsorted_time} after input for frame {prev_time}")]
+    #[error(
+        "unsorted input data: found input for frame {unsorted_time} after input for frame {prev_time}"
+    )]
     UnsortedInput {
         /// The frame number of the previous data point.
         prev_time: u64,

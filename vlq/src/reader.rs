@@ -106,7 +106,7 @@ impl Display for VlqDecodeError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{random_vlq, ByteFeeder};
+    use crate::test_utils::{ByteFeeder, random_vlq};
     use alloc::boxed::Box;
     use fastrand::Rng;
 

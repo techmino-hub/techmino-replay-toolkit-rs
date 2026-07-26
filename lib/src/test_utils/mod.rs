@@ -239,7 +239,7 @@ fn regenerate_cases() {
 #[ignore = "This test is only for regenerating test cases.\
     Run with `cargo test regenerate_cases --features preserve_metadata_order -- --ignored`"]
 fn regenerate_cases() {
-    use crate::{format::ReplayBufferKind, GameReplayData};
+    use crate::{GameReplayData, format::ReplayBufferKind};
     let cases = get_test_cases();
 
     let ron_config = get_ron_config();

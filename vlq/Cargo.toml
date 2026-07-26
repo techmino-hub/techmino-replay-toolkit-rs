@@ -1,9 +1,9 @@
 [package]
 name = "libtechmino-vlq"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 # When changing, change the readme too!
-rust-version = "1.84.1"
+rust-version = "1.87"
 description = "VLQ state machines for use in `libtechmino-replay`"
 repository = "https://github.com/techmino-hub/techmino-replay-toolkit-rs"
 license = "GPL-3.0-or-later"

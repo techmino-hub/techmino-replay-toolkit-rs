@@ -118,11 +118,7 @@ impl InputActionKind {
     /// information, see [`From`].
     #[must_use]
     pub const fn from_bool(value: bool) -> Self {
-        if value {
-            Self::Release
-        } else {
-            Self::Press
-        }
+        if value { Self::Release } else { Self::Press }
     }
 
     /// Converts this
@@ -206,7 +202,7 @@ impl InputActionKey {
     /// This function errors if the given byte is not a valid encoded input action byte.
     pub const fn try_from_byte(value: u8) -> Result<Self, InvalidInputActionKey> {
         use InputActionKey::{
-            Down1, Down10, Down4, Function1, Function2, HardDrop, Hold, InstantLeft, InstantRight,
+            Down1, Down4, Down10, Function1, Function2, HardDrop, Hold, InstantLeft, InstantRight,
             LeftDrop, LeftZangi, MoveLeft, MoveRight, RightDrop, RightZangi, Rotate180, RotateLeft,
             RotateRight, SoftDrop, SonicDrop,
         };
@@ -243,7 +239,7 @@ impl InputActionKey {
     #[must_use]
     pub const fn into_byte(self) -> u8 {
         use InputActionKey::{
-            Down1, Down10, Down4, Function1, Function2, HardDrop, Hold, InstantLeft, InstantRight,
+            Down1, Down4, Down10, Function1, Function2, HardDrop, Hold, InstantLeft, InstantRight,
             LeftDrop, LeftZangi, MoveLeft, MoveRight, RightDrop, RightZangi, Rotate180, RotateLeft,
             RotateRight, SoftDrop, SonicDrop,
         };

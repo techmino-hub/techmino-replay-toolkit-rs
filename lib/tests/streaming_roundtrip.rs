@@ -10,8 +10,8 @@ use libtechmino_replay::{
 };
 
 use crate::common::{
-    generate_event_chunk, random_action, random_game_input_event, SAMPLE_METADATA,
-    STREAMING_INPUTS_PER_ROUND,
+    SAMPLE_METADATA, STREAMING_INPUTS_PER_ROUND, generate_event_chunk, random_action,
+    random_game_input_event,
 };
 
 pub mod common;

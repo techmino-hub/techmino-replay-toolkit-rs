@@ -232,7 +232,7 @@ pub struct ExtractArguments {
 #[derive(Args, Debug, Clone)]
 pub struct CreateArguments {
     /// What format to create the replay in.
-    #[arg(short = 'f', long)]
+    #[arg(short = 'f', long, required = true)]
     pub(super) replay_format: CliReplayFormat,
     /// How much to compress the replay.
     ///

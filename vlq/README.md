@@ -6,6 +6,6 @@ A helper crate used by `libtechmino-replay` for VLQ data processing.
   - However, we require `alloc`
 
 # Minimum Supported Rust Version
-**Current MSRV: `1.84.1`**
+**Current MSRV: `1.87.0`**
 
 MSRV bumps are out of scope of semver changes. This means it may be changed across minor or patch updates.

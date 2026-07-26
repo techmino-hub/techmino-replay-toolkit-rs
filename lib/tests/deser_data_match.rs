@@ -1,6 +1,6 @@
 //! `deser_data_match`: Asserts that the deserialized replay matches known replay data.
 
-use crate::common::cases::{get_test_cases, StoredReplay};
+use crate::common::cases::{StoredReplay, get_test_cases};
 use libtechmino_replay::*;
 
 mod common;
