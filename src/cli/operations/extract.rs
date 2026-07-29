@@ -139,6 +139,10 @@ fn extract_inputs(
         let input = *input;
         let unpacked = UnpackedInputEvent::from_packed(input);
 
+        if !*is_first_input {
+            buf.push(b',');
+        }
+
         if let Err(e) = serde_json::to_writer(&mut buf, &unpacked) {
             return Err(CliOpError::InputSerializeError { input, inner: e });
         }
@@ -146,10 +150,6 @@ fn extract_inputs(
         output_stream.append_with_retry(&buf, retry_counter, retry_args)?;
 
         buf.clear();
-
-        if !*is_first_input {
-            buf.push(b',');
-        }
 
         *is_first_input = false;
     }

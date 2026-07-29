@@ -271,6 +271,9 @@ pub struct CreateArguments {
     pub(super) override_input_mode: Option<CliInputMode>,
     #[command(flatten)]
     pub(super) io_args: IoArguments,
+    /// Allow writing binary to the console.
+    #[arg(long)]
+    pub(super) skip_console_check: bool,
 }
 
 /// Arguments for the `base64ify` command.

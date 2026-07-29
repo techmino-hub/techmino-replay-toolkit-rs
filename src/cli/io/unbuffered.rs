@@ -5,7 +5,7 @@
 use core::time::Duration;
 use std::{
     fs::{File, OpenOptions},
-    io::{self, BufWriter, ErrorKind, Stdin, Stdout, prelude::Read},
+    io::{self, BufWriter, ErrorKind, IsTerminal, Stdin, Stdout, prelude::Read},
     path::{Path, PathBuf},
 };
 
@@ -206,7 +206,7 @@ impl OutputWriter {
     }
 
     /// Converts this unbuffered writer into a buffered writer.
-    pub(crate) fn into_buffered(self) -> OutputBufWriter {
+    pub(in crate::cli) fn into_buffered(self) -> OutputBufWriter {
         match self {
             OutputWriter::File { file } => OutputBufWriter::File {
                 file: BufWriter::new(file),
@@ -214,6 +214,16 @@ impl OutputWriter {
             OutputWriter::Stdout { stdout } => OutputBufWriter::Stdout {
                 stdout: BufWriter::new(stdout),
             },
+        }
+    }
+
+    /// Returns whether or not this is a terminal.
+    ///
+    /// See [`std::io::IsTerminal`] for more details.
+    pub(in crate::cli) fn is_terminal(&self) -> bool {
+        match self {
+            OutputWriter::File { file } => file.is_terminal(),
+            OutputWriter::Stdout { stdout } => stdout.is_terminal(),
         }
     }
 }

@@ -25,6 +25,10 @@ pub(super) fn create(args: &CreateArguments) -> Result<(), CliOpError> {
 
     let (mut in_stream, out_stream) = args.io_args.get_unbuffered(&mut retry_counter)?;
 
+    if (!args.skip_console_check) && out_stream.is_terminal() {
+        return Err(CliOpError::BinaryConsoleOutput);
+    }
+
     let mut input_data = Vec::with_capacity(in_stream.buf_size());
     let mut buf = [0u8; IO_COPY_BUFFER_SIZE];
 
@@ -59,6 +63,12 @@ pub(super) fn create(args: &CreateArguments) -> Result<(), CliOpError> {
 
     out_stream.append_with_retry(&out_buf, &mut retry_counter, args.io_args.retry_args)?;
     out_buf.clear();
+
+    encoder.finish(&mut out_buf)?;
+    out_stream.append_with_retry(&out_buf, &mut retry_counter, args.io_args.retry_args)?;
+    out_buf.clear();
+
+    out_stream.flush_with_retry(&mut retry_counter, args.io_args.retry_args)?;
 
     Ok(())
 }
