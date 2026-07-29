@@ -12,3 +12,5 @@ pub mod cli;
 pub mod gui;
 #[cfg(feature = "tui")]
 pub mod tui;
+
+mod consts;

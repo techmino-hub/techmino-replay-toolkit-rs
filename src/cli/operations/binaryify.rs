@@ -4,15 +4,15 @@ use core::cell::RefCell;
 use std::{
     collections::VecDeque,
     io::{
-        prelude::{Read, Write},
         BufReader, IsTerminal as _,
+        prelude::{Read, Write},
     },
     rc::Rc,
 };
 
 use base64::read::DecoderReader;
 
-use crate::cli::{clap::BinaryifyArguments, io::WriteFileOrStdout, types::CliOpError};
+use crate::cli::{clap::BinaryifyArguments, io::buffered::OutputBufWriter, types::CliOpError};
 
 pub(super) fn binaryify(args: &BinaryifyArguments) -> Result<(), CliOpError> {
     const SCRATCH_RING_BUF_SIZE: usize = 8192;
@@ -20,10 +20,10 @@ pub(super) fn binaryify(args: &BinaryifyArguments) -> Result<(), CliOpError> {
 
     let mut retry_counter = 0u32;
 
-    let (mut input_stream, mut output_stream) = args.io_args.get_rw(&mut retry_counter)?;
+    let (mut input_stream, mut output_stream) = args.io_args.get_buffered(&mut retry_counter)?;
 
     if !args.skip_console_check
-        && matches!(output_stream, WriteFileOrStdout::Stdout { .. })
+        && matches!(output_stream, OutputBufWriter::Stdout { .. })
         && std::io::stdout().is_terminal()
     {
         return Err(CliOpError::BinaryConsoleOutput);

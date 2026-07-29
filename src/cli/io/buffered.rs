@@ -1,32 +1,34 @@
-use crate::cli::{
-    clap::{IoArguments, RetryArguments},
-    types::CliOpError,
-};
+//! # Buffered I/O
+//!
+//! This is an abstraction for buffered I/O operations for the CLI.
+
 use core::time::Duration;
 use std::{
     fs::{File, OpenOptions},
     io::{
-        self,
+        self, BufReader, BufWriter, ErrorKind, Stdin, Stdout,
         prelude::{BufRead, Read, Write},
-        BufReader, BufWriter, ErrorKind, Stdin, Stdout,
     },
     path::{Path, PathBuf},
 };
 
-/// Either an open `File` in read-only mode, or stdin.
-pub(super) enum ReadFileOrStdin {
+use crate::cli::{clap::RetryArguments, types::CliOpError};
+
+/// Either an open `File` in read-only mode, or stdin. Buffered.
+pub(in crate::cli) enum InputBufReader {
     File { file: BufReader<File> },
     Stdin { stdin: BufReader<Stdin> },
 }
 
-impl ReadFileOrStdin {
-    /// Returns either an `impl Read` of the file at the input file path, or stdin if it's `None`.
+impl InputBufReader {
+    /// Returns either a buffered reader of the file at the input file path, or
+    /// stdin if it's `None`.
     ///
     /// Retries according to the retry arguments.
     ///
     /// # Errors
     /// Errors if there was an error trying to open the file.
-    pub(super) fn new(
+    pub(in crate::cli) fn new(
         input_file: &Option<PathBuf>,
         retry_counter: &mut u32,
         retry_args: RetryArguments,
@@ -90,7 +92,7 @@ impl ReadFileOrStdin {
     ///
     /// # Errors
     /// See [`std::io::Error`] for more information.
-    pub(super) fn buffer_with_retry(
+    pub(in crate::cli) fn buffer_with_retry(
         &mut self,
         retry_counter: &mut u32,
         retry_args: RetryArguments,
@@ -145,7 +147,7 @@ impl ReadFileOrStdin {
     }
 
     /// Calls the internal [`BufRead::consume`] function.
-    pub(super) fn consume(&mut self, amount: usize) {
+    pub(in crate::cli) fn consume(&mut self, amount: usize) {
         match self {
             Self::File { file } => file.consume(amount),
             Self::Stdin { stdin } => stdin.consume(amount),
@@ -153,17 +155,19 @@ impl ReadFileOrStdin {
     }
 }
 
-pub(super) enum WriteFileOrStdout {
+/// Either an open `File` in write-only mode, or stdout. Buffered.
+pub(in crate::cli) enum OutputBufWriter {
     File { file: BufWriter<File> },
     Stdout { stdout: BufWriter<Stdout> },
 }
 
-impl WriteFileOrStdout {
-    /// Returns either an `impl Write` of the file at the output file path, or stdout if it's `None`.
+impl OutputBufWriter {
+    /// Returns either a writer of the file at the output file path, or stdout
+    /// if it's `None`.
     ///
     /// # Errors
     /// Returns an error if there was an error trying to open the file.
-    pub(super) fn new(
+    pub(in crate::cli) fn new(
         output_file: &Option<PathBuf>,
         retry_counter: &mut u32,
         retry_args: RetryArguments,
@@ -172,7 +176,7 @@ impl WriteFileOrStdout {
             Self::new_file(path, retry_counter, retry_args)
         } else {
             let stdout = BufWriter::new(io::stdout());
-            Ok(WriteFileOrStdout::Stdout { stdout })
+            Ok(OutputBufWriter::Stdout { stdout })
         }
     }
 
@@ -220,7 +224,7 @@ impl WriteFileOrStdout {
             continue;
         };
 
-        Ok(WriteFileOrStdout::File { file })
+        Ok(OutputBufWriter::File { file })
     }
 
     /// Appends the entire buffer, retrying according to the retry
@@ -228,7 +232,7 @@ impl WriteFileOrStdout {
     ///
     /// # Errors
     /// See [`std::io::Error`] for more information.
-    pub(super) fn append_with_retry(
+    pub(in crate::cli) fn append_with_retry(
         &mut self,
         buf: &[u8],
         retry_counter: &mut u32,
@@ -262,7 +266,7 @@ impl WriteFileOrStdout {
     ///
     /// # Errors
     /// See [`std::io::Error`] for more information.
-    pub(super) fn copy_with_retry<const BUF_SIZE: usize>(
+    pub(in crate::cli) fn copy_with_retry<const BUF_SIZE: usize>(
         &mut self,
         src: &mut impl Read,
         retry_counter: &mut u32,
@@ -307,7 +311,7 @@ impl WriteFileOrStdout {
     }
 
     /// Flushes the buffer, retrying according to the retry arguments.
-    pub(super) fn flush_with_retry(
+    pub(in crate::cli) fn flush_with_retry(
         &mut self,
         retry_counter: &mut u32,
         retry_args: RetryArguments,
@@ -349,19 +353,5 @@ impl WriteFileOrStdout {
             Self::File { file } => file.write_all(buf),
             Self::Stdout { stdout } => stdout.write_all(buf),
         }
-    }
-}
-
-impl IoArguments {
-    /// Get an [`impl Read`] and [`impl Write`] struct based on this I/O argument.
-    pub fn get_rw(
-        &self,
-        retry_counter: &mut u32,
-    ) -> Result<(ReadFileOrStdin, WriteFileOrStdout), CliOpError> {
-        let input_stream = ReadFileOrStdin::new(&self.input_file, retry_counter, self.retry_args)?;
-        let output_stream =
-            WriteFileOrStdout::new(&self.output_file, retry_counter, self.retry_args)?;
-
-        Ok((input_stream, output_stream))
     }
 }

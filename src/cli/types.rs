@@ -2,7 +2,7 @@
 use crate::cli::clap::CliOperation;
 use libtechmino_replay::{GameInputEvent, InputAction, InputActionKey, InputActionKind};
 use serde::{Deserialize, Serialize};
-use std::{io, path::PathBuf};
+use std::{borrow::Cow, io, path::PathBuf};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -45,6 +45,17 @@ pub enum CliOpError {
     UnexpectedEof,
     #[error("Refusing to output binary to the console (use `--skip-console-check` to override)")]
     BinaryConsoleOutput,
+    /// There was an error trying to parse the replay data JSON for the `create` command.
+    #[error("Failed to parse replay data JSON: {inner}")]
+    ReplayJsonParseError { inner: serde_json::Error },
+    /// There was an error trying to use the replay data JSON for the `create` command.
+    ///
+    /// Usually this means a mismatched schema.
+    #[error("Invalid replay data JSON schema: {inner}")]
+    ReplayJsonSchemaError {
+        /// The inner details of the error. e.g. "missing field 'metadata'"
+        inner: Cow<'static, str>,
+    },
 }
 
 /// The unpacked input event, ready for serialization/deserialization.

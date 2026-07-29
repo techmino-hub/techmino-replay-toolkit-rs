@@ -2,7 +2,7 @@
 
 use core::cell::RefCell;
 use std::{
-    io::{self, prelude::Write, BufWriter},
+    io::{self, BufWriter, prelude::Write},
     rc::Rc,
 };
 
@@ -11,7 +11,7 @@ use crate::cli::{clap::Base64ifyArguments, types::CliOpError};
 pub(super) fn base64ify(args: &Base64ifyArguments) -> Result<(), CliOpError> {
     let mut retry_counter = 0u32;
 
-    let (mut input_stream, mut output_stream) = args.io_args.get_rw(&mut retry_counter)?;
+    let (mut input_stream, mut output_stream) = args.io_args.get_buffered(&mut retry_counter)?;
 
     let encode_buffer = RefCellBuffer::new();
     let mut encoder = base64::write::EncoderWriter::new(

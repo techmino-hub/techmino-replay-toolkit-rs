@@ -4,17 +4,17 @@ use core::ops::ControlFlow;
 
 use crate::cli::{
     clap::{ExtractArguments, RetryArguments},
-    io::WriteFileOrStdout,
+    io::buffered::OutputBufWriter,
     operations::infer_replay_kind,
     types::{CliOpError, UnpackedInputEvent},
 };
-use libtechmino_replay::{deserialize::ReplayDecoder, GameInputEvent, GameReplayMetadata};
+use libtechmino_replay::{GameInputEvent, GameReplayMetadata, deserialize::ReplayDecoder};
 
 // TODO: Optimize: Skip unnecessary sections by stabilizing preprocessors
 pub(super) fn extract(args: &ExtractArguments) -> Result<(), CliOpError> {
     let mut retry_counter = 0u32;
 
-    let (mut input_stream, mut output_stream) = args.io_args.get_rw(&mut retry_counter)?;
+    let (mut input_stream, mut output_stream) = args.io_args.get_buffered(&mut retry_counter)?;
 
     eprintln!("> starting read from input stream...");
 
@@ -84,7 +84,7 @@ pub(super) fn extract(args: &ExtractArguments) -> Result<(), CliOpError> {
 /// Inner function of [`extract`].
 fn extract_metadata(
     metadata: Option<Box<GameReplayMetadata>>,
-    output_stream: &mut WriteFileOrStdout,
+    output_stream: &mut OutputBufWriter,
     read_inputs: bool,
     retry_counter: &mut u32,
     retry_args: RetryArguments,
@@ -125,7 +125,7 @@ fn extract_metadata(
 
 fn extract_inputs(
     inputs: &[GameInputEvent],
-    output_stream: &mut WriteFileOrStdout,
+    output_stream: &mut OutputBufWriter,
     is_first_input: &mut bool,
     retry_counter: &mut u32,
     retry_args: RetryArguments,

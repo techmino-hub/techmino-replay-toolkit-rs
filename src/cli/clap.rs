@@ -48,12 +48,25 @@ pub enum CliOperation {
     /// Format is meant to be backwards compatible with
     /// `techmino-replay-parser@v4`'s output.
     /// (`techmino-replay-parser`: <https://www.npmjs.com/package/techmino-replay-parser>)
+    ///
+    /// This operation implements streaming. That is, it implements working with
+    /// chunks of data at a time and does not need to read the input all at once.
     Extract(ExtractArguments),
     /// Create a replay from a JSON input.
+    ///
+    /// Due to technical complexities of streaming JSON, this operation
+    /// currently does not stream. That is, it needs to read the entire input
+    /// file before outputting everything all in one go.
     Create(CreateArguments),
     /// Turn a `.rep` file into a base64 pasteable text.
+    ///
+    /// This operation implements streaming. That is, it implements working with
+    /// chunks of data at a time and does not need to read the input all at once.
     Base64ify(Base64ifyArguments),
     /// Turn base64 pasteable text into a `.rep` file.
+    ///
+    /// This operation implements streaming. That is, it implements working with
+    /// chunks of data at a time and does not need to read the input all at once.
     Binaryify(BinaryifyArguments),
 }
 
