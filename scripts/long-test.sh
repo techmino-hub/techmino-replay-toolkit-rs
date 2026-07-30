@@ -16,11 +16,12 @@ if [ $deps_met == 0 ]; then
     exit 1
 fi
 
-# e.g. ~/Code/techmino-replay-toolkit-rs
+# e.g. ~/Code/techmino-replay-toolkit-rs/scripts
 scripts_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_dir=$(dirname -- "$scripts_dir")
 
 # Start many scripts asynchronously
-echo "running tests..."
+echo "running code tests..."
 
 (
     fmt_result="$(cargo fmt --all -- --check 2>&1)"
@@ -62,7 +63,7 @@ done << FEATURES_END
 
 FEATURES_END
 
-echo "all tests launched, awaiting completion..."
+echo "all code tests launched, awaiting completion..."
 echo "pids launched: ${pids[@]}"
 
 success=1
@@ -80,9 +81,42 @@ do
 done
 
 if [ $success != 1 ]; then
-    echo "long test failed"
+    echo "code test(s) failed"
     exit 1
 else
-    echo "long test succeeded"
-    exit 0
+    echo "code tests passed"
+fi
+
+echo "launching e2e tests..."
+
+pids=()
+
+for test_file in "$repo_dir/e2e-tests/"*/*".sh"; do
+    "$test_file" &
+
+    pids+=("$!")
+done
+
+echo "all e2e tests launched, awaiting completion..."
+echo "pids launched: ${pids[@]}"
+
+success=1
+
+for pid in "${pids[@]}"
+do
+    echo "waiting for pid $pid"
+    wait $pid
+    exitcode=$?
+
+    if [ $exitcode != 0 ]; then
+        success=0
+        echo "pid $pid exited with exit code $exitcode"
+    fi
+done
+
+if [ $success != 1 ]; then
+    echo "e2e test(s) failed"
+    exit 1
+else
+    echo "e2e tests passed"
 fi
