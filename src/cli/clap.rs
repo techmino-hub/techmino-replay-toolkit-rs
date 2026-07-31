@@ -214,9 +214,9 @@ pub(super) struct IoArguments {
 /// Arguments for the `extract` command.
 #[derive(Args, Debug, Clone)]
 pub struct ExtractArguments {
-    /// What to extract from the replay.
-    #[command(subcommand)]
-    pub(super) extract_mode: ExtractMode,
+    /// What parts of the replay to extract.
+    #[arg(short = 's', long, default_value_t = ExtractScope::All)]
+    pub(super) scope: ExtractScope,
     /// The replay format to interpret the input data as.
     ///
     /// If not provided, the replay format is inferred from the input stream.
@@ -294,11 +294,12 @@ pub struct BinaryifyArguments {
 }
 
 /// Extract something from the replay.
-#[derive(Clone, Debug, Subcommand)]
-pub enum ExtractMode {
+#[derive(Clone, Debug, Default, ValueEnum)]
+pub enum ExtractScope {
     /// Extract everything from the replay; the metadata and the input data.
     ///
     /// Example: {"metadata":{...},"inputs":[...]}
+    #[default]
     All,
     /// Extract just the metadata from the replay.
     ///
@@ -310,7 +311,7 @@ pub enum ExtractMode {
     Inputs,
 }
 
-impl ExtractMode {
+impl ExtractScope {
     /// Returns a `(keep_metadata, keep_inputs)` tuple based on the mode.
     pub(crate) const fn to_keeps(&self) -> (bool, bool) {
         match self {
@@ -335,6 +336,16 @@ impl ExtractMode {
             Self::All => Some(b"]}"),
             Self::Metadata => None,
             Self::Inputs => Some(b"]"),
+        }
+    }
+}
+
+impl Display for ExtractScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExtractScope::All => f.write_str("all"),
+            ExtractScope::Metadata => f.write_str("metadata"),
+            ExtractScope::Inputs => f.write_str("inputs"),
         }
     }
 }

@@ -25,11 +25,11 @@ pub(super) fn extract(args: &ExtractArguments) -> Result<(), CliOpError> {
 
     let mut decoder = ReplayDecoder::new(replay_kind, args.override_input_mode.map(Into::into));
 
-    let (read_metadata, read_inputs) = args.extract_mode.to_keeps();
+    let (read_metadata, read_inputs) = args.scope.to_keeps();
 
     let mut is_first_input = true;
 
-    if let Some(header) = args.extract_mode.header() {
+    if let Some(header) = args.scope.header() {
         output_stream.append_with_retry(header, &mut retry_counter, args.io_args.retry_args)?;
     }
 
@@ -74,7 +74,7 @@ pub(super) fn extract(args: &ExtractArguments) -> Result<(), CliOpError> {
         }
     }
 
-    if let Some(footer) = args.extract_mode.footer() {
+    if let Some(footer) = args.scope.footer() {
         output_stream.append_with_retry(footer, &mut retry_counter, args.io_args.retry_args)?;
     }
 

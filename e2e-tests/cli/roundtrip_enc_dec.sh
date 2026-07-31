@@ -14,7 +14,7 @@ cargo b $cargo_build_verbosity_arg --bin techmino-replay-toolkit
 
 for replay_file in "$testcases_dir/"*".rep"; do
     tmpfile="$tmpdir/$(basename "$replay_file").tmp"
-    json=$(cargo r --bin techmino-replay-toolkit $cargo_verbosity_arg -- cli extract -i "$replay_file" all |\
+    json=$(cargo r --bin techmino-replay-toolkit $cargo_verbosity_arg -- cli extract -i "$replay_file" -s all |\
         jq --sort-keys "del(.metadata.$creation_marker_key)")
 
     if [[ "$verbosity" -gt 2 ]]; then
@@ -23,7 +23,7 @@ for replay_file in "$testcases_dir/"*".rep"; do
 
     roundtripped=$(echo "$json" |\
         cargo r --bin techmino-replay-toolkit $cargo_verbosity_arg -- cli create -f binary |\
-        cargo r --bin techmino-replay-toolkit $cargo_verbosity_arg -- cli extract all |\
+        cargo r --bin techmino-replay-toolkit $cargo_verbosity_arg -- cli extract -s all |\
         jq --sort-keys "del(.metadata.$creation_marker_key)")
 
     if [[ "$verbosity" -gt 2 ]]; then
@@ -32,7 +32,7 @@ for replay_file in "$testcases_dir/"*".rep"; do
 
     roundtripped_b64=$(echo "$json" |\
         cargo r --bin techmino-replay-toolkit $cargo_verbosity_arg -- cli create -f base64 |\
-        cargo r --bin techmino-replay-toolkit $cargo_verbosity_arg -- cli extract all |\
+        cargo r --bin techmino-replay-toolkit $cargo_verbosity_arg -- cli extract -s all |\
         jq --sort-keys "del(.metadata.$creation_marker_key)")
 
     if [[ "$verbosity" -gt 2 ]]; then
