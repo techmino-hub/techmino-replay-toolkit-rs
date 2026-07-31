@@ -41,6 +41,7 @@ fn process_testcase_file(file: &DirEntry, map: &mut HashMap<String, TestCase>) {
         .file_name()
         .into_string()
         .expect("Invalid Unicode in test case file name");
+    println!("Processing: {name}");
     let (basename, ext) = name
         .split_once('.')
         .expect("Invalid test case file name (no extension)");

@@ -228,16 +228,16 @@ fn get_ron_config() -> PrettyConfig {
 
 #[cfg(all(test, not(feature = "preserve_metadata_order")))]
 #[test]
-#[ignore = "This test is only for regenerating test cases.\
-    Run with `cargo test regenerate_cases --features preserve_metadata_order -- --ignored`"]
+#[ignore = "This test is only for regenerating test cases. \
+    Run with `cargo test regenerate_cases -p libtechmino-replay --lib --features preserve_metadata_order,float_roundtrip -- --ignored`"]
 fn regenerate_cases() {
-    panic!("metadata order should be preserved when creating initial RONs");
+    panic!("metadata order and floats should be preserved when creating initial RONs");
 }
 
-#[cfg(all(test, feature = "preserve_metadata_order"))]
+#[cfg(all(test, feature = "preserve_metadata_order", feature = "float_roundtrip"))]
 #[test]
-#[ignore = "This test is only for regenerating test cases.\
-    Run with `cargo test regenerate_cases --features preserve_metadata_order -- --ignored`"]
+#[ignore = "This test is only for regenerating test cases. \
+    Run with `cargo test regenerate_cases -p libtechmino-replay --lib --features preserve_metadata_order,float_roundtrip -- --ignored`"]
 fn regenerate_cases() {
     use crate::{GameReplayData, format::ReplayBufferKind};
     let cases = get_test_cases();
