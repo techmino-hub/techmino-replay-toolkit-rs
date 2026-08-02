@@ -1,4 +1,13 @@
-//! Constants for techmino-replay-toolkit.
+//! Miscellaneous constants for techmino-replay-toolkit.
+
+/////////////// REPLAY MAGIC HEADERS ///////////////
+
+/// Zlib always begins with 0x78 (`x`): https://en.wikipedia.org/wiki/List_of_file_signatures
+pub(crate) const ZLIB_HEADER_FIRST_BYTE: u8 = b'x';
+/// 0x7800 until 0x78FF always starts with an `e` in base64
+pub(crate) const BASE64_ZLIB_FIRST_BYTE: u8 = b'e';
+/// Raw uncompressed game data begins with a JSON object, which begins with a `{`
+pub(crate) const UNCOMPRESSED_FIRST_BYTE: u8 = b'{';
 
 /////////////// REPLAY DATA JSON ///////////////
 

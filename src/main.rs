@@ -4,6 +4,8 @@ use techmino_replay_toolkit::cli::{
     clap::{CliCommand, CliParser},
     operations::handle_cli_op,
 };
+#[cfg(feature = "tui")]
+use techmino_replay_toolkit::tui::start as start_tui;
 
 fn main() {
     let cli_cmd = CliParser::parse();
@@ -16,5 +18,7 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        #[cfg(feature = "tui")]
+        CliCommand::Tui { arguments } => start_tui(arguments),
     };
 }

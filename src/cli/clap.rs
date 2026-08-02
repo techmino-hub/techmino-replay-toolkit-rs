@@ -35,7 +35,10 @@ pub enum CliCommand {
     },
     /// Start the TRT terminal user interface.
     #[cfg(feature = "tui")]
-    Tui,
+    Tui {
+        #[command(flatten)]
+        arguments: TuiArguments,
+    },
     /// Start the TRT graphical user interface.
     #[cfg(feature = "gui")]
     Gui,
@@ -348,4 +351,17 @@ impl Display for ExtractScope {
             ExtractScope::Inputs => f.write_str("inputs"),
         }
     }
+}
+
+#[cfg(feature = "tui")]
+#[derive(Clone, Debug, Args)]
+pub struct TuiArguments {
+    /// A path to a folder or replay file.
+    ///
+    /// If pointing to a folder, determines the folder to start the explorer in.\
+    /// If pointing to a file, uses that as the replay file.
+    ///
+    /// Defaults to the detected game data replay path if found, otherwise the current
+    /// directory, otherwise the home directory, otherwise the root directory.
+    pub(crate) path: Option<PathBuf>,
 }

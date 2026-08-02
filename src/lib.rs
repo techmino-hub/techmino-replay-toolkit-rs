@@ -14,3 +14,7 @@ pub mod gui;
 pub mod tui;
 
 mod consts;
+#[cfg(feature = "tui")]
+mod heuristics;
+#[cfg(feature = "tui")]
+mod paths;

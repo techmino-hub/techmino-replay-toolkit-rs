@@ -1,8 +1,11 @@
 //! Handles specifically CLI operations and one-off commands.
 
-use crate::cli::{
-    clap::{CliOperation, CliReplayFormat},
-    types::CliOpError,
+use crate::{
+    cli::{
+        clap::{CliOperation, CliReplayFormat},
+        types::CliOpError,
+    },
+    consts::{BASE64_ZLIB_FIRST_BYTE, UNCOMPRESSED_FIRST_BYTE, ZLIB_HEADER_FIRST_BYTE},
 };
 use libtechmino_replay::ReplayBufferKind;
 
@@ -25,13 +28,6 @@ fn infer_replay_kind(
     fmt_override: Option<CliReplayFormat>,
     first_chunk: &[u8],
 ) -> Result<ReplayBufferKind, CliOpError> {
-    /// Zlib always begins with 0x78 (`x`): https://en.wikipedia.org/wiki/List_of_file_signatures
-    const ZLIB_HEADER_FIRST_BYTE: u8 = b'x';
-    /// 0x7800 until 0x78FF always starts with an `e` in base64
-    const BASE64_ZLIB_FIRST_BYTE: u8 = b'e';
-    /// Raw uncompressed game data begins with a JSON object, which begins with a `{`
-    const UNCOMPRESSED_FIRST_BYTE: u8 = b'{';
-
     if let Some(format) = fmt_override {
         return Ok(format.into());
     }
