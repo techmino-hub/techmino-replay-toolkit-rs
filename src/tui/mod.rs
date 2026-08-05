@@ -1,20 +1,34 @@
 //! A terminal user interface powered by Ratatui.
 
-use std::path::PathBuf;
+use core::num::NonZeroI32;
 
-use crate::{cli::clap::TuiArguments, paths};
+use crate::{backend::BackendState, cli::clap::TuiArguments};
 
-pub fn start(args: TuiArguments) {
-    let init_path = args.get_path();
+mod frontend;
+mod ui_state;
 
-    dbg!(init_path);
+/// Starts a TUI instance.
+///
+/// # Errors
+/// On error, returns the desired non-zero exit code of the process.
+pub fn start(args: TuiArguments) -> Result<(), NonZeroI32> {
+    let conn = match BackendState::spawn() {
+        Ok(bh) => bh.connection,
+        Err(e) => {
+            eprintln!("Error: Failed to start processing backend thread: {e}");
+            return Err(NonZeroI32::MIN);
+        }
+    };
 
-    todo!("the rest of the logic");
-}
+    let mut frontend = match frontend::AppFrontend::new(args, conn) {
+        Ok(fe) => fe,
+        Err(e) => {
+            eprintln!("Error: Failed to create frontend: {e}");
+            return Err(NonZeroI32::MIN);
+        }
+    };
 
-impl TuiArguments {
-    /// Gets the path if specified, or uses a fallback.
-    fn get_path(&self) -> PathBuf {
-        self.path.clone().unwrap_or_else(paths::get_initial_path)
-    }
+    ratatui::run(move |terminal| frontend.run(terminal));
+
+    Ok(())
 }

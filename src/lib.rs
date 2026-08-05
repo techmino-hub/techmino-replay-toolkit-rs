@@ -13,6 +13,8 @@ pub mod gui;
 #[cfg(feature = "tui")]
 pub mod tui;
 
+#[cfg(any(feature = "tui", feature = "gui"))]
+mod backend;
 mod consts;
 #[cfg(feature = "tui")]
 mod heuristics;

@@ -19,6 +19,9 @@ fn main() {
             }
         }
         #[cfg(feature = "tui")]
-        CliCommand::Tui { arguments } => start_tui(arguments),
+        CliCommand::Tui { arguments } => match start_tui(arguments) {
+            Ok(()) => (),
+            Err(e) => std::process::exit(e.get()),
+        },
     };
 }
