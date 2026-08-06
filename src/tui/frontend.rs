@@ -7,17 +7,18 @@ use crate::{
     backend::{BackendConnection, BackendMessage, BackendReply},
     cli::clap::TuiArguments,
     paths,
-    tui::ui_state::{ExplorerState, UiState},
+    tui::ui_state::{UiState, explorer::ExplorerState},
 };
 
 /// Represents the state for the TUI app's frontend.
+#[derive(Debug)]
 pub(in crate::tui) struct AppFrontend {
     /// The folder of the file explorer if we return to it later.
-    ret_path: PathBuf,
+    pub(in crate::tui) ret_path: PathBuf,
     /// The connection to the backend.
-    conn: BackendConnection,
+    pub(in crate::tui) conn: BackendConnection,
     /// The state of the UI.
-    ui_state: UiState,
+    pub(in crate::tui) ui_state: UiState,
 }
 
 impl AppFrontend {

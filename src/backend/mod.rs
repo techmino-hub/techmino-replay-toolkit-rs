@@ -86,6 +86,7 @@ struct FrontendConnection {
 /// the frontend).
 ///
 /// You get this from [`AppBackend::new`].
+#[derive(Debug)]
 pub(crate) struct BackendConnection {
     /// Sender of messages destined to the backend.
     pub(crate) tx: mpsc::Sender<BackendMessage>,
