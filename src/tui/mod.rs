@@ -8,7 +8,7 @@ use libtechmino_replay::ReplayParseError;
 use crate::{backend::BackendState, cli::clap::TuiArguments};
 
 mod frontend;
-mod ui_state;
+mod scenes;
 
 /// Starts a TUI instance.
 ///

@@ -2,29 +2,29 @@ use std::path::{Path, PathBuf};
 
 use ratatui::{crossterm, prelude::Frame};
 
-use crate::{backend::BackendConnection, tui::ui_state::explorer::ExplorerState};
+use crate::{backend::BackendConnection, tui::scenes::explorer::ExplorerScene};
 
 pub(in crate::tui) mod explorer;
 
-/// Represents the state of the interface.
+/// Represents the currently-displayed UI scene.
 #[derive(Debug)]
-pub(in crate::tui) enum UiState {
-    /// The explorer menu, where the user can traverse directories and
+pub(in crate::tui) enum Scene {
+    /// The explorer scene, where the user can traverse directories and
     /// select a file.
-    Explorer(ExplorerState),
-    /// The operations menu, where the user can select an operation to perform on
+    Explorer(ExplorerScene),
+    /// The operations scene, where the user can select an operation to perform on
     /// that file.
     Operations(core::convert::Infallible),
 }
 
-impl UiState {
-    /// Initializes the UI state given a certain initialization path.
+impl Scene {
+    /// Initializes the UI scene given a certain initialization path.
     ///
-    /// If the path points to a file, initializes at the operations menu.
-    /// Otherwise, initializes at the explorer menu.
+    /// If the path points to a file, initializes at the operations scene.
+    /// Otherwise, initializes at the explorer scene.
     pub(in crate::tui) fn new(path: &Path) -> Self {
         if path.is_dir() {
-            Self::Explorer(ExplorerState::new(path))
+            Self::Explorer(ExplorerScene::new(path))
         } else {
             Self::Operations(todo!())
         }

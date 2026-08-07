@@ -10,9 +10,9 @@ use ratatui::prelude::Frame;
 
 use crate::tui::ParseOrIoError;
 
-/// Represents the state of the explorer menu.
+/// Represents the state of the explorer scene.
 #[derive(Debug)]
-pub(in crate::tui) struct ExplorerState {
+pub(in crate::tui) struct ExplorerScene {
     /// The current folder being explored.
     folder: PathBuf,
     /// The (cached) file list currently being shown, or an I/O error if a
@@ -20,7 +20,7 @@ pub(in crate::tui) struct ExplorerState {
     file_list: io::Result<FileList>,
 }
 
-impl ExplorerState {
+impl ExplorerScene {
     /// Creates a new explorer state based on the specified directory path.
     pub(in crate::tui) fn new(folder: &Path) -> Self {
         let folder = folder.canonicalize().unwrap_or_else(|_| folder.to_owned());
@@ -135,7 +135,7 @@ impl ExplorerState {
         SelectionResult::Explorer(Self::new(&path))
     }
 
-    pub(in crate::tui::ui_state) fn render(&self, frame: &mut Frame) {
+    pub(in crate::tui::scenes) fn render(&self, frame: &mut Frame) {
         frame.render_widget("TODO: Explorer rendering\n{self:?}", frame.area());
     }
 }
@@ -227,7 +227,7 @@ impl SelectedFile {
     /// # Parameters
     /// - `folder`: The directory containing the given directory entries.
     /// - `entries`: The list of directory entries in the `folder` argument.
-    pub(in crate::tui::ui_state) fn new(folder: &Path, entries: &[UiDirEntry]) -> Self {
+    pub(in crate::tui::scenes) fn new(folder: &Path, entries: &[UiDirEntry]) -> Self {
         let mut this = Self {
             index: 0,
             rep_metadata: Err(ParseOrIoError::Io(io::Error::other(""))),
@@ -307,30 +307,30 @@ impl UiDirEntry {
 #[derive(Debug)]
 pub(in crate::tui) enum SelectionResult {
     /// Go to another explorer state.
-    Explorer(ExplorerState),
-    /// Move to the operations menu.
+    Explorer(ExplorerScene),
+    /// Move to the operations scene.
     Operations(GoToOperations),
 }
 
-/// A struct representing an instruction to navigate to the operations menu, and
+/// A struct representing an instruction to navigate to the operations scene, and
 /// any associated/related data.
 #[derive(Debug)]
 pub(in crate::tui) struct GoToOperations {
-    /// The path to return to later when revisiting the explorer menu.
+    /// The path to return to later when revisiting the explorer scene.
     ret_path: PathBuf,
-    /// The full path of the selected file to give to the operations menu.
+    /// The full path of the selected file to give to the operations scene.
     file_path: PathBuf,
 }
 
 impl GoToOperations {
-    /// Returns the path to return to later when revisiting the explorer menu.
+    /// Returns the path to return to later when revisiting the explorer scene.
     ///
     /// This should be saved for later.
     pub(in crate::tui) fn ret_path(&self) -> &Path {
         &self.ret_path
     }
 
-    /// Returns the full path of the selected file to give to the operations menu.
+    /// Returns the full path of the selected file to give to the operations scene.
     pub(in crate::tui) fn file_path(&self) -> &Path {
         &self.file_path
     }

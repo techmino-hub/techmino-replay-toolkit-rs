@@ -9,7 +9,7 @@ use crate::{
     backend::{BackendConnection, BackendMessage, BackendReply},
     cli::clap::TuiArguments,
     paths,
-    tui::ui_state::{UiState, explorer::ExplorerState},
+    tui::scenes::{Scene, explorer::ExplorerScene},
 };
 
 /// Represents the state for the TUI app's frontend.
@@ -19,8 +19,8 @@ pub(in crate::tui) struct AppFrontend {
     pub(in crate::tui) ret_path: PathBuf,
     /// The connection to the backend.
     pub(in crate::tui) conn: BackendConnection,
-    /// The state of the UI.
-    pub(in crate::tui) ui_state: UiState,
+    /// The currently-displayed UI scene.
+    pub(in crate::tui) scene: Scene,
 }
 
 impl AppFrontend {
@@ -35,12 +35,12 @@ impl AppFrontend {
         Self::check_backend_connection(&conn)?;
 
         let explorer_path = args.path.clone().unwrap_or_else(paths::get_initial_path);
-        let ui_state = UiState::Explorer(ExplorerState::new(&explorer_path));
+        let ui_state = Scene::Explorer(ExplorerScene::new(&explorer_path));
 
         Ok(Self {
             ret_path: explorer_path,
             conn,
-            ui_state,
+            scene: ui_state,
         })
     }
 
@@ -96,7 +96,7 @@ impl AppFrontend {
         terminal: &mut ratatui::DefaultTerminal,
     ) -> io::Result<()> {
         loop {
-            self.ui_state.render(&mut terminal.get_frame());
+            self.scene.render(&mut terminal.get_frame());
 
             if let ControlFlow::Break(res) = self.handle_events() {
                 return res;
@@ -116,7 +116,7 @@ impl AppFrontend {
             Err(e) => return ControlFlow::Break(Err(e)),
         };
 
-        self.ui_state
+        self.scene
             .handle_event(event, &mut self.conn, &mut self.ret_path);
 
         ControlFlow::Continue(())
