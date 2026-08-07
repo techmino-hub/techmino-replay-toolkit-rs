@@ -1,13 +1,19 @@
 //! The frontend: A wrapper around the UI state.
 
 use core::{ops::ControlFlow, time::Duration};
-use std::{io, path::PathBuf, sync::mpsc, time::Instant};
+use std::{
+    io,
+    path::PathBuf,
+    sync::mpsc::{self, TryRecvError},
+    time::Instant,
+};
 
 use ratatui::crossterm;
 
 use crate::{
     backend::{BackendConnection, BackendMessage, BackendReply},
     cli::clap::TuiArguments,
+    consts::backend::{EMSG_BACKEND_CONNECTION_BROKE, EMSG_BACKEND_UNRESPONSIVE},
     paths,
     tui::scenes::{Scene, explorer::ExplorerScene},
 };
@@ -27,7 +33,7 @@ impl AppFrontend {
     /// The maximum backend roundtrip time when initializing the frontend.
     const MAX_INIT_BACKEND_RTT: Duration = Duration::from_secs(5);
     /// The maximum amount of time to wait for input events.
-    const EVENT_POLL_DURATION: Duration = Duration::from_millis(250);
+    const EVENT_POLL_DURATION: Duration = Duration::from_millis(100);
 
     /// Creates a new frontend instance. Returns an error if the backend is
     /// unresponsive.
@@ -47,9 +53,6 @@ impl AppFrontend {
     /// Checks whether or not the given backend connection responds to pings
     /// in a reasonable amount of time.
     fn check_backend_connection(conn: &BackendConnection) -> io::Result<()> {
-        static BACKEND_CONNECTION_BROKE: &str = "Connection to backend broke";
-        static BACKEND_UNRESPONSIVE: &str = "Backend is unresponsive";
-
         let id: u64 = rand::random();
         let mes = BackendMessage::Ping { ping_id: id };
         if let Err(e) = conn.tx.send(mes) {
@@ -63,13 +66,13 @@ impl AppFrontend {
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     return Err(io::Error::new(
                         io::ErrorKind::BrokenPipe,
-                        BACKEND_CONNECTION_BROKE,
+                        EMSG_BACKEND_CONNECTION_BROKE,
                     ));
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     return Err(io::Error::new(
                         io::ErrorKind::TimedOut,
-                        BACKEND_UNRESPONSIVE,
+                        EMSG_BACKEND_UNRESPONSIVE,
                     ));
                 }
             };
@@ -78,7 +81,7 @@ impl AppFrontend {
                 // Deadline is in the past
                 return Err(io::Error::new(
                     io::ErrorKind::TimedOut,
-                    BACKEND_UNRESPONSIVE,
+                    EMSG_BACKEND_UNRESPONSIVE,
                 ));
             }
 
@@ -104,6 +107,7 @@ impl AppFrontend {
         }
     }
 
+    /// Handle crossterm (console) events.
     fn handle_events(&mut self) -> ControlFlow<io::Result<()>> {
         match crossterm::event::poll(Self::EVENT_POLL_DURATION) {
             Ok(true) => (),
@@ -120,5 +124,23 @@ impl AppFrontend {
             .handle_event(event, &mut self.conn, &mut self.ret_path);
 
         ControlFlow::Continue(())
+    }
+
+    /// Handle replies from the backend.
+    fn handle_replies(&mut self) -> io::Result<()> {
+        loop {
+            let reply = match self.conn.rx.try_recv() {
+                Ok(rep) => rep,
+                Err(TryRecvError::Empty) => return Ok(()),
+                Err(TryRecvError::Disconnected) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::BrokenPipe,
+                        EMSG_BACKEND_CONNECTION_BROKE,
+                    ));
+                }
+            };
+
+            self.scene.handle_reply(reply);
+        }
     }
 }

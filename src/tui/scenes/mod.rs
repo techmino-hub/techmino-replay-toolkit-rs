@@ -2,7 +2,10 @@ use std::path::{Path, PathBuf};
 
 use ratatui::{crossterm, prelude::Frame};
 
-use crate::{backend::BackendConnection, tui::scenes::explorer::ExplorerScene};
+use crate::{
+    backend::{BackendConnection, BackendReply},
+    tui::scenes::explorer::ExplorerScene,
+};
 
 pub(in crate::tui) mod explorer;
 
@@ -30,6 +33,7 @@ impl Scene {
         }
     }
 
+    /// Render this scene to the given frame.
     pub(in crate::tui) fn render(&self, frame: &mut Frame) {
         match self {
             Self::Explorer(inner) => inner.render(frame),
@@ -37,12 +41,28 @@ impl Scene {
         }
     }
 
+    /// Handle a crossterm event.
     pub(in crate::tui) fn handle_event(
         &mut self,
         event: crossterm::event::Event,
         backend: &mut BackendConnection,
         ret_path: &mut PathBuf,
     ) {
-        todo!("Handle event: {event:?}");
+        match self {
+            Scene::Explorer(explorer_scene) => {
+                if let Some(go_to_ops) = explorer_scene.handle_event(event, ret_path) {
+                    todo!("Go to operations scene");
+                }
+            }
+            _ => todo!("Handle event for other scenes"),
+        }
+    }
+
+    /// Handle a reply from the backend.
+    pub(in crate::tui) fn handle_reply(&mut self, reply: BackendReply) {
+        match self {
+            Scene::Explorer(explorer_scene) => explorer_scene.handle_reply(reply),
+            _ => todo!("Handle reply for other scenes"),
+        }
     }
 }

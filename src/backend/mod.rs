@@ -96,6 +96,7 @@ pub(crate) struct BackendConnection {
 
 /// A struct containing the connection and [`JoinHandle`] to an active, running
 /// backend.
+#[derive(Debug)]
 pub(crate) struct BackendHandle {
     /// The bidirectional connection to the backend.
     pub(crate) connection: BackendConnection,
@@ -104,6 +105,7 @@ pub(crate) struct BackendHandle {
 }
 
 /// Represents a message destined to the backend.
+#[derive(Debug)]
 pub(crate) enum BackendMessage {
     /// An message to test the backend connection.
     ///
@@ -124,6 +126,7 @@ impl BackendMessage {
 }
 
 /// Represents a reply from the backend.
+#[derive(Debug)]
 pub(crate) enum BackendReply {
     /// The reply to the [`BackendMessage::Ping`] message.
     Pong { ping_id: u64 },

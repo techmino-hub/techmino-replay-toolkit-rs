@@ -1,5 +1,7 @@
 //! Miscellaneous constants for techmino-replay-toolkit.
 
+#[cfg(any(feature = "tui", feature = "gui"))]
+pub(crate) mod backend;
 #[cfg(feature = "tui")]
 pub(crate) mod tui;
 

@@ -6,9 +6,9 @@ use std::{
 };
 
 use libtechmino_replay::GameReplayMetadata;
-use ratatui::prelude::Frame;
+use ratatui::{crossterm, prelude::Frame};
 
-use crate::tui::ParseOrIoError;
+use crate::{backend::BackendReply, tui::ParseOrIoError};
 
 /// Represents the state of the explorer scene.
 #[derive(Debug)]
@@ -28,6 +28,11 @@ impl ExplorerScene {
         let file_list = FileList::new(&folder);
 
         Self { folder, file_list }
+    }
+
+    /// Refreshes the file list.
+    pub(in crate::tui) fn refresh(&mut self) {
+        self.file_list = FileList::new(&self.folder);
     }
 
     /// Returns the (cached) file list to show, or an I/O error if a fatal error
@@ -112,31 +117,58 @@ impl ExplorerScene {
     /// Selects the currently-highlighted item.
     ///
     /// # Returns
-    /// Returns instructions on the next UI state after this selection.
-    pub(in crate::tui) fn select(mut self) -> SelectionResult {
+    /// If `Some`, then the scene should switch to the operations scene, using
+    /// the encapsulated parameters.
+    ///
+    /// If `None`, then the scene should stay in this explorer scene.
+    #[must_use = "Use the returned value to switch to the operations scene"]
+    pub(in crate::tui) fn select(&mut self, ret_path: &mut PathBuf) -> Option<GoToOperations> {
         let Ok(file_list) = &self.file_list else {
-            return SelectionResult::Explorer(self);
+            return None;
         };
 
         let Some(entry) = file_list.entries.get(file_list.selected.index) else {
-            return SelectionResult::Explorer(self);
+            return None;
         };
 
         let path = entry.resolve(&self.folder);
 
         if path.is_file() {
-            let instr = GoToOperations {
-                ret_path: self.folder,
-                file_path: path,
-            };
-            return SelectionResult::Operations(instr);
+            ret_path.clone_from(&self.folder);
+            let instr = GoToOperations { file_path: path };
+            return Some(instr);
         }
 
-        SelectionResult::Explorer(Self::new(&path))
+        self.folder = path;
+        self.refresh();
+
+        None
     }
 
+    /// Renders this scene to the given frame.
     pub(in crate::tui::scenes) fn render(&self, frame: &mut Frame) {
         frame.render_widget("TODO: Explorer rendering\n{self:?}", frame.area());
+    }
+
+    /// Handles a crossterm event.
+    ///
+    /// # Returns
+    /// If `Some`, then the scene should switch to the operations scene, using
+    /// the encapsulated parameters.
+    ///
+    /// If `None`, then the scene should stay in this explorer scene.
+    #[must_use = "Use the returned value to switch to the operations scene"]
+    pub(in crate::tui::scenes) fn handle_event(
+        &mut self,
+        event: crossterm::event::Event,
+        _ret_path: &mut PathBuf,
+    ) -> Option<GoToOperations> {
+        todo!("Handle event in explorer: {event:?}");
+    }
+
+    /// Handle a reply from the backend.
+    pub(in crate::tui::scenes) fn handle_reply(&mut self, reply: BackendReply) {
+        todo!("Handle backend reply: {reply:?}");
     }
 }
 
@@ -302,34 +334,16 @@ impl UiDirEntry {
     }
 }
 
-/// Represents the next UI state as a result of selecting a directory entry.
-#[must_use]
-#[derive(Debug)]
-pub(in crate::tui) enum SelectionResult {
-    /// Go to another explorer state.
-    Explorer(ExplorerScene),
-    /// Move to the operations scene.
-    Operations(GoToOperations),
-}
-
 /// A struct representing an instruction to navigate to the operations scene, and
 /// any associated/related data.
+#[must_use]
 #[derive(Debug)]
 pub(in crate::tui) struct GoToOperations {
-    /// The path to return to later when revisiting the explorer scene.
-    ret_path: PathBuf,
     /// The full path of the selected file to give to the operations scene.
     file_path: PathBuf,
 }
 
 impl GoToOperations {
-    /// Returns the path to return to later when revisiting the explorer scene.
-    ///
-    /// This should be saved for later.
-    pub(in crate::tui) fn ret_path(&self) -> &Path {
-        &self.ret_path
-    }
-
     /// Returns the full path of the selected file to give to the operations scene.
     pub(in crate::tui) fn file_path(&self) -> &Path {
         &self.file_path
