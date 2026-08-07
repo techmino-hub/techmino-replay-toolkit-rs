@@ -6,6 +6,7 @@ use std::{
 };
 
 use libtechmino_replay::GameReplayMetadata;
+use ratatui::prelude::Frame;
 
 use crate::tui::ParseOrIoError;
 
@@ -132,6 +133,10 @@ impl ExplorerState {
         }
 
         SelectionResult::Explorer(Self::new(&path))
+    }
+
+    pub(in crate::tui::ui_state) fn render(&self, frame: &mut Frame) {
+        frame.render_widget("TODO: Explorer rendering\n{self:?}", frame.area());
     }
 }
 

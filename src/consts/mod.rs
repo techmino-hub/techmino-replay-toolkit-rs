@@ -1,5 +1,8 @@
 //! Miscellaneous constants for techmino-replay-toolkit.
 
+#[cfg(feature = "tui")]
+pub(crate) mod tui;
+
 /////////////// REPLAY MAGIC HEADERS ///////////////
 
 /// Zlib always begins with 0x78 (`x`): https://en.wikipedia.org/wiki/List_of_file_signatures

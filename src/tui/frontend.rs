@@ -1,7 +1,9 @@
 //! The frontend: A wrapper around the UI state.
 
-use core::time::Duration;
+use core::{ops::ControlFlow, time::Duration};
 use std::{io, path::PathBuf, sync::mpsc, time::Instant};
+
+use ratatui::crossterm;
 
 use crate::{
     backend::{BackendConnection, BackendMessage, BackendReply},
@@ -24,6 +26,8 @@ pub(in crate::tui) struct AppFrontend {
 impl AppFrontend {
     /// The maximum backend roundtrip time when initializing the frontend.
     const MAX_INIT_BACKEND_RTT: Duration = Duration::from_secs(5);
+    /// The maximum amount of time to wait for input events.
+    const EVENT_POLL_DURATION: Duration = Duration::from_millis(250);
 
     /// Creates a new frontend instance. Returns an error if the backend is
     /// unresponsive.
@@ -87,9 +91,34 @@ impl AppFrontend {
     }
 
     /// Run this frontend given a ratatui terminal.
-    pub(in crate::tui) fn run(&mut self, terminal: &mut ratatui::DefaultTerminal) {
+    pub(in crate::tui) fn run(
+        &mut self,
+        terminal: &mut ratatui::DefaultTerminal,
+    ) -> io::Result<()> {
         loop {
-            todo!("Draw, get events, handle connection, etc.");
+            self.ui_state.render(&mut terminal.get_frame());
+
+            if let ControlFlow::Break(res) = self.handle_events() {
+                return res;
+            }
         }
+    }
+
+    fn handle_events(&mut self) -> ControlFlow<io::Result<()>> {
+        match crossterm::event::poll(Self::EVENT_POLL_DURATION) {
+            Ok(true) => (),
+            Ok(false) => return ControlFlow::Continue(()),
+            Err(e) => return ControlFlow::Break(Err(e)),
+        }
+
+        let event = match crossterm::event::read() {
+            Ok(ev) => ev,
+            Err(e) => return ControlFlow::Break(Err(e)),
+        };
+
+        self.ui_state
+            .handle_event(event, &mut self.conn, &mut self.ret_path);
+
+        ControlFlow::Continue(())
     }
 }
