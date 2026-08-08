@@ -6,7 +6,11 @@ use std::{
 };
 
 use libtechmino_replay::GameReplayMetadata;
-use ratatui::{crossterm, prelude::Frame};
+use ratatui::{
+    crossterm,
+    prelude::{Frame, Text},
+    widgets::{Paragraph, Wrap},
+};
 
 use crate::{
     backend::BackendReply,
@@ -87,7 +91,7 @@ impl ExplorerScene {
         let len = file_list.entries.len();
         let index = &mut file_list.selected.index;
 
-        *index = index.saturating_add(1).min(len);
+        *index = index.saturating_add(1).min(len.saturating_sub(1));
 
         file_list
             .selected
@@ -123,7 +127,7 @@ impl ExplorerScene {
     /// Selects the currently-highlighted item.
     ///
     /// # Returns
-    /// If `Some`, then the scene should switch, using
+    /// If `Some`, then the scene should switch to the operations scene, using
     /// the encapsulated parameters.
     ///
     /// If `None`, then the scene should stay in this explorer scene.
@@ -151,13 +155,15 @@ impl ExplorerScene {
 
     /// Renders this scene to the given frame.
     pub(in crate::tui::scenes) fn render(&self, frame: &mut Frame) {
-        frame.render_widget("TODO: Explorer rendering\n{self:?}", frame.area());
+        // TODO: Proper rendering
+        let text = Paragraph::new(format!("{self:?}")).wrap(Wrap { trim: true });
+        frame.render_widget(text, frame.area());
     }
 
     /// Handles a crossterm event.
     ///
     /// # Returns
-    /// If `Some`, then the scene should switch, using
+    /// If `Some`, then the scene should switch to the operations scene, using
     /// the encapsulated parameters.
     ///
     /// If `None`, then the scene should stay in this explorer scene.

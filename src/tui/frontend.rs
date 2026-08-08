@@ -99,7 +99,7 @@ impl AppFrontend {
         terminal: &mut ratatui::DefaultTerminal,
     ) -> io::Result<()> {
         loop {
-            self.scene.render(&mut terminal.get_frame());
+            terminal.draw(|f| self.scene.render(f))?;
 
             if let ControlFlow::Break(res) = self.handle_events(terminal) {
                 return res;
