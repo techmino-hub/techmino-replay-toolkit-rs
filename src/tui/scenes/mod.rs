@@ -1,10 +1,11 @@
+use core::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 
 use ratatui::{crossterm, prelude::Frame};
 
 use crate::{
     backend::{BackendConnection, BackendReply},
-    tui::scenes::explorer::ExplorerScene,
+    tui::scenes::explorer::{ExplorerScene, ExplorerTransition},
 };
 
 pub(in crate::tui) mod explorer;
@@ -45,13 +46,18 @@ impl Scene {
     pub(in crate::tui) fn handle_event(
         &mut self,
         event: crossterm::event::Event,
+        terminal: &ratatui::DefaultTerminal,
         backend: &mut BackendConnection,
         ret_path: &mut PathBuf,
-    ) {
+    ) -> ControlFlow<()> {
         match self {
             Scene::Explorer(explorer_scene) => {
-                if let Some(go_to_ops) = explorer_scene.handle_event(event, ret_path) {
-                    todo!("Go to operations scene");
+                match explorer_scene.handle_event(event, terminal, ret_path) {
+                    Some(ExplorerTransition::OperationsScene { file_path }) => {
+                        todo!("Go to operations scene: {file_path:?}")
+                    }
+                    Some(ExplorerTransition::Quit) => ControlFlow::Break(()),
+                    None => ControlFlow::Continue(()),
                 }
             }
             _ => todo!("Handle event for other scenes"),

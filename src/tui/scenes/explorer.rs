@@ -8,7 +8,13 @@ use std::{
 use libtechmino_replay::GameReplayMetadata;
 use ratatui::{crossterm, prelude::Frame};
 
-use crate::{backend::BackendReply, tui::ParseOrIoError};
+use crate::{
+    backend::BackendReply,
+    tui::{
+        ParseOrIoError,
+        event::{VerticalListEvent, explorer::ExplorerEvent},
+    },
+};
 
 /// Represents the state of the explorer scene.
 #[derive(Debug)]
@@ -47,7 +53,7 @@ impl ExplorerScene {
     }
 
     /// Explore one layer up.
-    pub(in crate::tui) fn up(&mut self) {
+    fn up(&mut self) {
         let Some(new_folder) = self.folder().parent() else {
             return;
         };
@@ -58,7 +64,7 @@ impl ExplorerScene {
     }
 
     /// Move the cursor to the previous item.
-    pub(in crate::tui) fn prev(&mut self) {
+    fn prev(&mut self) {
         let Ok(file_list) = &mut self.file_list else {
             return;
         };
@@ -73,7 +79,7 @@ impl ExplorerScene {
     }
 
     /// Move the cursor to the next item.
-    pub(in crate::tui) fn next(&mut self) {
+    fn next(&mut self) {
         let Ok(file_list) = &mut self.file_list else {
             return;
         };
@@ -89,7 +95,7 @@ impl ExplorerScene {
     }
 
     /// Move the cursor to the first item.
-    pub(in crate::tui) fn first(&mut self) {
+    fn first(&mut self) {
         let Ok(file_list) = &mut self.file_list else {
             return;
         };
@@ -102,7 +108,7 @@ impl ExplorerScene {
     }
 
     /// Move the cursor to the last item.
-    pub(in crate::tui) fn last(&mut self) {
+    fn last(&mut self) {
         let Ok(file_list) = &mut self.file_list else {
             return;
         };
@@ -117,25 +123,23 @@ impl ExplorerScene {
     /// Selects the currently-highlighted item.
     ///
     /// # Returns
-    /// If `Some`, then the scene should switch to the operations scene, using
+    /// If `Some`, then the scene should switch, using
     /// the encapsulated parameters.
     ///
     /// If `None`, then the scene should stay in this explorer scene.
     #[must_use = "Use the returned value to switch to the operations scene"]
-    pub(in crate::tui) fn select(&mut self, ret_path: &mut PathBuf) -> Option<GoToOperations> {
+    fn select(&mut self, ret_path: &mut PathBuf) -> Option<ExplorerTransition> {
         let Ok(file_list) = &self.file_list else {
             return None;
         };
 
-        let Some(entry) = file_list.entries.get(file_list.selected.index) else {
-            return None;
-        };
+        let entry = file_list.entries.get(file_list.selected.index)?;
 
         let path = entry.resolve(&self.folder);
 
         if path.is_file() {
             ret_path.clone_from(&self.folder);
-            let instr = GoToOperations { file_path: path };
+            let instr = ExplorerTransition::OperationsScene { file_path: path };
             return Some(instr);
         }
 
@@ -153,7 +157,7 @@ impl ExplorerScene {
     /// Handles a crossterm event.
     ///
     /// # Returns
-    /// If `Some`, then the scene should switch to the operations scene, using
+    /// If `Some`, then the scene should switch, using
     /// the encapsulated parameters.
     ///
     /// If `None`, then the scene should stay in this explorer scene.
@@ -161,9 +165,65 @@ impl ExplorerScene {
     pub(in crate::tui::scenes) fn handle_event(
         &mut self,
         event: crossterm::event::Event,
-        _ret_path: &mut PathBuf,
-    ) -> Option<GoToOperations> {
-        todo!("Handle event in explorer: {event:?}");
+        terminal: &ratatui::DefaultTerminal,
+        ret_path: &mut PathBuf,
+    ) -> Option<ExplorerTransition> {
+        let event = ExplorerEvent::process_ev(&event)?;
+
+        match event {
+            ExplorerEvent::Pop => {
+                self.up();
+                None
+            }
+            ExplorerEvent::Refresh => {
+                self.refresh();
+                None
+            }
+            ExplorerEvent::ListEvent(event) => self.handle_list_event(event, terminal, ret_path),
+            ExplorerEvent::Quit => Some(ExplorerTransition::Quit),
+        }
+    }
+
+    fn handle_list_event(
+        &mut self,
+        event: VerticalListEvent,
+        terminal: &ratatui::DefaultTerminal,
+        ret_path: &mut PathBuf,
+    ) -> Option<ExplorerTransition> {
+        let term_height = terminal.size().map(|s| s.height).unwrap_or(0);
+        let page_height = term_height.saturating_sub(2);
+
+        match event {
+            VerticalListEvent::Prev => {
+                self.prev();
+                None
+            }
+            VerticalListEvent::Next => {
+                self.next();
+                None
+            }
+            VerticalListEvent::Home => {
+                self.first();
+                None
+            }
+            VerticalListEvent::End => {
+                self.last();
+                None
+            }
+            VerticalListEvent::PageUp => {
+                for _ in 0..page_height {
+                    self.prev();
+                }
+                None
+            }
+            VerticalListEvent::PageDown => {
+                for _ in 0..page_height {
+                    self.next();
+                }
+                None
+            }
+            VerticalListEvent::Activate => self.select(ret_path),
+        }
     }
 
     /// Handle a reply from the backend.
@@ -334,18 +394,16 @@ impl UiDirEntry {
     }
 }
 
-/// A struct representing an instruction to navigate to the operations scene, and
+/// A struct representing an instruction to navigate to another scene, and
 /// any associated/related data.
 #[must_use]
 #[derive(Debug)]
-pub(in crate::tui) struct GoToOperations {
-    /// The full path of the selected file to give to the operations scene.
-    file_path: PathBuf,
-}
-
-impl GoToOperations {
-    /// Returns the full path of the selected file to give to the operations scene.
-    pub(in crate::tui) fn file_path(&self) -> &Path {
-        &self.file_path
-    }
+pub(in crate::tui) enum ExplorerTransition {
+    /// Navigate to the operations scene.
+    OperationsScene {
+        /// The full path of the selected file to give to the operations scene.
+        file_path: PathBuf,
+    },
+    /// Quit the application.
+    Quit,
 }

@@ -9,11 +9,7 @@
 //! This is not used in the CLI, which uses the main thread for everything,
 //! since it is not interactive.
 
-use std::{
-    io,
-    sync::mpsc,
-    thread::{self, JoinHandle},
-};
+use std::{io, sync::mpsc, thread};
 
 const BACKEND_THREAD_NAME: &str = "TRT-Backend";
 
@@ -48,14 +44,11 @@ impl BackendState {
     ///
     /// # Errors
     /// Errors if the backend thread could not be made.
-    pub(crate) fn spawn() -> io::Result<BackendHandle> {
+    pub(crate) fn spawn() -> io::Result<BackendConnection> {
         let (state, connection) = Self::new();
         let builder = thread::Builder::new().name(BACKEND_THREAD_NAME.to_string());
-        let join_handle = builder.spawn(move || state.run())?;
-        Ok(BackendHandle {
-            connection,
-            join_handle,
-        })
+        builder.spawn(move || state.run())?;
+        Ok(connection)
     }
 
     /// Run this backend in the current thread.
@@ -92,16 +85,6 @@ pub(crate) struct BackendConnection {
     pub(crate) tx: mpsc::Sender<BackendMessage>,
     /// Receiver of replies received from the backend.
     pub(crate) rx: mpsc::Receiver<BackendReply>,
-}
-
-/// A struct containing the connection and [`JoinHandle`] to an active, running
-/// backend.
-#[derive(Debug)]
-pub(crate) struct BackendHandle {
-    /// The bidirectional connection to the backend.
-    pub(crate) connection: BackendConnection,
-    /// The [`JoinHandle`] to the backend thread.
-    pub(crate) join_handle: JoinHandle<()>,
 }
 
 /// Represents a message destined to the backend.

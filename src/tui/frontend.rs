@@ -101,14 +101,17 @@ impl AppFrontend {
         loop {
             self.scene.render(&mut terminal.get_frame());
 
-            if let ControlFlow::Break(res) = self.handle_events() {
+            if let ControlFlow::Break(res) = self.handle_events(terminal) {
                 return res;
             }
         }
     }
 
     /// Handle crossterm (console) events.
-    fn handle_events(&mut self) -> ControlFlow<io::Result<()>> {
+    fn handle_events(
+        &mut self,
+        terminal: &ratatui::DefaultTerminal,
+    ) -> ControlFlow<io::Result<()>> {
         match crossterm::event::poll(Self::EVENT_POLL_DURATION) {
             Ok(true) => (),
             Ok(false) => return ControlFlow::Continue(()),
@@ -121,7 +124,8 @@ impl AppFrontend {
         };
 
         self.scene
-            .handle_event(event, &mut self.conn, &mut self.ret_path);
+            .handle_event(event, terminal, &mut self.conn, &mut self.ret_path)
+            .map_break(|()| Ok(()))?;
 
         ControlFlow::Continue(())
     }

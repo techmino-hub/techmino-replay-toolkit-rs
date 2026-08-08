@@ -7,6 +7,7 @@ use libtechmino_replay::ReplayParseError;
 
 use crate::{backend::BackendState, cli::clap::TuiArguments};
 
+mod event;
 mod frontend;
 mod scenes;
 
@@ -16,7 +17,7 @@ mod scenes;
 /// On error, returns the desired non-zero exit code of the process.
 pub fn start(args: TuiArguments) -> Result<(), NonZeroI32> {
     let conn = match BackendState::spawn() {
-        Ok(bh) => bh.connection,
+        Ok(c) => c,
         Err(e) => {
             eprintln!("Error: Failed to start processing backend thread: {e}");
             return Err(NonZeroI32::MIN);
@@ -31,7 +32,12 @@ pub fn start(args: TuiArguments) -> Result<(), NonZeroI32> {
         }
     };
 
-    ratatui::run(move |terminal| frontend.run(terminal));
+    let res = ratatui::run(move |terminal| frontend.run(terminal));
+
+    if let Err(e) = res {
+        eprintln!("Run-time error: {e}");
+        return Err(NonZeroI32::MIN);
+    }
 
     Ok(())
 }
