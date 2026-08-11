@@ -8,12 +8,13 @@ use std::{
 use libtechmino_replay::GameReplayMetadata;
 use ratatui::{
     crossterm,
-    prelude::{Frame, Text},
-    widgets::{Paragraph, Wrap},
+    prelude::{Constraint, Frame, Layout},
+    widgets::{Block, Paragraph, ScrollbarState, Wrap},
 };
 
 use crate::{
     backend::BackendReply,
+    consts::tui::{EXP_ERROR_HEADING, EXP_ERROR_HINT, EXP_ERROR_PADDING_MIN_HEIGHT},
     tui::{
         ParseOrIoError,
         event::{VerticalListEvent, explorer::ExplorerEvent},
@@ -160,6 +161,27 @@ impl ExplorerScene {
         frame.render_widget(text, frame.area());
     }
 
+    /// Rendering when the file list can't be retrieved (i.e., a fatal error occurred)
+    fn render_error(folder: &Path, error: &io::Error, frame: &mut Frame) {
+        let block = Block::new();
+
+        let text = format!(
+            "{heading}\n{error}\n{hint}",
+            heading = EXP_ERROR_HEADING,
+            hint = EXP_ERROR_HINT
+        );
+        let text = Paragraph::new(text).wrap(Wrap { trim: true }).centered();
+
+        let padding_constraint = (frame.area().height >= EXP_ERROR_PADDING_MIN_HEIGHT)
+            .then_some(Constraint::Percentage(30));
+        let constraints = padding_constraint
+            .into_iter()
+            .chain(core::iter::once(Constraint::Fill(1)));
+
+        let layout = Layout::vertical(constraints);
+        // TODO: Draw this layout
+    }
+
     /// Handles a crossterm event.
     ///
     /// # Returns
@@ -245,6 +267,8 @@ pub(in crate::tui) struct FileList {
     entries: Vec<UiDirEntry>,
     /// Information about the currently-selected file.
     selected: SelectedFile,
+    /// The current scrollbar state.
+    scrollbar_state: ScrollbarState,
     /// The number of non-fatal I/O errors that occurred while traversing the
     /// directory.
     non_fatal_errors: usize,
@@ -284,11 +308,14 @@ impl FileList {
             entries.push(entry);
         }
 
+        let scrollbar_state = ScrollbarState::new(entries.len());
+
         let selected = SelectedFile::new(&folder, &entries);
 
         Ok(Self {
             entries,
             selected,
+            scrollbar_state,
             non_fatal_errors,
         })
     }
