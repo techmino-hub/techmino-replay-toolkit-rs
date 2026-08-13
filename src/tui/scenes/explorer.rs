@@ -1,4 +1,4 @@
-use core::{cell::RefCell, fmt::Display, num::NonZeroUsize};
+use core::{cell::RefCell, cmp::Ordering, fmt::Display, num::NonZeroUsize};
 use std::{
     borrow::Cow,
     ffi::{OsStr, OsString},
@@ -389,18 +389,27 @@ impl FileList {
             };
 
             let mut name = entry.file_name();
+            let mut is_dir = false;
+
             if let Ok(ftype) = entry.file_type()
                 && ftype.is_dir()
             {
                 name.push(path::MAIN_SEPARATOR_STR);
+                is_dir = true;
             }
 
             let metadata = entry.metadata().ok();
 
-            let entry = UiDirEntry::Regular { name, metadata };
+            let entry = UiDirEntry::Regular {
+                name,
+                is_dir,
+                metadata,
+            };
 
             entries.push(entry);
         }
+
+        entries.sort();
 
         let primary_vscroll = RefCell::new(ScrollbarState::new(entries.len()));
 
@@ -524,7 +533,12 @@ pub(in crate::tui) enum UiDirEntry {
     /// Encompasses both files, folders, and symlinks.
     Regular {
         /// The displayed name of the directory entry.
+        ///
+        /// If this entry is a directory, then this comes with the OS-specific
+        /// path separator trailing at the end.
         name: OsString,
+        /// Whether or not this directory entry is itself a directory.
+        is_dir: bool,
         /// The metadata of this directory entry, if retrieving it was successful.
         metadata: Option<Metadata>,
     },
@@ -540,7 +554,11 @@ impl UiDirEntry {
     #[must_use]
     pub(in crate::tui) fn name(&self) -> &OsStr {
         match self {
-            UiDirEntry::Regular { name, metadata: _ } => name,
+            UiDirEntry::Regular {
+                name,
+                is_dir: _,
+                metadata: _,
+            } => name,
             UiDirEntry::ParentDir { metadata: _ } => OsStr::new("../   (Alt+U)"),
         }
     }
@@ -549,9 +567,64 @@ impl UiDirEntry {
     #[must_use]
     pub(in crate::tui) fn resolve(&self, folder: &Path) -> PathBuf {
         match self {
-            UiDirEntry::Regular { name, metadata: _ } => folder.join(name),
+            UiDirEntry::Regular {
+                name,
+                is_dir: _,
+                metadata: _,
+            } => folder.join(name),
             UiDirEntry::ParentDir { metadata: _ } => folder.parent().unwrap_or(folder).to_owned(),
         }
+    }
+}
+
+impl PartialEq for UiDirEntry {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Self::Regular {
+                    name: l_name,
+                    is_dir: l_is_dir,
+                    metadata: _,
+                },
+                Self::Regular {
+                    name: r_name,
+                    is_dir: r_is_dir,
+                    metadata: _,
+                },
+            ) => l_name == r_name && l_is_dir == r_is_dir,
+            (Self::ParentDir { .. }, Self::ParentDir { .. }) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for UiDirEntry {}
+
+impl PartialOrd for UiDirEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for UiDirEntry {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Parent dir, then dir, then files.
+
+        let (lhs, rhs) = match (self, other) {
+            (Self::ParentDir { .. }, Self::ParentDir { .. }) => return Ordering::Equal,
+            (Self::ParentDir { .. }, Self::Regular { .. }) => return Ordering::Less,
+            (Self::Regular { .. }, Self::ParentDir { .. }) => return Ordering::Greater,
+            (Self::Regular { is_dir: true, .. }, Self::Regular { is_dir: false, .. }) => {
+                return Ordering::Less;
+            }
+            (Self::Regular { is_dir: false, .. }, Self::Regular { is_dir: true, .. }) => {
+                return Ordering::Greater;
+            }
+            (Self::Regular { name: lhs, .. }, Self::Regular { name: rhs, .. }) => (lhs, rhs),
+        };
+
+        // Then compare names logically
+        alphanumeric_sort::compare_os_str(lhs, rhs)
     }
 }
 
