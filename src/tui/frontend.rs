@@ -15,7 +15,7 @@ use crate::{
     cli::clap::TuiArguments,
     consts::backend::{EMSG_BACKEND_CONNECTION_BROKE, EMSG_BACKEND_UNRESPONSIVE},
     paths,
-    tui::scenes::{Scene, explorer::ExplorerScene},
+    tui::scenes::Scene,
 };
 
 /// Represents the state for the TUI app's frontend.
@@ -41,12 +41,12 @@ impl AppFrontend {
         Self::check_backend_connection(&conn)?;
 
         let explorer_path = args.path.clone().unwrap_or_else(paths::get_initial_path);
-        let ui_state = Scene::Explorer(ExplorerScene::new(&explorer_path));
+        let scene = Scene::new(&explorer_path);
 
         Ok(Self {
             ret_path: explorer_path,
             conn,
-            scene: ui_state,
+            scene,
         })
     }
 

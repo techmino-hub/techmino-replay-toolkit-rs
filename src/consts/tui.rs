@@ -1,6 +1,6 @@
 use ratatui::{
     crossterm::event::KeyCode,
-    prelude::{Color, Constraint, Style},
+    prelude::{Constraint, Style},
 };
 
 /// General keycode list for navigating to the previous entry in a vertical list.

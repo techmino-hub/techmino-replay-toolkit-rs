@@ -27,10 +27,10 @@ impl Scene {
     /// If the path points to a file, initializes at the operations scene.
     /// Otherwise, initializes at the explorer scene.
     pub(in crate::tui) fn new(path: &Path) -> Self {
-        if path.is_dir() {
-            Self::Explorer(ExplorerScene::new(path))
+        if path.is_file() {
+            todo!("Open operations scene at path {path:?}");
         } else {
-            Self::Operations(todo!())
+            Self::Explorer(ExplorerScene::new(path))
         }
     }
 
@@ -47,7 +47,7 @@ impl Scene {
         &mut self,
         event: crossterm::event::Event,
         terminal: &ratatui::DefaultTerminal,
-        backend: &mut BackendConnection,
+        _backend: &mut BackendConnection,
         ret_path: &mut PathBuf,
     ) -> ControlFlow<()> {
         match self {
