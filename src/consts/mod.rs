@@ -7,7 +7,8 @@ pub(crate) mod tui;
 
 /////////////// REPLAY MAGIC HEADERS ///////////////
 
-/// Zlib always begins with 0x78 (`x`): https://en.wikipedia.org/wiki/List_of_file_signatures
+/// Zlib always begins with 0x78 (`x`). \
+/// <https://en.wikipedia.org/wiki/List_of_file_signatures>
 pub(crate) const ZLIB_HEADER_FIRST_BYTE: u8 = b'x';
 /// 0x7800 until 0x78FF always starts with an `e` in base64
 pub(crate) const BASE64_ZLIB_FIRST_BYTE: u8 = b'e';

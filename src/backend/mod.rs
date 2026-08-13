@@ -78,7 +78,7 @@ struct FrontendConnection {
 /// Represents a bidirectional connection to the backend (presumably held by
 /// the frontend).
 ///
-/// You get this from [`AppBackend::new`].
+/// You get this from [`BackendState::new`].
 #[derive(Debug)]
 pub(crate) struct BackendConnection {
     /// Sender of messages destined to the backend.

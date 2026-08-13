@@ -117,7 +117,7 @@ pub(crate) fn truncate_folder_path<'a>(path: &'a str, max_len: usize) -> Cow<'a,
     truncate_folder_path_inner::<SEPARATOR>(path, max_len)
 }
 
-/// Internal version of the [`trim_folder_path`] function for tests.
+/// Internal version of the [`truncate_folder_path`] function for tests.
 fn truncate_folder_path_inner<'a, const SEPARATOR: char>(
     path: &'a str,
     max_len: usize,
