@@ -17,10 +17,11 @@ use ratatui::{
 use crate::{
     backend::BackendReply,
     consts::tui::{
-        EXP_ERROR_HEADING, EXP_ERROR_HINT, EXP_ERROR_PADDING_MIN_HEIGHT,
-        EXP_PRIM_STYLE_FILENAME_SEL, EXP_PRIM_STYLE_FILENAME_UNSEL, EXP_PRIM_STYLE_LINE_SEL,
-        EXP_PRIM_STYLE_LINE_UNSEL, EXP_PRIM_STYLE_SPACER_SEL, EXP_PRIM_STYLE_SPACER_UNSEL,
-        EXP_PRIM_TEXT_SPACER_SEL, EXP_PRIM_TEXT_SPACER_UNSEL, EXP_SEC_CONTENT_LENGTH,
+        EXP_ERROR_HEADING, EXP_ERROR_HINT, EXP_ERROR_PADDING_CONSTRAINT,
+        EXP_ERROR_PADDING_MIN_HEIGHT, EXP_PRIM_STYLE_FILENAME_SEL, EXP_PRIM_STYLE_FILENAME_UNSEL,
+        EXP_PRIM_STYLE_LINE_SEL, EXP_PRIM_STYLE_LINE_UNSEL, EXP_PRIM_STYLE_SPACER_SEL,
+        EXP_PRIM_STYLE_SPACER_UNSEL, EXP_PRIM_TEXT_SPACER_SEL, EXP_PRIM_TEXT_SPACER_UNSEL,
+        EXP_SEC_CONTENT_LENGTH,
     },
     paths::truncate_folder_path,
     tui::{
@@ -70,61 +71,96 @@ impl ExplorerScene {
         self.file_list = FileList::new(self.folder());
     }
 
-    /// Move the cursor to the previous item.
-    fn prev(&mut self) {
+    /// Move the cursor to a certain new index.
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn move_cursor<I>(&mut self, index_cb: I, page_height: u16)
+    where
+        I: FnOnce(&FileList) -> usize,
+    {
         let Ok(file_list) = &mut self.file_list else {
             return;
         };
 
-        let index = &mut file_list.selected.index;
+        let new_idx = index_cb(file_list);
 
-        *index = index.saturating_sub(1);
+        if file_list.selected.index == new_idx {
+            return;
+        }
+
+        file_list.selected.index = new_idx;
 
         file_list
             .selected
             .update_metadata(&self.folder, &file_list.entries);
+
+        file_list.rescroll(page_height);
+    }
+
+    /// Move the cursor to the previous item.
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn prev(&mut self, page_height: u16) {
+        self.prev_multi(1, page_height);
+    }
+
+    /// Move the cursor to the `amount`-th previous item.
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn prev_multi(&mut self, amount: usize, page_height: u16) {
+        self.move_cursor(
+            |list| list.selected.index.saturating_sub(amount),
+            page_height,
+        );
     }
 
     /// Move the cursor to the next item.
-    fn next(&mut self) {
-        let Ok(file_list) = &mut self.file_list else {
-            return;
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn next(&mut self, page_height: u16) {
+        self.next_multi(1, page_height);
+    }
+
+    /// Move the cursor to the `amount`-th next item.
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn next_multi(&mut self, amount: usize, page_height: u16) {
+        let index_cb = |list: &FileList| -> usize {
+            let len = list.entries.len();
+            let index = list.selected.index;
+
+            index.saturating_add(amount).min(len.saturating_sub(1))
         };
 
-        let len = file_list.entries.len();
-        let index = &mut file_list.selected.index;
-
-        *index = index.saturating_add(1).min(len.saturating_sub(1));
-
-        file_list
-            .selected
-            .update_metadata(&self.folder, &file_list.entries);
+        self.move_cursor(index_cb, page_height);
     }
 
     /// Move the cursor to the first item.
-    fn first(&mut self) {
-        let Ok(file_list) = &mut self.file_list else {
-            return;
-        };
-
-        file_list.selected.index = 0;
-
-        file_list
-            .selected
-            .update_metadata(&self.folder, &file_list.entries);
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn first(&mut self, page_height: u16) {
+        self.move_cursor(|_| 0, page_height);
     }
 
     /// Move the cursor to the last item.
-    fn last(&mut self) {
-        let Ok(file_list) = &mut self.file_list else {
-            return;
-        };
-
-        file_list.selected.index = file_list.entries().len() - 1;
-
-        file_list
-            .selected
-            .update_metadata(&self.folder, &file_list.entries);
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn last(&mut self, page_height: u16) {
+        self.move_cursor(|list| list.entries.len() - 1, page_height);
     }
 
     /// Selects the currently-highlighted item.
@@ -217,7 +253,7 @@ impl ExplorerScene {
         let text = Paragraph::new(text).wrap(Wrap { trim: true }).centered();
 
         let padding_constraint = (frame.area().height >= EXP_ERROR_PADDING_MIN_HEIGHT)
-            .then_some(Constraint::Percentage(20));
+            .then_some(EXP_ERROR_PADDING_CONSTRAINT);
         let constraints = padding_constraint
             .into_iter()
             .chain(core::iter::once(Constraint::Fill(1)));
@@ -264,6 +300,12 @@ impl ExplorerScene {
             ExplorerEvent::SecondaryListEvent(event) => {
                 todo!("Handle secondary list event {event:?}");
             }
+            ExplorerEvent::Rescroll(_cols, rows) => {
+                if let Ok(list) = &mut self.file_list {
+                    list.rescroll(rows);
+                }
+                None
+            }
             ExplorerEvent::Quit => Some(ExplorerTransition::Quit),
         }
     }
@@ -279,31 +321,27 @@ impl ExplorerScene {
 
         match event {
             VerticalListEvent::Prev => {
-                self.prev();
+                self.prev(page_height);
                 None
             }
             VerticalListEvent::Next => {
-                self.next();
+                self.next(page_height);
                 None
             }
             VerticalListEvent::Home => {
-                self.first();
+                self.first(page_height);
                 None
             }
             VerticalListEvent::End => {
-                self.last();
+                self.last(page_height);
                 None
             }
             VerticalListEvent::PageUp => {
-                for _ in 0..page_height {
-                    self.prev();
-                }
+                self.prev_multi(page_height as usize, page_height);
                 None
             }
             VerticalListEvent::PageDown => {
-                for _ in 0..page_height {
-                    self.next();
-                }
+                self.next_multi(page_height as usize, page_height);
                 None
             }
             VerticalListEvent::Activate => self.select(ret_path),
@@ -376,16 +414,34 @@ impl FileList {
         })
     }
 
-    /// Gets the list of file entries shown in the current directory.
-    #[must_use]
-    pub(in crate::tui) fn entries(&self) -> &[UiDirEntry] {
-        &self.entries
-    }
+    /// Adjust the primary vertical scroll offset to make the currently-selected
+    /// entry visible, if it is currently off-screen.
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn rescroll(&mut self, page_height: u16) {
+        let Some(page_height_minus_one) = page_height.checked_sub(1) else {
+            // Terminal is too small to render anything!
+            return;
+        };
 
-    /// Information about the currently-selected file.
-    #[must_use]
-    pub(in crate::tui) fn selected(&self) -> &SelectedFile {
-        &self.selected
+        let page_height_minus_one = page_height_minus_one as usize;
+
+        let first_displayed = self.primary_vscroll.borrow().get_position();
+        let last_displayed = first_displayed.saturating_add(page_height_minus_one);
+
+        let selected_idx = self.selected.index;
+
+        if selected_idx < first_displayed {
+            // Selected is above viewport
+            let mut state = self.primary_vscroll.borrow_mut();
+            *state = state.position(selected_idx);
+        } else if selected_idx > last_displayed {
+            // Selected is below viewport
+            let mut state = self.primary_vscroll.borrow_mut();
+            *state = state.position(selected_idx.saturating_sub(page_height_minus_one));
+        }
     }
 
     /// Returns the data for the displayed error counter.

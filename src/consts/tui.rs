@@ -1,6 +1,6 @@
 use ratatui::{
     crossterm::event::KeyCode,
-    prelude::{Color, Style},
+    prelude::{Color, Constraint, Style},
 };
 
 /// General keycode list for navigating to the previous entry in a vertical list.
@@ -33,6 +33,13 @@ pub(crate) static EXP_ERROR_HINT: &str = "Alt+U to move up; Q or Ctrl+C to quit"
 /// The minimum height of the terminal in the "error" version of the explorer
 /// scene that has any vertical padding.
 pub(crate) const EXP_ERROR_PADDING_MIN_HEIGHT: u16 = 16;
+
+/// The size of the vertical padding in the "error" version of the explorer
+/// scene.
+///
+/// This assumes the minimum height requirement is met, see
+/// [`EXP_ERROR_PADDING_MIN_HEIGHT`].
+pub(crate) const EXP_ERROR_PADDING_CONSTRAINT: Constraint = Constraint::Percentage(20);
 
 /// The text for the unselected entry's spacer.
 pub(crate) const EXP_PRIM_TEXT_SPACER_UNSEL: &str = " ";

@@ -17,6 +17,8 @@ pub(in crate::tui) enum ExplorerEvent {
     PrimaryListEvent(VerticalListEvent),
     /// An event relating to the file metadata/secondary block.
     SecondaryListEvent(VerticalListEvent),
+    /// Adjust the scroll state to make the currently-selected item visible.
+    Rescroll(u16, u16),
     /// Quit the application.
     Quit,
 }
@@ -44,6 +46,10 @@ impl ExplorerEvent {
             } else {
                 return Some(Self::PrimaryListEvent(list_ev));
             }
+        }
+
+        if let Some((cols, rows)) = ev.as_resize_event() {
+            return Some(Self::Rescroll(cols, rows));
         }
 
         None
