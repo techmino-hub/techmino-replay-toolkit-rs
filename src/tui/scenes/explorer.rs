@@ -10,14 +10,17 @@ use std::{
 use libtechmino_replay::GameReplayMetadata;
 use ratatui::{
     crossterm,
-    prelude::{Constraint, Frame, Layout, Rect, Widget},
+    prelude::{Constraint, Frame, HorizontalAlignment, Layout, Line, Rect, Span, Widget},
     widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
 
 use crate::{
     backend::BackendReply,
     consts::tui::{
-        EXP_ERROR_HEADING, EXP_ERROR_HINT, EXP_ERROR_PADDING_MIN_HEIGHT, EXP_SEC_CONTENT_LENGTH,
+        EXP_ERROR_HEADING, EXP_ERROR_HINT, EXP_ERROR_PADDING_MIN_HEIGHT,
+        EXP_PRIM_STYLE_FILENAME_SEL, EXP_PRIM_STYLE_FILENAME_UNSEL, EXP_PRIM_STYLE_LINE_SEL,
+        EXP_PRIM_STYLE_LINE_UNSEL, EXP_PRIM_STYLE_SPACER_SEL, EXP_PRIM_STYLE_SPACER_UNSEL,
+        EXP_PRIM_TEXT_SPACER_SEL, EXP_PRIM_TEXT_SPACER_UNSEL, EXP_SEC_CONTENT_LENGTH,
     },
     paths::truncate_folder_path,
     tui::{
@@ -49,12 +52,6 @@ impl ExplorerScene {
     /// Refreshes the file list.
     pub(in crate::tui) fn refresh(&mut self) {
         self.file_list = FileList::new(&self.folder);
-    }
-
-    /// Returns the (cached) file list to show, or an I/O error if a fatal error
-    /// occurred.
-    pub(in crate::tui) fn file_list(&self) -> &io::Result<FileList> {
-        &self.file_list
     }
 
     /// Returns the current path being shown.
@@ -201,8 +198,7 @@ impl ExplorerScene {
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         frame.render_stateful_widget(scrollbar, prim_area, &mut list.primary_vscroll.borrow_mut());
 
-        let text = Paragraph::new(format!("{list:?}")).wrap(Wrap { trim: true });
-        frame.render_widget(text, frame.area());
+        frame.render_widget(list.as_primary_widget(), inner_prim_area);
     }
 
     /// Rendering when the file list can't be retrieved (i.e., a fatal error occurred)
@@ -400,6 +396,11 @@ impl FileList {
             None => ErrorCounter::None,
         }
     }
+
+    /// Return a widget to display a representation of this for the primary block.
+    fn as_primary_widget(&self) -> ExplorerPrimaryContents<'_> {
+        ExplorerPrimaryContents(self)
+    }
 }
 
 /// Contains internal data about the selected file shown in the secondary block.
@@ -484,7 +485,7 @@ impl UiDirEntry {
     pub(in crate::tui) fn name(&self) -> &OsStr {
         match self {
             UiDirEntry::Regular { name, metadata: _ } => name,
-            UiDirEntry::ParentDir { metadata: _ } => OsStr::new("../"),
+            UiDirEntry::ParentDir { metadata: _ } => OsStr::new("../   (Alt+U)"),
         }
     }
 
@@ -512,7 +513,9 @@ pub(in crate::tui) enum ExplorerTransition {
     Quit,
 }
 
-/// A [`Widget`] for the explorer scene's primary/file list block.
+/// Represents the explorer scene's primary/file list block.
+///
+/// Use [`instantiate`][Self::instantiate] to convert into a [`Widget`].
 #[must_use]
 struct ExplorerPrimaryBlock<'a> {
     path: Cow<'a, str>,
@@ -531,7 +534,6 @@ impl ExplorerPrimaryBlock<'_> {
             .title_top(path)
     }
 
-    #[must_use]
     fn to_owned(&self) -> Self {
         let path = self.path.to_string();
         let path = Cow::Owned(path);
@@ -555,7 +557,7 @@ impl Widget for ExplorerPrimaryBlock<'_> {
 
 /// A representation of the error counter display.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ErrorCounter {
+pub(in crate::tui) enum ErrorCounter {
     /// No errors.
     None,
     /// A non-zero amount of non-fatal errors.
@@ -581,5 +583,63 @@ impl ErrorCounter {
 impl Display for ErrorCounter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.to_str())
+    }
+}
+
+/// A widget to render the primary block's contents based on the current
+/// [`FileList`].
+#[must_use = "render this widget"]
+struct ExplorerPrimaryContents<'a>(&'a FileList);
+
+impl Widget for ExplorerPrimaryContents<'_> {
+    fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer) {
+        let list = self.0;
+        let scroll_offset = list.primary_vscroll.borrow().get_position();
+
+        for (display_index, area) in area.rows().enumerate() {
+            let Some(entry_idx) = display_index.checked_add(scroll_offset) else {
+                // Overflow
+                break;
+            };
+
+            let Some(entry) = list.entries.get(entry_idx) else {
+                // Entry not found
+                break;
+            };
+
+            let is_selected = entry_idx == list.selected.index;
+
+            let (line_style, spacer_style, filename_style) = if is_selected {
+                (
+                    EXP_PRIM_STYLE_LINE_SEL,
+                    EXP_PRIM_STYLE_SPACER_SEL,
+                    EXP_PRIM_STYLE_FILENAME_SEL,
+                )
+            } else {
+                (
+                    EXP_PRIM_STYLE_LINE_UNSEL,
+                    EXP_PRIM_STYLE_SPACER_UNSEL,
+                    EXP_PRIM_STYLE_FILENAME_UNSEL,
+                )
+            };
+
+            let spacer_text = if is_selected {
+                EXP_PRIM_TEXT_SPACER_SEL
+            } else {
+                EXP_PRIM_TEXT_SPACER_UNSEL
+            };
+
+            let spacer = Span::raw(spacer_text).style(spacer_style);
+            let filename = Span::raw(entry.name().to_string_lossy()).style(filename_style);
+
+            let line = Line {
+                style: line_style,
+                spans: vec![spacer, filename],
+                alignment: Some(HorizontalAlignment::Left),
+            };
+
+            line.render(area, buf);
+            // let line = Line::raw(entry.name().to_string_lossy()).;
+        }
     }
 }

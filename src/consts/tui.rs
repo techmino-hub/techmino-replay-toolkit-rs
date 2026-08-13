@@ -1,4 +1,7 @@
-use ratatui::crossterm::event::KeyCode;
+use ratatui::{
+    crossterm::event::KeyCode,
+    prelude::{Color, Style},
+};
 
 /// General keycode list for navigating to the previous entry in a vertical list.
 pub(crate) const KC_GEN_UP: [KeyCode; 2] = [KeyCode::Up, KeyCode::Char('k')];
@@ -30,6 +33,31 @@ pub(crate) static EXP_ERROR_HINT: &str = "Alt+U to move up; Q or Ctrl+C to quit"
 /// The minimum height of the terminal in the "error" version of the explorer
 /// scene that has any vertical padding.
 pub(crate) const EXP_ERROR_PADDING_MIN_HEIGHT: u16 = 16;
+
+/// The text for the unselected entry's spacer.
+pub(crate) const EXP_PRIM_TEXT_SPACER_UNSEL: &str = " ";
+
+/// The text for the selected entry's spacer.
+pub(crate) const EXP_PRIM_TEXT_SPACER_SEL: &str = "→ ";
+
+/// The style to give to the primary block's unselected line.
+pub(crate) const EXP_PRIM_STYLE_LINE_UNSEL: Style = Style::new();
+
+/// The style to give to the primary block's selected line.
+pub(crate) const EXP_PRIM_STYLE_LINE_SEL: Style = Style::new().on_red().bold();
+
+/// The style to give to the primary block's unselected spacer.
+pub(crate) const EXP_PRIM_STYLE_SPACER_UNSEL: Style = EXP_PRIM_STYLE_LINE_UNSEL;
+
+/// The style to give to the primary block's selected spacer.
+pub(crate) const EXP_PRIM_STYLE_SPACER_SEL: Style = EXP_PRIM_STYLE_LINE_SEL.light_red();
+
+/// The style to give to the primary block's unselected filename.
+pub(crate) const EXP_PRIM_STYLE_FILENAME_UNSEL: Style = EXP_PRIM_STYLE_LINE_UNSEL;
+
+/// The style to give to the primary block's selected filename.
+pub(crate) const EXP_PRIM_STYLE_FILENAME_SEL: Style =
+    EXP_PRIM_STYLE_LINE_SEL.light_cyan().underlined();
 
 /// The minimum width of the secondary block for it to contain a
 /// scroll hint in the bottom right.
