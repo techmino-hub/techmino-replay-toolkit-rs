@@ -27,6 +27,16 @@ pub(crate) static EXP_ERROR_HEADING: &str = "Could not read file list";
 /// The hint text for the "error" version of the explorer scene.
 pub(crate) static EXP_ERROR_HINT: &str = "Alt+U to move up; Q or Ctrl+C to quit";
 
-/// The minimum height in the "error" version of the explorer scene
-/// that has any vertical padding.
-pub(crate) const EXP_ERROR_PADDING_MIN_HEIGHT: u16 = 6;
+/// The minimum height of the terminal in the "error" version of the explorer
+/// scene that has any vertical padding.
+pub(crate) const EXP_ERROR_PADDING_MIN_HEIGHT: u16 = 16;
+
+/// The minimum width of the secondary block for it to contain a
+/// scroll hint in the bottom right.
+pub(crate) const EXP_SEC_SCROLL_HINT_MIN_BLOCK_WIDTH: u16 = 32;
+
+/// The "content length" of the secondary block's contents.
+///
+/// Used for the [`ScrollbarState`][ratatui::widgets::ScrollbarState] to
+/// limit scroll offsets.
+pub(crate) const EXP_SEC_CONTENT_LENGTH: usize = 24;

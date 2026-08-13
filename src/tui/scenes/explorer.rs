@@ -1,20 +1,25 @@
+use core::{cell::RefCell, fmt::Display, num::NonZeroUsize};
 use std::{
+    borrow::Cow,
     ffi::{OsStr, OsString},
     fs::{self, Metadata},
-    io,
+    io::{self},
     path::{self, Path, PathBuf},
 };
 
 use libtechmino_replay::GameReplayMetadata;
 use ratatui::{
     crossterm,
-    prelude::{Constraint, Frame, Layout},
-    widgets::{Block, Paragraph, ScrollbarState, Wrap},
+    prelude::{Constraint, Frame, Layout, Rect, Widget},
+    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
 
 use crate::{
     backend::BackendReply,
-    consts::tui::{EXP_ERROR_HEADING, EXP_ERROR_HINT, EXP_ERROR_PADDING_MIN_HEIGHT},
+    consts::tui::{
+        EXP_ERROR_HEADING, EXP_ERROR_HINT, EXP_ERROR_PADDING_MIN_HEIGHT, EXP_SEC_CONTENT_LENGTH,
+    },
+    paths::truncate_folder_path,
     tui::{
         ParseOrIoError,
         event::{VerticalListEvent, explorer::ExplorerEvent},
@@ -154,16 +159,59 @@ impl ExplorerScene {
         None
     }
 
+    /// Gets the primary block of this scene.
+    fn primary_block(&self) -> ExplorerPrimaryBlock<'_> {
+        let path = self.folder().as_os_str().to_string_lossy();
+        let error_counter = self
+            .file_list
+            .as_ref()
+            .map_or(ErrorCounter::Fatal, |l| l.error_counter());
+
+        ExplorerPrimaryBlock {
+            path,
+            error_counter,
+        }
+    }
+
     /// Renders this scene to the given frame.
     pub(in crate::tui::scenes) fn render(&self, frame: &mut Frame) {
+        match self.file_list {
+            Ok(ref list) => {
+                let block = self.primary_block().to_owned();
+                Self::render_normal(block, list, frame);
+            }
+            Err(ref error) => {
+                let block = self.primary_block();
+                Self::render_error(block, error, frame);
+            }
+        }
+    }
+
+    /// Rendering when the directory was read successfully
+    fn render_normal(prim_block: ExplorerPrimaryBlock<'_>, list: &FileList, frame: &mut Frame) {
         // TODO: Proper rendering
-        let text = Paragraph::new(format!("{self:?}")).wrap(Wrap { trim: true });
+
+        let [prim_area, sec_area] =
+            Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1)]).areas(frame.area());
+
+        let block = prim_block.instantiate(prim_area);
+        let inner_prim_area = block.inner(prim_area);
+        frame.render_widget(block, prim_area);
+
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+        frame.render_stateful_widget(scrollbar, prim_area, &mut list.primary_vscroll.borrow_mut());
+
+        let text = Paragraph::new(format!("{list:?}")).wrap(Wrap { trim: true });
         frame.render_widget(text, frame.area());
     }
 
     /// Rendering when the file list can't be retrieved (i.e., a fatal error occurred)
-    fn render_error(folder: &Path, error: &io::Error, frame: &mut Frame) {
-        let block = Block::new();
+    fn render_error(block: ExplorerPrimaryBlock<'_>, error: &io::Error, frame: &mut Frame) {
+        let area = frame.area();
+        let block = block.instantiate(area);
+        frame.render_widget(&block, area);
+
+        let area = block.inner(area);
 
         let text = format!(
             "{heading}\n{error}\n{hint}",
@@ -173,13 +221,20 @@ impl ExplorerScene {
         let text = Paragraph::new(text).wrap(Wrap { trim: true }).centered();
 
         let padding_constraint = (frame.area().height >= EXP_ERROR_PADDING_MIN_HEIGHT)
-            .then_some(Constraint::Percentage(30));
+            .then_some(Constraint::Percentage(20));
         let constraints = padding_constraint
             .into_iter()
             .chain(core::iter::once(Constraint::Fill(1)));
 
         let layout = Layout::vertical(constraints);
-        // TODO: Draw this layout
+        let rects = layout.split(area);
+        let allocation = rects
+            .last()
+            .copied()
+            .expect("constraint list should not be empty");
+        drop(rects);
+
+        frame.render_widget(text, allocation);
     }
 
     /// Handles a crossterm event.
@@ -207,12 +262,17 @@ impl ExplorerScene {
                 self.refresh();
                 None
             }
-            ExplorerEvent::ListEvent(event) => self.handle_list_event(event, terminal, ret_path),
+            ExplorerEvent::PrimaryListEvent(event) => {
+                self.handle_primary_list_event(event, terminal, ret_path)
+            }
+            ExplorerEvent::SecondaryListEvent(event) => {
+                todo!("Handle secondary list event {event:?}");
+            }
             ExplorerEvent::Quit => Some(ExplorerTransition::Quit),
         }
     }
 
-    fn handle_list_event(
+    fn handle_primary_list_event(
         &mut self,
         event: VerticalListEvent,
         terminal: &ratatui::DefaultTerminal,
@@ -267,8 +327,8 @@ pub(in crate::tui) struct FileList {
     entries: Vec<UiDirEntry>,
     /// Information about the currently-selected file.
     selected: SelectedFile,
-    /// The current scrollbar state.
-    scrollbar_state: ScrollbarState,
+    /// The current vertical scrollbar state of the primary block list.
+    primary_vscroll: RefCell<ScrollbarState>,
     /// The number of non-fatal I/O errors that occurred while traversing the
     /// directory.
     non_fatal_errors: usize,
@@ -308,42 +368,49 @@ impl FileList {
             entries.push(entry);
         }
 
-        let scrollbar_state = ScrollbarState::new(entries.len());
+        let primary_vscroll = RefCell::new(ScrollbarState::new(entries.len()));
 
         let selected = SelectedFile::new(&folder, &entries);
 
         Ok(Self {
             entries,
             selected,
-            scrollbar_state,
+            primary_vscroll,
             non_fatal_errors,
         })
     }
 
     /// Gets the list of file entries shown in the current directory.
+    #[must_use]
     pub(in crate::tui) fn entries(&self) -> &[UiDirEntry] {
         &self.entries
     }
 
     /// Information about the currently-selected file.
+    #[must_use]
     pub(in crate::tui) fn selected(&self) -> &SelectedFile {
         &self.selected
     }
 
-    /// Returns the number of non-fatal I/O errors that occurred while
-    /// traversing the directory.
-    pub(in crate::tui) fn non_fatal_errors(&self) -> usize {
-        self.non_fatal_errors
+    /// Returns the data for the displayed error counter.
+    #[must_use]
+    pub(in crate::tui) fn error_counter(&self) -> ErrorCounter {
+        match NonZeroUsize::new(self.non_fatal_errors) {
+            Some(e) => ErrorCounter::NonFatal(e),
+            None => ErrorCounter::None,
+        }
     }
 }
 
-/// Contains internal data about the selected file.
+/// Contains internal data about the selected file shown in the secondary block.
 #[derive(Debug)]
 pub(in crate::tui) struct SelectedFile {
     /// The index of the file which is selected.
     index: usize,
     /// The replay-specific metadata of that file if it parses correctly.
     rep_metadata: Result<GameReplayMetadata, ParseOrIoError>,
+    /// The current vertical scrollbar state of the secondary block.
+    secondary_vscroll: ScrollbarState,
 }
 
 impl SelectedFile {
@@ -352,10 +419,12 @@ impl SelectedFile {
     /// # Parameters
     /// - `folder`: The directory containing the given directory entries.
     /// - `entries`: The list of directory entries in the `folder` argument.
+    #[must_use]
     pub(in crate::tui::scenes) fn new(folder: &Path, entries: &[UiDirEntry]) -> Self {
         let mut this = Self {
             index: 0,
             rep_metadata: Err(ParseOrIoError::Io(io::Error::other(""))),
+            secondary_vscroll: ScrollbarState::new(EXP_SEC_CONTENT_LENGTH),
         };
 
         this.update_metadata(folder, entries);
@@ -411,6 +480,7 @@ pub(in crate::tui) enum UiDirEntry {
 
 impl UiDirEntry {
     /// Gets the displayed name of this directory entry.
+    #[must_use]
     pub(in crate::tui) fn name(&self) -> &OsStr {
         match self {
             UiDirEntry::Regular { name, metadata: _ } => name,
@@ -419,6 +489,7 @@ impl UiDirEntry {
     }
 
     /// Resolves this entry into a full path given a certain parent directory.
+    #[must_use]
     pub(in crate::tui) fn resolve(&self, folder: &Path) -> PathBuf {
         match self {
             UiDirEntry::Regular { name, metadata: _ } => folder.join(name),
@@ -439,4 +510,76 @@ pub(in crate::tui) enum ExplorerTransition {
     },
     /// Quit the application.
     Quit,
+}
+
+/// A [`Widget`] for the explorer scene's primary/file list block.
+#[must_use]
+struct ExplorerPrimaryBlock<'a> {
+    path: Cow<'a, str>,
+    error_counter: ErrorCounter,
+}
+
+impl ExplorerPrimaryBlock<'_> {
+    /// Instantiate this [`ExplorerPrimaryBlock`] instance into a [`Block`].
+    #[must_use]
+    fn instantiate(&self, area: Rect) -> Block<'_> {
+        let path_max_len = area.width.saturating_sub(2);
+        let path = truncate_folder_path(&self.path, path_max_len as usize);
+
+        Block::bordered()
+            .title_bottom(self.error_counter.to_str())
+            .title_top(path)
+    }
+
+    #[must_use]
+    fn to_owned(&self) -> Self {
+        let path = self.path.to_string();
+        let path = Cow::Owned(path);
+        let error_counter = self.error_counter;
+
+        Self {
+            path,
+            error_counter,
+        }
+    }
+}
+
+impl Widget for ExplorerPrimaryBlock<'_> {
+    fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer)
+    where
+        Self: Sized,
+    {
+        self.instantiate(area).render(area, buf)
+    }
+}
+
+/// A representation of the error counter display.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ErrorCounter {
+    /// No errors.
+    None,
+    /// A non-zero amount of non-fatal errors.
+    NonFatal(NonZeroUsize),
+    /// At least one fatal error occurred.
+    Fatal,
+}
+
+impl ErrorCounter {
+    /// Formats this enum into a readable form.
+    ///
+    /// Will not allocate if not necessary.
+    fn to_str(self) -> Cow<'static, str> {
+        match self {
+            Self::None => Cow::Borrowed("No errors"),
+            Self::NonFatal(NonZeroUsize::MIN) => Cow::Borrowed("1 error"),
+            Self::NonFatal(num) => Cow::Owned(format!("{num} errors")),
+            Self::Fatal => Cow::Borrowed("Fatal error"),
+        }
+    }
+}
+
+impl Display for ErrorCounter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.to_str())
+    }
 }

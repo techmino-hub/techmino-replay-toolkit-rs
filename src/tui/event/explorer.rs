@@ -14,7 +14,9 @@ pub(in crate::tui) enum ExplorerEvent {
     /// Refresh the current directory listing.
     Refresh,
     /// An event relating to the file list.
-    ListEvent(VerticalListEvent),
+    PrimaryListEvent(VerticalListEvent),
+    /// An event relating to the file metadata/secondary block.
+    SecondaryListEvent(VerticalListEvent),
     /// Quit the application.
     Quit,
 }
@@ -27,7 +29,24 @@ impl ExplorerEvent {
             return Some(ev);
         }
 
-        VerticalListEvent::process_ev(ev).map(Self::ListEvent)
+        if let Some(list_ev) = VerticalListEvent::process_ev(ev) {
+            let ctrl_held = match ev {
+                Event::FocusGained => false,
+                Event::FocusLost => false,
+                Event::Key(ev) => ev.modifiers.contains(KeyModifiers::CONTROL),
+                Event::Mouse(ev) => ev.modifiers.contains(KeyModifiers::CONTROL),
+                Event::Paste(..) => false,
+                Event::Resize(..) => false,
+            };
+
+            if ctrl_held {
+                return Some(Self::SecondaryListEvent(list_ev));
+            } else {
+                return Some(Self::PrimaryListEvent(list_ev));
+            }
+        }
+
+        None
     }
 
     /// Process the crossterm keyboard event, possibly yielding a logical list event.

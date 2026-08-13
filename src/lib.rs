@@ -17,6 +17,4 @@ pub mod tui;
 mod backend;
 mod consts;
 #[cfg(feature = "tui")]
-mod heuristics;
-#[cfg(feature = "tui")]
 mod paths;

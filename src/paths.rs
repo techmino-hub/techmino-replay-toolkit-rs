@@ -111,14 +111,14 @@ fn get_fallback_start_path() -> PathBuf {
 /// Trims away the start of a path of a given folder to a given maximum length,
 /// prioritizing path separator characters as points for splitting.
 #[cfg(feature = "tui")]
-pub(crate) fn trim_folder_path<'a>(path: &'a str, max_len: usize) -> Cow<'a, str> {
+pub(crate) fn truncate_folder_path<'a>(path: &'a str, max_len: usize) -> Cow<'a, str> {
     const SEPARATOR: char = std::path::MAIN_SEPARATOR;
 
-    trim_folder_path_inner::<SEPARATOR>(path, max_len)
+    truncate_folder_path_inner::<SEPARATOR>(path, max_len)
 }
 
 /// Internal version of the [`trim_folder_path`] function for tests.
-fn trim_folder_path_inner<'a, const SEPARATOR: char>(
+fn truncate_folder_path_inner<'a, const SEPARATOR: char>(
     path: &'a str,
     max_len: usize,
 ) -> Cow<'a, str> {
@@ -199,13 +199,13 @@ mod tests {
 
     /// Test case for the [`trim_folder_path`] function.
     #[derive(Debug)]
-    struct PathTrimCase {
+    struct PathTrunCase {
         path_input: &'static str,
         max_len: usize,
         expected_output: &'static str,
     }
 
-    impl PathTrimCase {
+    impl PathTrunCase {
         const fn new(
             path_input: &'static str,
             max_len: usize,
@@ -222,141 +222,141 @@ mod tests {
 
         const fn unix_case_list() -> impl IntoIterator<Item = Self> {
             [
-                PathTrimCase::new("/var/lib/hello/world/", 21, "/var/lib/hello/world/"),
-                PathTrimCase::new("/var/lib/hello/world/", 20, ".../lib/hello/world/"),
-                PathTrimCase::new("/var/lib/hello/world/", 19, ".../hello/world/"),
-                PathTrimCase::new("/var/lib/hello/world/", 16, ".../hello/world/"),
-                PathTrimCase::new("/var/lib/hello/world/", 15, ".../world/"),
-                PathTrimCase::new("/var/lib/hello/world/", 10, ".../world/"),
-                PathTrimCase::new("/var/lib/hello/world/", 9, "world/"),
-                PathTrimCase::new("/var/lib/hello/world/", 6, "world/"),
-                PathTrimCase::new("/var/lib/hello/world/", 5, "orld/"),
-                PathTrimCase::new("/var/lib/hello/world/", 4, "rld/"),
-                PathTrimCase::new("/var/lib/hello/world/", 3, "ld/"),
-                PathTrimCase::new("/var/lib/hello/world/", 2, "d/"),
-                PathTrimCase::new("/var/lib/hello/world/", 1, "/"),
-                PathTrimCase::new("/var/lib/hello/world/", 0, ""),
-                PathTrimCase::new(
+                PathTrunCase::new("/var/lib/hello/world/", 21, "/var/lib/hello/world/"),
+                PathTrunCase::new("/var/lib/hello/world/", 20, ".../lib/hello/world/"),
+                PathTrunCase::new("/var/lib/hello/world/", 19, ".../hello/world/"),
+                PathTrunCase::new("/var/lib/hello/world/", 16, ".../hello/world/"),
+                PathTrunCase::new("/var/lib/hello/world/", 15, ".../world/"),
+                PathTrunCase::new("/var/lib/hello/world/", 10, ".../world/"),
+                PathTrunCase::new("/var/lib/hello/world/", 9, "world/"),
+                PathTrunCase::new("/var/lib/hello/world/", 6, "world/"),
+                PathTrunCase::new("/var/lib/hello/world/", 5, "orld/"),
+                PathTrunCase::new("/var/lib/hello/world/", 4, "rld/"),
+                PathTrunCase::new("/var/lib/hello/world/", 3, "ld/"),
+                PathTrunCase::new("/var/lib/hello/world/", 2, "d/"),
+                PathTrunCase::new("/var/lib/hello/world/", 1, "/"),
+                PathTrunCase::new("/var/lib/hello/world/", 0, ""),
+                PathTrunCase::new(
                     "/home/gargantuan-folder-name/",
                     29,
                     "/home/gargantuan-folder-name/",
                 ),
-                PathTrimCase::new(
+                PathTrunCase::new(
                     "/home/gargantuan-folder-name/",
                     28,
                     ".../gargantuan-folder-name/",
                 ),
-                PathTrimCase::new(
+                PathTrunCase::new(
                     "/home/gargantuan-folder-name/",
                     27,
                     ".../gargantuan-folder-name/",
                 ),
-                PathTrimCase::new(
+                PathTrunCase::new(
                     "/home/gargantuan-folder-name/",
                     26,
                     "gargantuan-folder-name/",
                 ),
-                PathTrimCase::new(
+                PathTrunCase::new(
                     "/home/gargantuan-folder-name/",
                     23,
                     "gargantuan-folder-name/",
                 ),
-                PathTrimCase::new(
+                PathTrunCase::new(
                     "/home/gargantuan-folder-name/",
                     22,
                     "argantuan-folder-name/",
                 ),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 21, "rgantuan-folder-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 20, "gantuan-folder-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 19, "antuan-folder-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 18, "ntuan-folder-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 17, "tuan-folder-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 16, "uan-folder-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 15, "an-folder-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 14, "n-folder-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 13, "-folder-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 12, "folder-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 11, "older-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 10, "lder-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 9, "der-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 8, "er-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 7, "r-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 6, "-name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 5, "name/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 4, "ame/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 3, "me/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 2, "e/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 1, "/"),
-                PathTrimCase::new("/home/gargantuan-folder-name/", 0, ""),
-                PathTrimCase::new("/var/lib/hello/world", 20, "/var/lib/hello/world"),
-                PathTrimCase::new("/var/lib/hello/world", 19, ".../lib/hello/world"),
-                PathTrimCase::new("/var/lib/hello/world", 18, ".../hello/world"),
-                PathTrimCase::new("/var/lib/hello/world", 15, ".../hello/world"),
-                PathTrimCase::new("/var/lib/hello/world", 14, ".../world"),
-                PathTrimCase::new("/var/lib/hello/world", 9, ".../world"),
-                PathTrimCase::new("/var/lib/hello/world", 8, "world"),
-                PathTrimCase::new("/var/lib/hello/world", 5, "world"),
-                PathTrimCase::new("/var/lib/hello/world", 4, "orld"),
-                PathTrimCase::new("/var/lib/hello/world", 3, "rld"),
-                PathTrimCase::new("/var/lib/hello/world", 2, "ld"),
-                PathTrimCase::new("/var/lib/hello/world", 1, "d"),
-                PathTrimCase::new("/var/lib/hello/world", 0, ""),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 21, "rgantuan-folder-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 20, "gantuan-folder-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 19, "antuan-folder-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 18, "ntuan-folder-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 17, "tuan-folder-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 16, "uan-folder-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 15, "an-folder-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 14, "n-folder-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 13, "-folder-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 12, "folder-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 11, "older-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 10, "lder-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 9, "der-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 8, "er-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 7, "r-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 6, "-name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 5, "name/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 4, "ame/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 3, "me/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 2, "e/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 1, "/"),
+                PathTrunCase::new("/home/gargantuan-folder-name/", 0, ""),
+                PathTrunCase::new("/var/lib/hello/world", 20, "/var/lib/hello/world"),
+                PathTrunCase::new("/var/lib/hello/world", 19, ".../lib/hello/world"),
+                PathTrunCase::new("/var/lib/hello/world", 18, ".../hello/world"),
+                PathTrunCase::new("/var/lib/hello/world", 15, ".../hello/world"),
+                PathTrunCase::new("/var/lib/hello/world", 14, ".../world"),
+                PathTrunCase::new("/var/lib/hello/world", 9, ".../world"),
+                PathTrunCase::new("/var/lib/hello/world", 8, "world"),
+                PathTrunCase::new("/var/lib/hello/world", 5, "world"),
+                PathTrunCase::new("/var/lib/hello/world", 4, "orld"),
+                PathTrunCase::new("/var/lib/hello/world", 3, "rld"),
+                PathTrunCase::new("/var/lib/hello/world", 2, "ld"),
+                PathTrunCase::new("/var/lib/hello/world", 1, "d"),
+                PathTrunCase::new("/var/lib/hello/world", 0, ""),
             ]
         }
 
         const fn windows_case_list() -> impl IntoIterator<Item = Self> {
             [
-                PathTrimCase::new(
+                PathTrunCase::new(
                     r"C:\Testcases\Examples\Folder",
                     28,
                     r"C:\Testcases\Examples\Folder",
                 ),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder", 27, r"...\Examples\Folder"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder", 19, r"...\Examples\Folder"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder", 18, r"...\Folder"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder", 10, r"...\Folder"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder", 9, r"Folder"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder", 6, r"Folder"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder", 5, r"older"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder", 4, r"lder"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder", 3, r"der"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder", 2, r"er"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder", 1, r"r"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder", 0, r""),
-                PathTrimCase::new(
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder", 27, r"...\Examples\Folder"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder", 19, r"...\Examples\Folder"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder", 18, r"...\Folder"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder", 10, r"...\Folder"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder", 9, r"Folder"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder", 6, r"Folder"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder", 5, r"older"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder", 4, r"lder"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder", 3, r"der"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder", 2, r"er"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder", 1, r"r"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder", 0, r""),
+                PathTrunCase::new(
                     r"C:\Testcases\Examples\Folder\",
                     29,
                     r"C:\Testcases\Examples\Folder\",
                 ),
-                PathTrimCase::new(
+                PathTrunCase::new(
                     r"C:\Testcases\Examples\Folder\",
                     28,
                     r"...\Examples\Folder\",
                 ),
-                PathTrimCase::new(
+                PathTrunCase::new(
                     r"C:\Testcases\Examples\Folder\",
                     20,
                     r"...\Examples\Folder\",
                 ),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder\", 19, r"...\Folder\"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder\", 11, r"...\Folder\"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder\", 10, r"Folder\"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder\", 7, r"Folder\"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder\", 6, r"older\"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder\", 5, r"lder\"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder\", 4, r"der\"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder\", 3, r"er\"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder\", 2, r"r\"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder\", 1, r"\"),
-                PathTrimCase::new(r"C:\Testcases\Examples\Folder\", 0, r""),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder\", 19, r"...\Folder\"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder\", 11, r"...\Folder\"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder\", 10, r"Folder\"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder\", 7, r"Folder\"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder\", 6, r"older\"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder\", 5, r"lder\"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder\", 4, r"der\"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder\", 3, r"er\"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder\", 2, r"r\"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder\", 1, r"\"),
+                PathTrunCase::new(r"C:\Testcases\Examples\Folder\", 0, r""),
             ]
         }
     }
 
     #[test]
-    fn trim_folder_path() {
-        for case in PathTrimCase::unix_case_list() {
-            let result = trim_folder_path_inner::<'/'>(case.path_input, case.max_len);
+    fn truncate_folder_path() {
+        for case in PathTrunCase::unix_case_list() {
+            let result = truncate_folder_path_inner::<'/'>(case.path_input, case.max_len);
 
             assert_eq!(
                 &*result, case.expected_output,
@@ -364,8 +364,8 @@ mod tests {
             );
         }
 
-        for case in PathTrimCase::windows_case_list() {
-            let result = trim_folder_path_inner::<'\\'>(case.path_input, case.max_len);
+        for case in PathTrunCase::windows_case_list() {
+            let result = truncate_folder_path_inner::<'\\'>(case.path_input, case.max_len);
 
             assert_eq!(
                 &*result, case.expected_output,
