@@ -1,6 +1,7 @@
 use ratatui::{
     crossterm::event::KeyCode,
     prelude::{Constraint, Style},
+    widgets::Padding,
 };
 
 /// General keycode list for navigating to the previous entry in a vertical list.
@@ -47,6 +48,9 @@ pub(crate) const EXP_PRIM_TEXT_SPACER_UNSEL: &str = " ";
 /// The text for the selected entry's spacer.
 pub(crate) const EXP_PRIM_TEXT_SPACER_SEL: &str = "→ ";
 
+/// The text for the parent directory entry.
+pub(crate) const EXP_PRIM_TEXT_PARENT: &str = "../   (Alt+↑)";
+
 /// The style to give to the primary block's unselected line.
 pub(crate) const EXP_PRIM_STYLE_LINE_UNSEL: Style = Style::new();
 
@@ -75,3 +79,21 @@ pub(crate) const EXP_SEC_SCROLL_HINT_MIN_BLOCK_WIDTH: u16 = 32;
 /// Used for the [`ScrollbarState`][ratatui::widgets::ScrollbarState] to
 /// limit scroll offsets.
 pub(crate) const EXP_SEC_CONTENT_LENGTH: usize = 24;
+
+/// The file hint in the bottom left of the secondary block if the selected file
+/// is deemed to be a replay file.
+pub(crate) static EXP_SEC_HINT_IS_REPLAY: &str = "replay file";
+
+// TODO(metadata_hint): Change this to "not replay"
+/// The file hint in the bottom left of the secondary block if the selected file
+/// is deemed not to be a replay file.
+pub(crate) static EXP_SEC_HINT_NOT_REPLAY: &str = "unknown";
+
+/// The scroll hint in the bottom right of the secondary block if the terminal
+/// is wide enough.
+///
+/// See [`EXP_SEC_SCROLL_HINT_MIN_BLOCK_WIDTH`].
+pub(crate) static EXP_SEC_HINT_SCROLL: &str = "ctrl+↑↓ to scroll";
+
+/// The padding for the secondary block.
+pub(crate) const EXP_SEC_BLOCK_PADDING: Padding = Padding::horizontal(1);

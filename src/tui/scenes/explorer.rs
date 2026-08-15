@@ -10,8 +10,10 @@ use std::{
 use libtechmino_replay::GameReplayMetadata;
 use ratatui::{
     crossterm,
-    prelude::{Constraint, Frame, HorizontalAlignment, Layout, Line, Rect, Span, Widget},
-    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    prelude::{
+        Constraint, Frame, HorizontalAlignment, Layout, Line, Rect, Span, StatefulWidget, Widget,
+    },
+    widgets::{Block, Padding, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
 
 use crate::{
@@ -20,8 +22,10 @@ use crate::{
         EXP_ERROR_HEADING, EXP_ERROR_HINT, EXP_ERROR_PADDING_CONSTRAINT,
         EXP_ERROR_PADDING_MIN_HEIGHT, EXP_PRIM_STYLE_FILENAME_SEL, EXP_PRIM_STYLE_FILENAME_UNSEL,
         EXP_PRIM_STYLE_LINE_SEL, EXP_PRIM_STYLE_LINE_UNSEL, EXP_PRIM_STYLE_SPACER_SEL,
-        EXP_PRIM_STYLE_SPACER_UNSEL, EXP_PRIM_TEXT_SPACER_SEL, EXP_PRIM_TEXT_SPACER_UNSEL,
-        EXP_SEC_CONTENT_LENGTH,
+        EXP_PRIM_STYLE_SPACER_UNSEL, EXP_PRIM_TEXT_PARENT, EXP_PRIM_TEXT_SPACER_SEL,
+        EXP_PRIM_TEXT_SPACER_UNSEL, EXP_SEC_BLOCK_PADDING, EXP_SEC_CONTENT_LENGTH,
+        EXP_SEC_HINT_IS_REPLAY, EXP_SEC_HINT_NOT_REPLAY, EXP_SEC_HINT_SCROLL,
+        EXP_SEC_SCROLL_HINT_MIN_BLOCK_WIDTH,
     },
     paths::truncate_folder_path,
     tui::{
@@ -235,6 +239,7 @@ impl ExplorerScene {
         frame.render_stateful_widget(scrollbar, prim_area, &mut list.primary_vscroll.borrow_mut());
 
         frame.render_widget(list.as_primary_widget(), inner_prim_area);
+        frame.render_widget(list.as_secondary_widget(), sec_area);
     }
 
     /// Rendering when the file list can't be retrieved (i.e., a fatal error occurred)
@@ -298,7 +303,8 @@ impl ExplorerScene {
                 self.handle_primary_list_event(event, terminal, ret_path)
             }
             ExplorerEvent::SecondaryListEvent(event) => {
-                todo!("Handle secondary list event {event:?}");
+                self.handle_secondary_list_event(event, terminal);
+                None
             }
             ExplorerEvent::Rescroll(_cols, rows) => {
                 if let Ok(list) = &mut self.file_list {
@@ -310,6 +316,7 @@ impl ExplorerScene {
         }
     }
 
+    /// Handles a primary list logical event.
     fn handle_primary_list_event(
         &mut self,
         event: VerticalListEvent,
@@ -345,6 +352,46 @@ impl ExplorerScene {
                 None
             }
             VerticalListEvent::Activate => self.select(ret_path),
+        }
+    }
+
+    /// Handles a secondary list logical event.
+    fn handle_secondary_list_event(
+        &mut self,
+        event: VerticalListEvent,
+        terminal: &ratatui::DefaultTerminal,
+    ) {
+        let Ok(list) = &mut self.file_list else {
+            return;
+        };
+
+        let term_height = terminal.size().map(|s| s.height).unwrap_or(0);
+        let page_height = term_height.saturating_sub(2);
+
+        let mut offset = list.selected.secondary_vscroll.borrow_mut();
+
+        match event {
+            VerticalListEvent::Prev => offset.prev(),
+            VerticalListEvent::Next => offset.next(),
+            VerticalListEvent::Home => offset.first(),
+            VerticalListEvent::End => offset.last(),
+            VerticalListEvent::PageUp => {
+                // HACK: Looping `prev` instead of setting position manually
+                // [`ScrollbarState`] doesn't have a method to retrieve content
+                // length
+                for _ in 0..page_height {
+                    offset.prev();
+                }
+            }
+            VerticalListEvent::PageDown => {
+                // HACK: Looping `next` instead of setting position manually
+                // [`ScrollbarState`] doesn't have a method to retrieve content
+                // length
+                for _ in 0..page_height {
+                    offset.next();
+                }
+            }
+            VerticalListEvent::Activate => (),
         }
     }
 
@@ -466,6 +513,11 @@ impl FileList {
     fn as_primary_widget(&self) -> ExplorerPrimaryContents<'_> {
         ExplorerPrimaryContents(self)
     }
+
+    /// Return a widget to display a representation of this for the secondary block.
+    fn as_secondary_widget(&self) -> ExplorerSecondaryBlock<'_> {
+        ExplorerSecondaryBlock(self)
+    }
 }
 
 /// Contains internal data about the selected file shown in the secondary block.
@@ -476,7 +528,7 @@ pub(in crate::tui) struct SelectedFile {
     /// The replay-specific metadata of that file if it parses correctly.
     rep_metadata: Result<GameReplayMetadata, ParseOrIoError>,
     /// The current vertical scrollbar state of the secondary block.
-    secondary_vscroll: ScrollbarState,
+    secondary_vscroll: RefCell<ScrollbarState>,
 }
 
 impl SelectedFile {
@@ -490,7 +542,7 @@ impl SelectedFile {
         let mut this = Self {
             index: 0,
             rep_metadata: Err(ParseOrIoError::Io(io::Error::other(""))),
-            secondary_vscroll: ScrollbarState::new(EXP_SEC_CONTENT_LENGTH),
+            secondary_vscroll: RefCell::new(ScrollbarState::new(EXP_SEC_CONTENT_LENGTH)),
         };
 
         this.update_metadata(folder, entries);
@@ -504,6 +556,7 @@ impl SelectedFile {
             || Err(io::Error::new(io::ErrorKind::NotFound, "Entry not found"))?,
             |entry| Self::read_entry(folder, entry),
         );
+        self.secondary_vscroll.borrow_mut().first();
     }
 
     /// Reads a UI directory entry to try to extract the game replay metadata.
@@ -559,7 +612,7 @@ impl UiDirEntry {
                 is_dir: _,
                 metadata: _,
             } => name,
-            UiDirEntry::ParentDir { metadata: _ } => OsStr::new("../   (Alt+↑)"),
+            UiDirEntry::ParentDir { metadata: _ } => OsStr::new(EXP_PRIM_TEXT_PARENT),
         }
     }
 
@@ -770,5 +823,55 @@ impl Widget for ExplorerPrimaryContents<'_> {
             line.render(area, buf);
             // let line = Line::raw(entry.name().to_string_lossy()).;
         }
+    }
+}
+
+/// A widget to render the secondary block and its contents based on the current
+/// [`FileList`].
+#[must_use = "render this widget"]
+struct ExplorerSecondaryBlock<'a>(&'a FileList);
+
+impl Widget for ExplorerSecondaryBlock<'_> {
+    fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer) {
+        let list = self.0;
+
+        let Some(selected_entry) = list.entries.get(list.selected.index) else {
+            let msg = format!(
+                "invariant breached\n\
+                this is a bug!\n\
+                selection index {idx} >= entry len {len}",
+                idx = list.selected.index,
+                len = list.entries.len()
+            );
+            msg.render(area, buf);
+            return;
+        };
+
+        let title = selected_entry.name().to_string_lossy();
+        let rep_hint = if list.selected.rep_metadata.is_ok() {
+            EXP_SEC_HINT_IS_REPLAY
+        } else {
+            EXP_SEC_HINT_NOT_REPLAY
+        };
+        let rep_hint = Line::from(rep_hint).left_aligned();
+
+        let mut block = Block::bordered()
+            .title(title)
+            .title_bottom(rep_hint)
+            .padding(EXP_SEC_BLOCK_PADDING);
+
+        if area.width >= EXP_SEC_SCROLL_HINT_MIN_BLOCK_WIDTH {
+            let line = Line::from(EXP_SEC_HINT_SCROLL).right_aligned();
+            block = block.title_bottom(line);
+        }
+
+        let inner_area = block.inner(area);
+
+        block.render(area, buf);
+
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+        scrollbar.render(area, buf, &mut list.selected.secondary_vscroll.borrow_mut());
+
+        // TODO: Render contents
     }
 }
