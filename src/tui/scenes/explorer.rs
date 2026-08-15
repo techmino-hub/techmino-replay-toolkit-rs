@@ -1,4 +1,9 @@
-use core::{cell::RefCell, cmp::Ordering, fmt::Display, num::NonZeroUsize};
+use core::{
+    cell::RefCell,
+    cmp::Ordering,
+    fmt::{Display, Write as _},
+    num::NonZeroUsize,
+};
 use std::{
     borrow::Cow,
     ffi::{OsStr, OsString},
@@ -7,13 +12,14 @@ use std::{
     path::{self, Path, PathBuf},
 };
 
+use chrono::prelude::{DateTime, Local};
 use libtechmino_replay::GameReplayMetadata;
 use ratatui::{
     crossterm,
     prelude::{
         Constraint, Frame, HorizontalAlignment, Layout, Line, Rect, Span, StatefulWidget, Widget,
     },
-    widgets::{Block, Padding, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
 
 use crate::{
@@ -226,8 +232,6 @@ impl ExplorerScene {
 
     /// Rendering when the directory was read successfully
     fn render_normal(prim_block: ExplorerPrimaryBlock<'_>, list: &FileList, frame: &mut Frame) {
-        // TODO: Proper rendering
-
         let [prim_area, sec_area] =
             Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1)]).areas(frame.area());
 
@@ -424,7 +428,7 @@ impl FileList {
         let mut non_fatal_errors = 0;
 
         if let Some(parent_dir) = folder.parent() {
-            let metadata = fs::metadata(parent_dir).ok();
+            let metadata = fs::metadata(parent_dir);
             let entry = UiDirEntry::ParentDir { metadata };
             entries.push(entry);
         }
@@ -445,7 +449,7 @@ impl FileList {
                 is_dir = true;
             }
 
-            let metadata = entry.metadata().ok();
+            let metadata = entry.metadata();
 
             let entry = UiDirEntry::Regular {
                 name,
@@ -593,12 +597,12 @@ pub(in crate::tui) enum UiDirEntry {
         /// Whether or not this directory entry is itself a directory.
         is_dir: bool,
         /// The metadata of this directory entry, if retrieving it was successful.
-        metadata: Option<Metadata>,
+        metadata: io::Result<Metadata>,
     },
     /// The `..` (parent directory) virtual directory entry.
     ParentDir {
         /// The metadata of this directory entry, if retrieving it was successful.
-        metadata: Option<Metadata>,
+        metadata: io::Result<Metadata>,
     },
 }
 
@@ -626,6 +630,14 @@ impl UiDirEntry {
                 metadata: _,
             } => folder.join(name),
             UiDirEntry::ParentDir { metadata: _ } => folder.parent().unwrap_or(folder).to_owned(),
+        }
+    }
+
+    #[must_use]
+    fn metadata(&self) -> &io::Result<Metadata> {
+        match self {
+            UiDirEntry::Regular { metadata, .. } => metadata,
+            UiDirEntry::ParentDir { metadata } => metadata,
         }
     }
 }
@@ -872,6 +884,114 @@ impl Widget for ExplorerSecondaryBlock<'_> {
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         scrollbar.render(area, buf, &mut list.selected.secondary_vscroll.borrow_mut());
 
-        // TODO: Render contents
+        let paragraph_offset = list.selected.secondary_vscroll.borrow().get_position();
+        let paragraph_offset = u16::try_from(paragraph_offset).unwrap_or(u16::MAX);
+
+        let paragraph = metadata_paragraph(selected_entry.metadata(), &list.selected.rep_metadata)
+            .scroll((paragraph_offset, 0));
+
+        paragraph.render(inner_area, buf)
+    }
+}
+
+/// Get the paragraph representing the metadata of the given file.
+fn metadata_paragraph(
+    fs_meta: &io::Result<Metadata>,
+    rep_meta: &Result<GameReplayMetadata, ParseOrIoError>,
+) -> Paragraph<'static> {
+    let mut string = match fs_meta {
+        Ok(m) => format!("{}\n\n", DisplayFsMetadata(m)),
+        Err(e) => format!("Could not read file metadata:\n{e}\n\n"),
+    };
+
+    if fs_meta.as_ref().is_ok_and(|m| !m.is_dir()) {
+        match rep_meta {
+            Ok(meta) => write!(&mut string, "{}", DisplayReplayMetadata(meta))
+                .expect("Writing to a string should never fail"),
+            Err(e) => write!(&mut string, "{e}").expect("Writing to a string should never fail"),
+        }
+    }
+
+    Paragraph::new(string).wrap(Wrap { trim: true })
+}
+
+/// Filesystem metadata newtype for a custom [`Display`] impl.
+///
+/// Used for showing file metadata in the secondary block contents.
+struct DisplayFsMetadata<'a>(&'a Metadata);
+
+impl Display for DisplayFsMetadata<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let meta = self.0;
+
+        if meta.is_dir() {
+            return f.write_str("Directory");
+        }
+
+        let len = meta.len();
+        writeln!(f, "File size: {len}")?;
+
+        match meta.created() {
+            Ok(ts) => writeln!(f, "Created at: {}", DateTime::<Local>::from(ts))?,
+            Err(e) => writeln!(f, "Error getting creation timestamp: {e}")?,
+        }
+
+        match meta.modified() {
+            Ok(ts) => writeln!(f, "Modified at: {}", DateTime::<Local>::from(ts))?,
+            Err(e) => writeln!(f, "Error getting modification timestamp: {e}")?,
+        }
+
+        Ok(())
+    }
+}
+
+/// Game replay metadata newtype for a custom [`Display`] impl.
+///
+/// Used for showing replay metadata in the secondary block contents.
+struct DisplayReplayMetadata<'a>(&'a GameReplayMetadata);
+
+impl Display for DisplayReplayMetadata<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let meta = self.0;
+
+        match meta.get_version_or_raw() {
+            None => f.write_str("Unknown Techmino version\n")?,
+            Some(Ok(s)) => writeln!(f, "Techmino version '{s}'")?,
+            Some(Err(val)) => writeln!(f, "Techmino version (mangled): '{val:?}'")?,
+        }
+
+        match meta.get_mode_or_raw() {
+            None => f.write_str("Unknown game mode\n")?,
+            Some(Ok(s)) => writeln!(f, "Game mode: '{s}'")?,
+            Some(Err(val)) => writeln!(f, "Game mode (mangled): '{val:?}'")?,
+        }
+
+        match meta.get_date_or_raw() {
+            None => f.write_str("Unknown recording date\n")?,
+            Some(Ok(s)) => writeln!(f, "Recording date: '{s}'")?,
+            Some(Err(val)) => writeln!(f, "Recording date (mangled): '{val:?}'")?,
+        }
+
+        match meta.get_player_or_raw() {
+            None => f.write_str("Unknown player username\n")?,
+            Some(Ok(s)) => writeln!(f, "Played by username '{s}'")?,
+            Some(Err(val)) => writeln!(f, "Played by (mangled) username '{val:?}'")?,
+        }
+
+        match meta.get_tas_used_or_raw() {
+            None => f.write_str("Unknown TAS state\n")?,
+            Some(Ok(true)) => f.write_str("Marked as tool-assisted\n")?,
+            Some(Ok(false)) => f.write_str("Marked as real-time (not TAS)\n")?,
+            Some(Err(val)) => writeln!(f, "Mangled TAS state: '{val:?}'")?,
+        }
+
+        match &meta.get_mods_or_raw() {
+            None => f.write_str("No mods applied\n")?,
+            Some(Ok(v)) if v.is_empty() => f.write_str("No mods applied\n")?,
+            Some(Ok(v)) => writeln!(f, "{len} mods applied: {v:?}", len = v.len())?,
+            Some(Err(val)) => writeln!(f, "Mangled mod list: '{val:?}'")?,
+        }
+
+        Ok(())
     }
 }

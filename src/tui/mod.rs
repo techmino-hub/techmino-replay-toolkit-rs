@@ -45,8 +45,8 @@ pub fn start(args: TuiArguments) -> Result<(), NonZeroI32> {
 /// Either a replay-parsing or I/O error.
 #[derive(Debug, thiserror::Error)]
 enum ParseOrIoError {
-    #[error("Failed to parse replay file")]
+    #[error("Failed to parse replay file: {0}")]
     Parse(#[from] ReplayParseError),
-    #[error("Failed to read from replay file")]
+    #[error("Failed to read from replay file: {0}")]
     Io(#[from] io::Error),
 }
