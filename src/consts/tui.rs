@@ -28,7 +28,7 @@ pub(crate) const KC_GEN_ACTIVATE: [KeyCode; 1] = [KeyCode::Enter];
 pub(crate) static EXP_ERROR_HEADING: &str = "Could not read file list";
 
 /// The hint text for the "error" version of the explorer scene.
-pub(crate) static EXP_ERROR_HINT: &str = "Alt+U to move up; Q or Ctrl+C to quit";
+pub(crate) static EXP_ERROR_HINT: &str = "Alt+↑ to move up; Q or Ctrl+C to quit";
 
 /// The minimum height of the terminal in the "error" version of the explorer
 /// scene that has any vertical padding.

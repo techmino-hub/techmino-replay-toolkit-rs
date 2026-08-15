@@ -559,7 +559,7 @@ impl UiDirEntry {
                 is_dir: _,
                 metadata: _,
             } => name,
-            UiDirEntry::ParentDir { metadata: _ } => OsStr::new("../   (Alt+U)"),
+            UiDirEntry::ParentDir { metadata: _ } => OsStr::new("../   (Alt+↑)"),
         }
     }
 
