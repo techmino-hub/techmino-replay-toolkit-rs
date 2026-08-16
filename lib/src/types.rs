@@ -9,6 +9,10 @@ use serde_json::Map;
 use crate::{
     InputAction, InputActionKey, InputActionKind,
     consts::TOTAL_PIECE_COUNT,
+    convert::{
+        json_to_bool, json_to_f64, json_to_modlist, json_to_piece_bytes, json_to_str, json_to_u8,
+        json_to_u64, modlist_to_json,
+    },
     macros::{metadata_getters_setters, setting_getters_setters},
 };
 use alloc::{
@@ -16,11 +20,10 @@ use alloc::{
     fmt::{self},
     format,
     string::{FromUtf8Error, String},
-    vec,
     vec::Vec,
 };
 use base64::DecodeError;
-use core::fmt::Debug;
+use core::fmt::{Debug, Display};
 use libtechmino_vlq::VlqDecodeError;
 use miniz_oxide::{MZError, deflate::core::TDEFLStatus, inflate::TINFLStatus};
 use semver::Version;
@@ -138,12 +141,146 @@ impl Debug for GameInputEvent {
 
 /// An entry had an unexpected type and could not be converted into the
 /// standardized type.
+///
+/// This is the owned variant of [`TypeError`].
 #[derive(Debug, Error)]
-#[error(
-    "An entry had an unexpected type and could not be converted into the \
-    standardized type."
-)]
-pub struct TypeError(pub(crate) ());
+pub struct OwnedTypeError {
+    /// The key used to index into the map.
+    key: &'static str,
+    /// The expected variant to be retrieved.
+    exp_ty: ValueVariant,
+    /// The value retrieved from the JSON object.
+    value: serde_json::Value,
+}
+
+impl OwnedTypeError {
+    /// Borrows the inner value retrieved from the JSON object that
+    /// had an unexpected type.
+    #[must_use]
+    pub fn inner(&self) -> &serde_json::Value {
+        &self.value
+    }
+
+    /// Deconstructs this type to take its inner value.
+    #[must_use]
+    pub fn take_inner(self) -> serde_json::Value {
+        self.value
+    }
+
+    /// Create a borrowed [`TypeError`] from this owned variant.
+    #[must_use]
+    pub fn get_ref(&self) -> TypeError<'_> {
+        TypeError {
+            key: self.key,
+            exp_ty: self.exp_ty,
+            value: &self.value,
+        }
+    }
+}
+
+/// An entry had an unexpected type and could not be converted into the
+/// standardized type.
+#[derive(Debug, Error)]
+pub struct TypeError<'a> {
+    /// The key used to index into the map.
+    key: &'static str,
+    /// The expected variant to be retrieved.
+    exp_ty: ValueVariant,
+    /// The value retrieved from the JSON object.
+    value: &'a serde_json::Value,
+}
+
+impl<'a> TypeError<'a> {
+    /// Returns the inner value retrieved from the JSON object that
+    /// had an unexpected type.
+    #[must_use]
+    pub fn inner(&self) -> &'a serde_json::Value {
+        self.value
+    }
+}
+
+impl Display for TypeError<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "Entry with key {key} had an unexpected type \
+            {val_ty} instead of the expected {exp_ty}",
+            key = self.key,
+            exp_ty = self.exp_ty.to_str(),
+            val_ty = ValueVariant::from(self.value).to_str(),
+        )
+    }
+}
+
+impl Display for OwnedTypeError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        <TypeError as Display>::fmt(&self.get_ref(), f)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ValueVariant {
+    /// Null.
+    Null,
+    /// A boolean.
+    Bool,
+    /// A number.
+    Number,
+    /// A floating-point number representable by binary64 (`f64`).
+    ///
+    /// Subtype of [`Number`][Self::Number].
+    Float,
+    /// An integer number representable by an unsigned byte (`u8`).
+    ///
+    /// Subtype of [`Number`][Self::Number].
+    Byte,
+    /// An integer number representable by an unsigned long/quadword (`u64`).
+    ///
+    /// Subtype of [`Number`][Self::Number].
+    Long,
+    /// A string.
+    String,
+    /// A JSON array of any length.
+    Array,
+    /// A JSON array specifically with a length of [`TOTAL_PIECE_COUNT`].
+    ///
+    /// Subtype of [`Array`][Self::Array].
+    PieceArray,
+    /// A JSON object/map.
+    Object,
+}
+
+impl ValueVariant {
+    const fn to_str(self) -> &'static str {
+        match self {
+            ValueVariant::Null => "null",
+            ValueVariant::Bool => "bool",
+            ValueVariant::Number => "(unspecified kind of) number",
+            ValueVariant::Float => "64-bit floating-point number",
+            ValueVariant::Byte => "8-bit unsigned integer",
+            ValueVariant::Long => "64-bit unsigned integer",
+            ValueVariant::String => "string",
+            ValueVariant::Array => "array",
+            ValueVariant::PieceArray => {
+                const_format::formatc!("array with {TOTAL_PIECE_COUNT} elements")
+            }
+            ValueVariant::Object => "object",
+        }
+    }
+}
+
+impl From<&serde_json::Value> for ValueVariant {
+    fn from(value: &serde_json::Value) -> Self {
+        match value {
+            serde_json::Value::Null => Self::Null,
+            serde_json::Value::Bool(_) => Self::Bool,
+            serde_json::Value::Number(_) => Self::Number,
+            serde_json::Value::String(_) => Self::String,
+            serde_json::Value::Array(_) => Self::Array,
+            serde_json::Value::Object(_) => Self::Object,
+        }
+    }
+}
 
 /// The error type for when the game input event couldn't be created.
 #[derive(Debug, Error)]
@@ -280,12 +417,31 @@ impl PlayerSettingsRef<'_> {
 }
 
 impl<'a> TryFrom<&'a serde_json::Value> for PlayerSettingsRef<'a> {
-    type Error = TypeError;
+    type Error = TypeError<'a>;
 
     fn try_from(value: &'a serde_json::Value) -> Result<Self, Self::Error> {
+        const EXPECTED_TYPE: ValueVariant = ValueVariant::Object;
+
+        let variant = ValueVariant::from(value);
+
         let serde_json::Value::Object(map) = value else {
-            return Err(TypeError(()));
+            debug_assert_ne!(
+                variant, EXPECTED_TYPE,
+                "Invariant breached: expected type shouldn't match (this is a `libtechmino-replay` bug, please report there)"
+            );
+
+            return Err(TypeError {
+                key: GameReplayMetadata::KEY_SETTINGS,
+                exp_ty: EXPECTED_TYPE,
+                value,
+            });
         };
+
+        debug_assert_eq!(
+            ValueVariant::from(value),
+            EXPECTED_TYPE,
+            "Invariant breached: expected type should match (this is a `libtechmino-replay` bug, please report there)"
+        );
 
         Ok(Self { map })
     }
@@ -406,18 +562,18 @@ setting_getters_setters! {
     /// The IRS (initial rotation system) checkbox in the control settings.
     ///
     /// Learn more about IRS: <https://tetris.wiki/IRS>
-    "irs" irs: bool where { from_json: serde_json::Value::as_bool },
+    "irs" irs: bool where { from_json: json_to_bool },
 
     /// The IHS (initial hold system) checkbox in the control settings.
     ///
     /// Learn more about IHS: <https://tetris.wiki/IHS>
-    "ihs" ihs: bool where { from_json: serde_json::Value::as_bool },
+    "ihs" ihs: bool where { from_json: json_to_bool },
 
     /// The IMS (initial movement system) checkbox in the control settings.
     ///
     /// Analogous to [IRS](<https://tetris.wiki/IRS>) and [IHS](<https://tetris.wiki/IHS>),
     /// but for movement instead of rotating and holding, respectively.
-    "ims" ims: bool where { from_json: serde_json::Value::as_bool },
+    "ims" ims: bool where { from_json: json_to_bool },
 
     /// The rotation system used in the replay.
     ///
@@ -439,16 +595,16 @@ setting_getters_setters! {
     /// - `Classic_plus`
     /// - `None`
     /// - `None_plus`
-    "RS" rs: &str | String where { from_json: serde_json::Value::as_str },
+    "RS" rs: &str | String where { from_json: json_to_str },
 
     /// The bag separator option in the video settings.
-    "bagLine" bag_line: bool where { from_json: serde_json::Value::as_bool },
+    "bagLine" bag_line: bool where { from_json: json_to_bool },
 
     /// The "draw active piece" option in the video settings.
-    "block" block: bool where { from_json: serde_json::Value::as_bool },
+    "block" block: bool where { from_json: json_to_bool },
 
     /// The rotation center opacity option in the video settings.
-    "center" center: f64 where { from_json: serde_json::Value::as_f64 },
+    "center" center: f64 where { from_json: json_to_f64 },
 
     // TODO: Figure out the order of the specific elements
     /// The starting orientations of all the pieces.
@@ -457,19 +613,19 @@ setting_getters_setters! {
     "face" face: [u8; TOTAL_PIECE_COUNT] where { from_json: json_to_piece_bytes },
 
     /// The ghost piece opacity option in the video settings.
-    "ghost" ghost: f64 where { from_json: serde_json::Value::as_f64 },
+    "ghost" ghost: f64 where { from_json: json_to_f64 },
 
     /// The grid opacity option in the video settings.
-    "grid" grid: f64 where { from_json: serde_json::Value::as_f64 },
+    "grid" grid: f64 where { from_json: json_to_f64 },
 
     /// The screen scrolling option in the video settings.
-    "highCam" high_cam: bool where { from_json: serde_json::Value::as_bool },
+    "highCam" high_cam: bool where { from_json: json_to_bool },
 
     /// The spawn preview option in the video settings.
-    "nextPos" next_pos: bool where { from_json: serde_json::Value::as_bool },
+    "nextPos" next_pos: bool where { from_json: json_to_bool },
 
     /// The "score pop-ups" option in the video settings.
-    "score" score: bool where { from_json: serde_json::Value::as_bool },
+    "score" score: bool where { from_json: json_to_bool },
 
     // TODO: Figure out the order of the specific elements
     /// The colors of all the pieces.
@@ -478,18 +634,18 @@ setting_getters_setters! {
     "skin" skin: [u8; TOTAL_PIECE_COUNT] where { from_json: json_to_piece_bytes },
 
     /// The smooth falling option option in the video settings.
-    "smooth" smooth: bool where { from_json: serde_json::Value::as_bool },
+    "smooth" smooth: bool where { from_json: json_to_bool },
 
     /// The line clear popups option in the video settings.
-    "text" text: bool where { from_json: serde_json::Value::as_bool },
+    "text" text: bool where { from_json: json_to_bool },
 
     /// The danger alerts option in the video settings.
-    "warn" warn: bool where { from_json: serde_json::Value::as_bool },
+    "warn" warn: bool where { from_json: json_to_bool },
 
     /// The "Frame skip" option in the video settings.
     ///
     /// This option was removed in version 0.17.2 of the game.
-    "FTLock" ft_lock: bool where { from_json: serde_json::Value::as_bool },
+    "FTLock" ft_lock: bool where { from_json: json_to_bool },
 }
 
 /// A struct representing the metadata stored within the replay.
@@ -562,43 +718,91 @@ impl GameReplayMetadata {
     /// store any data here.
     ///
     /// # Returns
-    /// Returns the old value of the field.
-    /// - If there was no old value of the field, returns `None`.
-    /// - If conversion succeeds, returns the strictly typed version
-    ///   (`Some(Ok(T))`).
-    /// - Otherwise, returns the raw JSON value.
-    ///   (`Some(Err(serde_json::Value)))`)
-    pub fn set_private(&mut self, value: Option<serde_json::Value>) -> Option<serde_json::Value> {
-        let Some(value) = value else {
-            return self.map.remove(Self::KEY_PRIVATE);
-        };
-
+    /// Returns the old value of the field, if there was any.
+    pub fn set_private(&mut self, value: serde_json::Value) -> Option<serde_json::Value> {
         if let Some(mutref) = self.map.get_mut(Self::KEY_PRIVATE) {
             return Some(core::mem::replace(mutref, value));
         }
         self.map.insert(Self::KEY_PRIVATE.to_owned(), value)
     }
 
+    /// The 'private' field of the replay, used to store mode-specific data.\
+    /// Its contents differ based on the mode played.\
+    /// Currently, only the `custom_clear` and `custom_puzzle` modes are known to
+    /// store any data here.
+    ///
+    /// # Returns
+    /// Returns the old value of the field, if there was any.
+    pub fn remove_private(&mut self) -> Option<serde_json::Value> {
+        self.map.remove(Self::KEY_PRIVATE)
+    }
+
     /// The settings of the game when the run was played.
+    ///
+    /// # Strict Getter
+    /// Strict getter methods attempt to convert the stored value into
+    /// the normal strictly-typed version for convenience.
+    ///
+    /// # Errors
+    /// The [`TypeError`] struct contains a reference to the raw
+    /// [`serde_json::Value`] value if you need it.
+    /// Alternatively, use the shortcut method `get_*_or_raw()` if you
+    /// don't need the error reason.
     #[must_use]
-    pub fn get_settings(&self) -> Option<Result<PlayerSettingsRef<'_>, TypeError>> {
+    pub fn get_settings(&self) -> Option<Result<PlayerSettingsRef<'_>, TypeError<'_>>> {
+        const EXPECTED_TYPE: ValueVariant = ValueVariant::Object;
+
         let entry = self.map.get(Self::KEY_SETTINGS)?;
 
+        let variant = ValueVariant::from(entry);
+
         let serde_json::Value::Object(map) = entry else {
-            return Some(Err(TypeError(())));
+            debug_assert_ne!(
+                variant, EXPECTED_TYPE,
+                "Invariant breached: expected type shouldn't match (this is a `libtechmino-replay` bug, please report there)"
+            );
+
+            return Some(Err(TypeError {
+                key: Self::KEY_SETTINGS,
+                exp_ty: EXPECTED_TYPE,
+                value: entry,
+            }));
         };
+
+        debug_assert_eq!(
+            variant, EXPECTED_TYPE,
+            "Invariant breached: expected type should match (this is a `libtechmino-replay` bug, please report there)"
+        );
 
         Some(Ok(PlayerSettingsRef { map }))
     }
 
     /// The settings of the game when the run was played.
     #[must_use]
-    pub fn get_settings_mut(&mut self) -> Option<Result<PlayerSettingsMut<'_>, TypeError>> {
+    pub fn get_settings_mut(&mut self) -> Option<Result<PlayerSettingsMut<'_>, TypeError<'_>>> {
+        const EXPECTED_TYPE: ValueVariant = ValueVariant::Object;
+
         let entry = self.map.get_mut(Self::KEY_SETTINGS)?;
 
+        let entry_kind = ValueVariant::from(&*entry);
+
         let serde_json::Value::Object(map) = entry else {
-            return Some(Err(TypeError(())));
+            debug_assert_ne!(
+                entry_kind, EXPECTED_TYPE,
+                "Invariant breached: expected type shouldn't match (this is a `libtechmino-replay` bug, please report there)"
+            );
+
+            return Some(Err(TypeError {
+                key: Self::KEY_SETTINGS,
+                exp_ty: EXPECTED_TYPE,
+                value: entry,
+            }));
         };
+
+        debug_assert_eq!(
+            entry_kind, EXPECTED_TYPE,
+            "Invariant breached: expected type should match (this is a `libtechmino-replay` bug, please report there)"
+        );
 
         Some(Ok(PlayerSettingsMut { map }))
     }
@@ -648,57 +852,135 @@ impl GameReplayMetadata {
     /// - If there was no old value of the field, returns `None`.
     /// - If conversion succeeds, returns the strictly typed version
     ///   (`Some(Ok(T))`).
-    /// - Otherwise, returns the raw JSON value.
-    ///   (`Some(Err(serde_json::Value)))`)
+    /// - Otherwise, returns the error that happened while attempting to
+    ///   convert the value.
+    ///   (`Some(Err(OwnedTypeError)))`)
+    ///   - You can then try to get the inner value using
+    ///     [`.inner()`][crate::types::OwnedTypeError::inner]
+    ///
+    /// # Errors
+    /// Converting the old stored value into a strict form may fail.
+    ///
+    /// When this happens, the map is still set properly.
+    ///
+    /// You can then display the error using its `Display` impl or try
+    /// to get the inner value using
+    /// [`.inner()`][crate::types::OwnedTypeError::inner].
     pub fn set_settings(
         &mut self,
-        value: Option<serde_json::Map<String, serde_json::Value>>,
-    ) -> Option<Result<PlayerSettings, serde_json::Value>> {
-        let Some(value) = value else {
-            let json = self.map.remove(Self::KEY_SETTINGS)?;
-            return match PlayerSettings::try_from(json) {
-                Ok(ps) => Some(Ok(ps)),
-                Err(json) => Some(Err(json)),
-            };
-        };
+        value: serde_json::Map<String, serde_json::Value>,
+    ) -> Option<Result<PlayerSettings, OwnedTypeError>> {
+        const EXPECTED_TYPE: ValueVariant = ValueVariant::Object;
 
-        if let Some(dest) = self.map.get_mut(Self::KEY_SETTINGS) {
-            if let serde_json::Value::Object(dest) = dest {
-                let old = core::mem::replace(dest, value);
-                Some(Ok(PlayerSettings { map: old }))
-            } else {
-                let src = serde_json::Value::Object(value);
-                let old = core::mem::replace(dest, src);
-                Some(Err(old))
-            }
-        } else {
+        let Some(dest) = self.map.get_mut(Self::KEY_SETTINGS) else {
             self.map.insert(
                 Self::KEY_SETTINGS.to_owned(),
                 serde_json::Value::Object(value),
             );
-            None
+
+            return None;
+        };
+
+        let variant = ValueVariant::from(&*dest);
+
+        // Optimization: Replace inner `Map`s when possible instead of entire
+        // `serde_json::Value`
+
+        if let serde_json::Value::Object(dest) = dest {
+            debug_assert_eq!(
+                variant, EXPECTED_TYPE,
+                "Invariant breached: expected type should match (this is a `libtechmino-replay` bug, please report there)"
+            );
+
+            let old = core::mem::replace(dest, value);
+            Some(Ok(PlayerSettings { map: old }))
+        } else {
+            debug_assert_ne!(
+                variant, EXPECTED_TYPE,
+                "Invariant breached: expected type shouldn't match (this is a `libtechmino-replay` bug, please report there)"
+            );
+
+            let src = serde_json::Value::Object(value);
+            let old = core::mem::replace(dest, src);
+
+            Some(Err(OwnedTypeError {
+                key: Self::KEY_SETTINGS,
+                exp_ty: EXPECTED_TYPE,
+                value: old,
+            }))
+        }
+    }
+
+    /// The settings of the game when the run was played.
+    ///
+    /// # Returns
+    /// Returns the old value of the field.
+    /// - If there was no old value of the field, returns `None`.
+    /// - If conversion succeeds, returns the strictly typed version
+    ///   (`Some(Ok(T))`).
+    /// - Otherwise, returns the error that happened while attempting to
+    ///   convert the value.
+    ///   (`Some(Err(OwnedTypeError)))`)
+    ///   - You can then try to get the inner value using
+    ///     [`.inner()`][crate::types::OwnedTypeError::inner]
+    ///
+    /// # Errors
+    /// Converting the old stored value into a strict form may fail.
+    ///
+    /// When this happens, the map is still set properly.
+    ///
+    /// You can then display the error using its `Display` impl or try
+    /// to get the inner value using
+    /// [`.inner()`][crate::types::OwnedTypeError::inner].
+    pub fn remove_settings(&mut self) -> Option<Result<PlayerSettings, OwnedTypeError>> {
+        const EXPECTED_TYPE: ValueVariant = ValueVariant::Object;
+
+        let json = self.map.remove(Self::KEY_SETTINGS)?;
+        let variant = ValueVariant::from(&json);
+
+        let res = PlayerSettings::try_from(json);
+
+        match res {
+            Ok(ps) => {
+                debug_assert_eq!(
+                    variant, EXPECTED_TYPE,
+                    "Invariant breached: expected type should match (this is a `libtechmino-replay` bug, please report there)"
+                );
+                Some(Ok(ps))
+            }
+            Err(value) => {
+                debug_assert_ne!(
+                    variant, EXPECTED_TYPE,
+                    "Invariant breached: expected type shouldn't match (this is a `libtechmino-replay` bug, please report there)"
+                );
+                Some(Err(OwnedTypeError {
+                    key: Self::KEY_SETTINGS,
+                    exp_ty: EXPECTED_TYPE,
+                    value,
+                }))
+            }
         }
     }
 
     metadata_getters_setters! {
         (map);
         /// Whether or not the replay is marked as a TAS.
-        "tasUsed" tas_used: bool where { from_json: serde_json::Value::as_bool },
+        "tasUsed" tas_used: bool where { from_json: json_to_bool },
 
         /// The username of the player.
-        "player" player: &str | String where { from_json: serde_json::Value::as_str },
+        "player" player: &str | String where { from_json: json_to_str },
 
         /// The seed for the random number generator.
-        "seed" seed: u64 where { from_json: serde_json::Value::as_u64 },
+        "seed" seed: u64 where { from_json: json_to_u64 },
 
         /// The version of the game the replay was made in.
         ///
         /// Usually conforms to semver (major.minor.patch), but some mods
         /// may use a different or custom format.
-        "version" version: &str | String where { from_json: serde_json::Value::as_str },
+        "version" version: &str | String where { from_json: json_to_str },
 
         /// The date and time the replay was initially created.
-        "date" date: &str | String where { from_json: serde_json::Value::as_str },
+        "date" date: &str | String where { from_json: json_to_str },
 
         /// A list of mods applied to the run.
         ///
@@ -711,7 +993,7 @@ impl GameReplayMetadata {
         /// The name of the mode that was played.
         ///
         /// This refers to the internal/codename of the mode, i.e. `sprint_10l` instead of `Sprint 10L`.
-        "mode" mode: &str | String where { from_json: serde_json::Value::as_str },
+        "mode" mode: &str | String where { from_json: json_to_str },
 
         // "setting" settings: PlayerSettings where { from_json: serde_json::Value::as_object },
     }
@@ -978,57 +1260,6 @@ impl InputParseMode {
         // It's not really possible to "disprove" relative mode, so we're still unsure
         None
     }
-}
-
-fn json_to_u8(value: &serde_json::Value) -> Option<u8> {
-    value.as_number()?.as_u64()?.try_into().ok()
-}
-
-/// Attempts to convert a JSON value into a byte array for every piece in the game.
-fn json_to_piece_bytes(value: &serde_json::Value) -> Option<[u8; TOTAL_PIECE_COUNT]> {
-    let values: &[serde_json::Value] = value.as_array()?.as_slice();
-    let arr = <&[serde_json::Value; TOTAL_PIECE_COUNT]>::try_from(values).ok()?;
-
-    let mut bytes = [0u8; TOTAL_PIECE_COUNT];
-
-    for i in 0..TOTAL_PIECE_COUNT {
-        bytes[i] = json_to_u8(&arr[i])?;
-    }
-
-    Some(bytes)
-}
-
-/// Attempts to convert a JSON value into a mod list type.
-fn json_to_modlist(value: &serde_json::Value) -> Option<Vec<(u64, serde_json::Value)>> {
-    let source = value.as_array()?;
-
-    let mut processed_list = Vec::with_capacity(source.len());
-
-    for entry in source {
-        let entry = entry.as_array()?.as_slice();
-        let [mod_id, mod_value] = <&[serde_json::Value; 2]>::try_from(entry).ok()?;
-        let mod_id = mod_id.as_u64()?;
-        let mod_value = mod_value.clone();
-
-        processed_list.push((mod_id, mod_value));
-    }
-
-    Some(processed_list)
-}
-
-/// Converts a modlist into JSON format.
-fn modlist_to_json(modlist: Vec<(u64, serde_json::Value)>) -> serde_json::Value {
-    let values: Vec<serde_json::Value> = modlist
-        .into_iter()
-        .map(|(mod_id, mod_value)| {
-            serde_json::Value::Array(vec![
-                serde_json::Value::Number(serde_json::Number::from(mod_id)),
-                mod_value,
-            ])
-        })
-        .collect();
-
-    serde_json::Value::Array(values)
 }
 
 #[cfg(test)]

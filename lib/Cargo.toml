@@ -9,7 +9,7 @@ repository = "https://github.com/techmino-hub/techmino-replay-toolkit-rs"
 license = "GPL-3.0-or-later"
 keywords = ["techmino", "parser"]
 categories = ["no-std", "parser-implementations"]
-include = ["/src", "/README.md"]
+include = ["/src", "/README.md", "/CHANGELOG.md"]
 
 [lints]
 workspace = true
@@ -59,6 +59,7 @@ thiserror = { version = "2.0.18", default-features = false }
 arbitrary = { version = "1.4.2", optional = true, features = ["derive"] }
 pastey = "0.2.3"
 derive_more = { version = "2.1.1", default-features = false, features = ["deref", "deref_mut", "from", "into"] }
+const_format = { version = "0.2.36", default-features = false, features = ["fmt"] }
 
 [dev-dependencies]
 ascii = { version = "1.1.0", default-features = false, features = ["alloc"] }

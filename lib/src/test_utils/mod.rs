@@ -47,11 +47,11 @@ pub static SAMPLE_METADATA: LazyLock<GameReplayMetadata> = LazyLock::new(|| {
 
     metadata.set_date("2026-01-01 01:23:45".into());
     metadata.set_mode("sprint_10l".into());
-    metadata.set_mods(Some(Vec::new()));
+    metadata.set_mods(Vec::new());
     metadata.set_player("Stacker".into());
     metadata.set_seed(0.into());
-    metadata.set_settings(Some(PLAYER_SETTINGS.clone().map));
-    metadata.set_tas_used(Some(false));
+    metadata.set_settings(PLAYER_SETTINGS.clone().map);
+    metadata.set_tas_used(false);
     metadata.set_version("V0.17.21".into());
 
     metadata
