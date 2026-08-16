@@ -93,10 +93,9 @@ fn process_json_replay_data(value: JsonValue) -> Result<GameReplayData, CliOpErr
         });
     };
 
-    metadata.insert(
-        TRT_CREATION_MARKER_KEY.into(),
-        TRT_CREATION_MARKER_VALUE.into(),
-    );
+    if let Some(val) = TRT_CREATION_MARKER_VALUE {
+        metadata.insert(TRT_CREATION_MARKER_KEY.into(), val.into());
+    }
 
     let inputs = value
         .remove(KEYWORD_INPUTS)

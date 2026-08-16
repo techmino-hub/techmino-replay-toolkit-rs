@@ -46,4 +46,4 @@ pub(crate) static KEYWORD_KEY: &str = "key";
 pub(crate) static TRT_CREATION_MARKER_KEY: &str = "__meta__created_with_techmino_replay_toolkit";
 
 /// The (current) metadata value for the "created with techmino-replay-toolkit" hidden marker.
-pub(crate) static TRT_CREATION_MARKER_VALUE: &str = env!("MARKER_VALUE");
+pub(crate) static TRT_CREATION_MARKER_VALUE: Option<&str> = option_env!("MARKER_VALUE");

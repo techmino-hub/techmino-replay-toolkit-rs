@@ -1,6 +1,12 @@
 use std::process::Command;
 
 fn main() {
+    if option_env!("TRT_MARKERLESS_MODE").is_none() {
+        assign_marker_value();
+    }
+}
+
+fn assign_marker_value() {
     let output = match Command::new("git").args(["rev-parse", "HEAD"]).output() {
         Ok(o) => o,
         Err(e) => {
