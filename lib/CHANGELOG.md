@@ -10,6 +10,7 @@ A massive refactoring:
 - Improved documentation on metadata getter and setter functions.
 - Updated documentation on unsorted inputs
 - Updated documentation on compression levels (now `1` is recommended)
+- Documentation "Input Parse Mode" sections now link to `InputParseMode`
 <!--
 Internal Changes:
 - Internal: Refactored metadata method definitions into one place instead of two.

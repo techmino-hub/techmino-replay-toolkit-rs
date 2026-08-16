@@ -84,7 +84,10 @@ impl GameReplayData {
     /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
     ///
     /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
-    /// best to give a `None`.
+    /// best to give a `None` and let the library infer the input parse mode from the metadata's version
+    /// string.
+    ///
+    /// For more information, see [`InputParseMode`].
     pub fn parse_replay(
         replay_data: &[u8],
         kind: ReplayBufferKind,
@@ -153,7 +156,10 @@ impl ReplayDecoder {
     /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
     ///
     /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
-    /// best to give a `None`.
+    /// best to give a `None` and let the library infer the input parse mode from the metadata's version
+    /// string.
+    ///
+    /// For more information, see [`InputParseMode`].
     #[must_use]
     pub fn new(kind: ReplayBufferKind, input_mode: Option<InputParseMode>) -> Self {
         Self {

@@ -103,7 +103,10 @@ impl GameReplayData {
     /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
     ///
     /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
-    /// best to give a `None`.
+    /// best to give a `None` and let the library infer the input parse mode from the metadata's version
+    /// string.
+    ///
+    /// For more information, see [`InputParseMode`].
     ///
     /// # Compression Level
     /// For the [`Compressed`][ReplayBufferKind::Compressed] and
@@ -170,7 +173,10 @@ impl GameReplayData {
     /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
     ///
     /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
-    /// best to give a `None`.
+    /// best to give a `None` and let the library infer the input parse mode from the metadata's version
+    /// string.
+    ///
+    /// For more information, see [`InputParseMode`].
     ///
     /// # Unsorted Inputs
     /// TL;DR: For normal use-cases, if you're not sure if the inputs are sorted
@@ -223,7 +229,10 @@ impl GameReplayData {
     /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
     ///
     /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
-    /// best to give a `None`.
+    /// best to give a `None` and let the library infer the input parse mode from the metadata's version
+    /// string.
+    ///
+    /// For more information, see [`InputParseMode`].
     ///
     /// # Compression Level
     /// You can choose how hard to try to compress the output using zlib.
@@ -281,7 +290,10 @@ impl GameReplayData {
     /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
     ///
     /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
-    /// best to give a `None`.
+    /// best to give a `None` and let the library infer the input parse mode from the metadata's version
+    /// string.
+    ///
+    /// For more information, see [`InputParseMode`].
     ///
     /// # Compression Level
     /// You can choose how hard to try to compress the output using zlib.
@@ -369,7 +381,10 @@ impl ReplayEncoder {
     /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
     ///
     /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
-    /// best to give a `None`.
+    /// best to give a `None` and let the library infer the input parse mode from the metadata's version
+    /// string.
+    ///
+    /// For more information, see [`InputParseMode`].
     ///
     /// # Returns
     /// If this function succeeds, returns a `Vec` of encoded replay bytes. The form of this
