@@ -45,14 +45,14 @@ pub const TEST_CHUNK_MAX_SIZE: usize = 48;
 pub static SAMPLE_METADATA: LazyLock<GameReplayMetadata> = LazyLock::new(|| {
     let mut metadata = GameReplayMetadata::new();
 
-    metadata.set_date("2026-01-01 01:23:45".into());
-    metadata.set_mode("sprint_10l".into());
+    metadata.set_date("2026-01-01 01:23:45");
+    metadata.set_mode("sprint_10l");
     metadata.set_mods(Vec::new());
-    metadata.set_player("Stacker".into());
-    metadata.set_seed(0.into());
+    metadata.set_player("Stacker");
+    metadata.set_seed(0);
     metadata.set_settings(PLAYER_SETTINGS.clone().map);
     metadata.set_tas_used(false);
-    metadata.set_version("V0.17.21".into());
+    metadata.set_version("V0.17.21");
 
     metadata
 });
@@ -60,41 +60,41 @@ pub static SAMPLE_METADATA: LazyLock<GameReplayMetadata> = LazyLock::new(|| {
 pub static PLAYER_SETTINGS: LazyLock<PlayerSettings> = LazyLock::new(|| {
     let mut settings = PlayerSettings::new();
 
-    settings.set_das(Some(4));
-    settings.set_arr(Some(0));
-    settings.set_atk_fx(Some(0));
-    settings.set_bag_line(Some(true));
-    settings.set_block(Some(true));
-    settings.set_center(Some(1.0));
-    settings.set_clear_fx(Some(0));
-    settings.set_dascut(Some(2));
-    settings.set_drop_fx(Some(0));
-    settings.set_dropcut(Some(0));
-    settings.set_face(Some([0; 29]));
-    settings.set_ft_lock(None);
-    settings.set_ghost(Some(0.8));
-    settings.set_grid(Some(0.5));
-    settings.set_high_cam(Some(true));
-    settings.set_ihs(Some(true));
-    settings.set_ims(Some(true));
-    settings.set_irs(Some(true));
-    settings.set_irscut(Some(2));
-    settings.set_lock_fx(Some(1));
-    settings.set_move_fx(Some(0));
-    settings.set_next_pos(Some(true));
-    settings.set_rs(Some("TRS"));
-    settings.set_score(Some(true));
-    settings.set_sdarr(Some(0));
-    settings.set_sddas(Some(0));
-    settings.set_shake_fx(Some(0));
-    settings.set_skin(Some([
+    settings.set_das(4);
+    settings.set_arr(0);
+    settings.set_atk_fx(0);
+    settings.set_bag_line(true);
+    settings.set_block(true);
+    settings.set_center(1.0);
+    settings.set_clear_fx(0);
+    settings.set_dascut(2);
+    settings.set_drop_fx(0);
+    settings.set_dropcut(0);
+    settings.set_face([0; 29]);
+    settings.remove_ft_lock();
+    settings.set_ghost(0.8);
+    settings.set_grid(0.5);
+    settings.set_high_cam(true);
+    settings.set_ihs(true);
+    settings.set_ims(true);
+    settings.set_irs(true);
+    settings.set_irscut(2);
+    settings.set_lock_fx(1);
+    settings.set_move_fx(0);
+    settings.set_next_pos(true);
+    settings.set_rs("TRS");
+    settings.set_score(true);
+    settings.set_sdarr(0);
+    settings.set_sddas(0);
+    settings.set_shake_fx(0);
+    settings.set_skin([
         1, 7, 11, 3, 14, 4, 9, 1, 7, 2, 6, 10, 2, 13, 5, 9, 15, 4, 11, 3, 12, 2, 16, 8, 4, 10, 13,
         2, 8,
-    ]));
-    settings.set_smooth(Some(true));
-    settings.set_splash_fx(Some(0));
-    settings.set_text(Some(true));
-    settings.set_warn(Some(true));
+    ]);
+    settings.set_smooth(true);
+    settings.set_splash_fx(0);
+    settings.set_text(true);
+    settings.set_warn(true);
 
     settings
 });
