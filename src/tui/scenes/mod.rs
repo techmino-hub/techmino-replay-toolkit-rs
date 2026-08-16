@@ -12,12 +12,17 @@ pub(in crate::tui) mod explorer;
 
 /// Represents the currently-displayed UI scene.
 #[derive(Debug)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "The operations scene is currently unimplemented"
+)]
 pub(in crate::tui) enum Scene {
     /// The explorer scene, where the user can traverse directories and
     /// select a file.
     Explorer(ExplorerScene),
     /// The operations scene, where the user can select an operation to perform on
     /// that file.
+    #[expect(unused, reason = "The operations scene is currently unimplemented")]
     Operations(core::convert::Infallible),
 }
 

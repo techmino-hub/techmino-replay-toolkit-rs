@@ -633,7 +633,6 @@ impl UiDirEntry {
         }
     }
 
-    #[must_use]
     fn metadata(&self) -> &io::Result<Metadata> {
         match self {
             UiDirEntry::Regular { metadata, .. } => metadata,

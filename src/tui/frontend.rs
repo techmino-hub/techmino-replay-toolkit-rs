@@ -104,6 +104,8 @@ impl AppFrontend {
             if let ControlFlow::Break(res) = self.handle_events(terminal) {
                 return res;
             }
+
+            self.handle_replies()?;
         }
     }
 
