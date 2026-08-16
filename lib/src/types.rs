@@ -1106,10 +1106,16 @@ pub enum ReplaySerializeError {
     #[error("attempted to call a function at the wrong state")]
     InvalidOperation,
 
-    /// The input [`Vec`] isn't sorted.
+    /// The input [`Vec`] isn't sorted in relative-mode encoding.
     ///
-    /// The serializer expects the input [`Vec`] to be sorted, or the game may parse the inputs
-    /// in a strange way.
+    /// The relative-mode serializer expects the input [`Vec`] to be sorted,
+    /// otherwise the replay is unrepresentable in that mode.
+    ///
+    /// The absolute-mode serializer does NOT explicitly check the input's
+    /// sorting state.
+    ///
+    /// In any case, the unmodified game will probably handle unsorted inputs in
+    /// a bizzare way.
     ///
     /// To fix this error, consider calling [`sort_inputs`][GameReplayData::sort_inputs] on the
     /// [`GameReplayData`] before serializing it.

@@ -8,6 +8,8 @@ A massive refactoring:
 - `TypeError` now has a reference to the `serde_json::Value`, making the metadata `get_*_or_raw()` methods a simple shortcut to `get_*().inner()`.
 - Improved `TypeError` `Display` impl.
 - Improved documentation on metadata getter and setter functions.
+- Updated documentation on unsorted inputs
+- Updated documentation on compression levels (now `1` is recommended)
 <!--
 Internal Changes:
 - Internal: Refactored metadata method definitions into one place instead of two.

@@ -95,12 +95,8 @@ impl GameReplayData {
     /// For more information on the different formats,
     /// see the [`ReplayBufferKind`] documentation.
     ///
-    /// Note that the serialization algorithm requires that the inputs in the
-    /// replay are sorted to time.\
-    /// If this isn't always the case, consider calling
-    /// [`sort_inputs`][GameReplayData::sort_inputs] before calling this
-    /// function, otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput]
-    /// error will be returned.
+    /// The inputs are usually sorted in terms of time. See the "Unsorted Inputs"
+    /// section for more details.
     ///
     /// # Input Parse Mode
     /// This function takes in an input parse mode override. This is often not required, but can be useful
@@ -112,12 +108,32 @@ impl GameReplayData {
     /// # Compression Level
     /// For the [`Compressed`][ReplayBufferKind::Compressed] and
     /// [`Base64`][ReplayBufferKind::Base64] formats, you can choose how hard
-    /// to try to compress the output using zlib. The default is usually 7.
+    /// to try to compress the output using zlib.
+    ///
+    /// A value of `1` is usually good enough.
     ///
     /// This argument is completely ignored when serializing with the
     /// [`Uncompressed`][ReplayBufferKind::Uncompressed] format.
     ///
     /// For more information, see [`miniz_oxide::deflate::CompressionLevel`].
+    ///
+    /// # Unsorted Inputs
+    /// TL;DR: For normal use-cases, if you're not sure if the inputs are sorted
+    /// in time, **consider calling [`sort_inputs`][GameReplayData::sort_inputs]
+    /// to sort them**, otherwise you may get an error or unorthodox playback
+    /// behaviour.
+    ///
+    /// Unsorted inputs are handled by the unmodified game weirdly. However, since
+    /// this library is made with leniency and mods/forks in mind (which may or
+    /// may not assign a new meaning to unsorted inputs), this library *can*
+    /// serialize using unsorted inputs, **if the input parse mode is set to
+    /// [`Absolute`][InputParseMode::Absolute]**.
+    ///
+    /// Note that this library will return an
+    /// [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error if the
+    /// inputs aren't sorted and the [`InputParseMode`] is set to
+    /// [`Relative`][InputParseMode::Relative] as it is currently not possible
+    /// to have a negative relative offset.
     ///
     /// # Errors
     /// For more information, refer to [`ReplaySerializeError`].
@@ -146,9 +162,8 @@ impl GameReplayData {
     /// For serializing the data into a copiable text/base64 format, use
     /// [`serialize_to_base64`][GameReplayData::serialize_to_base64] instead.
     ///
-    /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.\
-    /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
-    /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
+    /// The inputs are usually sorted in terms of time. See the "Unsorted Inputs"
+    /// section for more details.
     ///
     /// # Input Parse Mode
     /// This function takes in an input parse mode override. This is often not required, but can be useful
@@ -156,6 +171,24 @@ impl GameReplayData {
     ///
     /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
     /// best to give a `None`.
+    ///
+    /// # Unsorted Inputs
+    /// TL;DR: For normal use-cases, if you're not sure if the inputs are sorted
+    /// in time, **consider calling [`sort_inputs`][GameReplayData::sort_inputs]
+    /// to sort them**, otherwise you may get an error or unorthodox playback
+    /// behaviour.
+    ///
+    /// Unsorted inputs are handled by the unmodified game weirdly. However, since
+    /// this library is made with leniency and mods/forks in mind (which may or
+    /// may not assign a new meaning to unsorted inputs), this library *can*
+    /// serialize using unsorted inputs, **if the input parse mode is set to
+    /// [`Absolute`][InputParseMode::Absolute]**.
+    ///
+    /// Note that this library will return an
+    /// [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error if the
+    /// inputs aren't sorted and the [`InputParseMode`] is set to
+    /// [`Relative`][InputParseMode::Relative] as it is currently not possible
+    /// to have a negative relative offset.
     ///
     /// # Errors
     /// For more information, refer to [`ReplaySerializeError`]
@@ -182,9 +215,8 @@ impl GameReplayData {
     /// `FOr` serializing the data into a raw, uncompressed byte array form, use
     /// [`serialize_to_raw`][GameReplayData::serialize_to_raw] instead.
     ///
-    /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.\
-    /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
-    /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
+    /// The inputs are usually sorted in terms of time. See the "Unsorted Inputs"
+    /// section for more details.
     ///
     /// # Input Parse Mode
     /// This function takes in an input parse mode override. This is often not required, but can be useful
@@ -194,8 +226,27 @@ impl GameReplayData {
     /// best to give a `None`.
     ///
     /// # Compression Level
-    /// You can choose how hard to try to compress the output using zlib. The default is usually 7.
+    /// You can choose how hard to try to compress the output using zlib.
+    /// A value of `1` is usually good enough.
     /// For more information, see [`miniz_oxide::deflate::CompressionLevel`].
+    ///
+    /// # Unsorted Inputs
+    /// TL;DR: For normal use-cases, if you're not sure if the inputs are sorted
+    /// in time, **consider calling [`sort_inputs`][GameReplayData::sort_inputs]
+    /// to sort them**, otherwise you may get an error or unorthodox playback
+    /// behaviour.
+    ///
+    /// Unsorted inputs are handled by the unmodified game weirdly. However, since
+    /// this library is made with leniency and mods/forks in mind (which may or
+    /// may not assign a new meaning to unsorted inputs), this library *can*
+    /// serialize using unsorted inputs, **if the input parse mode is set to
+    /// [`Absolute`][InputParseMode::Absolute]**.
+    ///
+    /// Note that this library will return an
+    /// [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error if the
+    /// inputs aren't sorted and the [`InputParseMode`] is set to
+    /// [`Relative`][InputParseMode::Relative] as it is currently not possible
+    /// to have a negative relative offset.
     ///
     /// # Errors
     /// For more information, refer to [`ReplaySerializeError`]
@@ -222,9 +273,8 @@ impl GameReplayData {
     /// `FOr` serializing the data into a raw, uncompressed byte array form, use
     /// [`serialize_to_raw`][GameReplayData::serialize_to_raw] instead.
     ///
-    /// Note that the serialization algorithm requires that the inputs in the replay are sorted to time.\
-    /// If this isn't always the case, consider calling [`sort_inputs`][GameReplayData::sort_inputs] before calling this function,
-    /// otherwise an [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error will be returned.
+    /// The inputs are usually sorted in terms of time. See the "Unsorted Inputs"
+    /// section for more details.
     ///
     /// # Input Parse Mode
     /// This function takes in an input parse mode override. This is often not required, but can be useful
@@ -234,8 +284,27 @@ impl GameReplayData {
     /// best to give a `None`.
     ///
     /// # Compression Level
-    /// You can choose how hard to try to compress the output using zlib. The default is usually 7.
+    /// You can choose how hard to try to compress the output using zlib.
+    /// A value of `1` is usually good enough.
     /// For more information, see [`miniz_oxide::deflate::CompressionLevel`].
+    ///
+    /// # Unsorted Inputs
+    /// TL;DR: For normal use-cases, if you're not sure if the inputs are sorted
+    /// in time, **consider calling [`sort_inputs`][GameReplayData::sort_inputs]
+    /// to sort them**, otherwise you may get an error or unorthodox playback
+    /// behaviour.
+    ///
+    /// Unsorted inputs are handled by the unmodified game weirdly. However, since
+    /// this library is made with leniency and mods/forks in mind (which may or
+    /// may not assign a new meaning to unsorted inputs), this library *can*
+    /// serialize using unsorted inputs, **if the input parse mode is set to
+    /// [`Absolute`][InputParseMode::Absolute]**.
+    ///
+    /// Note that this library will return an
+    /// [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error if the
+    /// inputs aren't sorted and the [`InputParseMode`] is set to
+    /// [`Relative`][InputParseMode::Relative] as it is currently not possible
+    /// to have a negative relative offset.
     ///
     /// # Errors
     /// For more information, refer to [`ReplaySerializeError`]
@@ -274,7 +343,8 @@ impl ReplayEncoder {
     /// Creates a new [`ReplayEncoder`] instance.
     ///
     /// # Compression Level
-    /// You can choose how hard to try to compress the output using zlib. The default is usually 7.
+    /// You can choose how hard to try to compress the output using zlib.
+    /// A value of `1` is usually good enough.
     /// For more information, see [`miniz_oxide::deflate::CompressionLevel`].
     ///
     /// For uncompressed replays, this parameter is ignored.
@@ -610,6 +680,8 @@ impl ReplayEncoderPostprocessor {
     /// The compression level dictates, for compressed or base64 formats,
     /// how hard to try to compress the replay data. For more information,
     /// see [`miniz_oxide::deflate::CompressionLevel`].
+    ///
+    /// A value of `1` is usually good enough.
     ///
     /// The compression level is ignored for uncompressed formats.
     fn new(kind: ReplayBufferKind, compression_level: u8) -> Self {
