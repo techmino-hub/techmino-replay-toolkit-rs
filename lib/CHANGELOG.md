@@ -11,6 +11,8 @@ A massive refactoring:
 - Updated documentation on unsorted inputs
 - Updated documentation on compression levels (now `1` is recommended)
 - Documentation "Input Parse Mode" sections now link to `InputParseMode`
+- (Unstable) new: "Preprocessors" API exposing internal structs that work with compressed/base64 streams.
+  - Beware, unstable means this can change at any time in between patch versions!
 <!--
 Internal Changes:
 - Internal: Refactored metadata method definitions into one place instead of two.

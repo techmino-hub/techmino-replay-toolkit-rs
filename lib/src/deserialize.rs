@@ -467,7 +467,8 @@ impl InputDecoderState {
 }
 
 /// Preprocesses different replay data forms into uncompressed form.
-enum ReplayDecoderPreprocessor {
+#[instability::unstable(feature = "preprocessors")]
+pub enum ReplayDecoderPreprocessor {
     /// Preprocess by decoding base64 and then
     /// decompressing it
     Base64 {

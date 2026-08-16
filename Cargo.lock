@@ -2925,6 +2925,7 @@ dependencies = [
  "const_format",
  "derive_more",
  "fastrand",
+ "instability",
  "libtechmino-vlq 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "miniz_oxide 0.9.1",
  "pastey",
