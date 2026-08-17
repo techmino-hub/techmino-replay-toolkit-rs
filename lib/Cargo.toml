@@ -38,6 +38,8 @@ preserve_metadata_order = ["serde_json/preserve_order"]
 float_roundtrip = ["serde_json/float_roundtrip"]
 # Unstable feature: Exposes the currently-unstable Preprocessors API.
 unstable-preprocessors = []
+# Unstable feature: Exposes the currently-unstable Postprocessors API.
+unstable-postprocessors = []
 
 [dependencies]
 libtechmino-vlq = "0.1.0"

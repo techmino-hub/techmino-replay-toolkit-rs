@@ -658,7 +658,9 @@ impl ReplayEncoderState {
     }
 }
 
-enum ReplayEncoderPostprocessor {
+/// Helps convert a raw replay stream into an encoded stream.
+#[instability::unstable(feature = "postprocessors")]
+pub enum ReplayEncoderPostprocessor {
     /// Compress then encode to base64
     Base64 {
         /// We can convert every three bytes into 4 base64 chars.
