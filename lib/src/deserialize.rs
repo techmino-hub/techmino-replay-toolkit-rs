@@ -480,12 +480,14 @@ pub enum ReplayDecoderPreprocessor {
         b64_buffer: [u8; 3],
         /// The amount of space in the b64 buffer that is used.
         b64_buffer_len: u8,
-
-        /// The zlib decompressor.
+        /// The zlib decompressor state.
         decompressor: InflateState,
     },
     /// Just the zlib decompressor.
-    Compressed { decompressor: InflateState },
+    Compressed {
+        /// The zlib decompressor state.
+        decompressor: InflateState,
+    },
     /// No-op.
     Uncompressed,
 }
