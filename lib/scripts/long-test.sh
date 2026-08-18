@@ -80,9 +80,11 @@ std,arbitrary
 std,strum
 std,strum,preserve_metadata_order,float_roundtrip
 std,arbitrary,strum,preserve_metadata_order,float_roundtrip
+std,arbitrary,strum,preserve_metadata_order,float_roundtrip,unstable-preprocessors,unstable-postprocessors
 alloc
 alloc,strum
 alloc,strum,preserve_metadata_order,float_roundtrip
+alloc,strum,preserve_metadata_order,float_roundtrip,unstable-preprocessors,unstable-postprocessors
 FEATURES_END
 
 echo "all tests launched, awaiting completion..."
