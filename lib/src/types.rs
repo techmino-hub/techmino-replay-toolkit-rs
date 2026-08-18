@@ -69,7 +69,7 @@ impl GameInputEvent {
     /// This will return an error if this condition is not met.
     pub const fn new(frame: u64, action: InputAction) -> Result<Self, GameInputEventError> {
         if frame > Self::MAX_FRAME {
-            return Err(GameInputEventError(()));
+            return Err(GameInputEventError { frame });
         }
 
         let InputAction { kind, key } = action;
@@ -109,14 +109,12 @@ impl GameInputEvent {
     #[must_use]
     #[expect(
         clippy::missing_panics_doc,
-        reason = "This function should never panic\
-        unless the programmer of this library made a mistake\
-        or if an unsound transmutation was done"
+        reason = "This function should never panic"
     )]
     pub fn key(self) -> InputActionKey {
         let shifted = (self.0.cast_unsigned() >> 56) as u8;
         let masked = shifted & 0x1F;
-        InputActionKey::try_from(masked).expect("invalid input action key")
+        InputActionKey::try_from(masked).expect("invariant breached: invalid input action key")
     }
 
     /// Gets the action that happened in this event.
@@ -284,8 +282,13 @@ impl From<&serde_json::Value> for ValueVariant {
 
 /// The error type for when the game input event couldn't be created.
 #[derive(Debug, Error)]
-#[error("Failed to create GameInputEvent")]
-pub struct GameInputEventError(pub(crate) ());
+#[error(
+    "Failed to create GameInputEvent: Frame number {frame} is greater than max of {max_frame}",
+    max_frame = GameInputEvent::MAX_FRAME
+)]
+pub struct GameInputEventError {
+    frame: u64,
+}
 
 /// The error type for when a u8 greater than 1 tried to be converted
 /// into a bool.
