@@ -12,10 +12,20 @@
 //!             - [`InputActionKind`] tells whether or not it was a key press or a key release.
 //!             - [`InputActionKey`] tells which key was acted upon.
 //!
-//! # Serialization and Parsing
+//! ## Serialization and Parsing
 //!
-//! For more information about how to serialize and deserialize (parse) Techmino replays,
-//! check the [`deserialize`] and [`serialize`] module-level documentation.
+//! For more information about how to serialize (encode) and deserialize (parse)
+//! Techmino replays, check the [`deserialize`] and [`serialize`] module-level
+//! documentation.
+//!
+//! ## Modules
+//! - [`consts`]: Some public constants e.g. the amount of pieces Techmino
+//! supports.
+//! - [`config`]: Structs related to replay ecnoder and parser configuration.
+//! - [`deserialize`]: Parse a replay.
+//! - [`errors`]: Error structs and enums for when something went wrong.
+//! - [`replay`]: Structs related to the data stored in the replay.
+//! - [`serialize`]: Create/encode a replay.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
