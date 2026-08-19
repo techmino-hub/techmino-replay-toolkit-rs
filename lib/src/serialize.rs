@@ -59,10 +59,10 @@
 
 use crate::{
     SerializedReplay,
+    config::InputParseMode,
+    errors::ReplaySerializeError,
     format::ReplayBufferKind,
-    types::{
-        GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplaySerializeError,
-    },
+    replay::{GameInputEvent, GameReplayData, GameReplayMetadata},
 };
 use alloc::{
     string::{String, ToString},

@@ -1,34 +1,25 @@
-//! General types and structs to represent metadata and other trivial data.
+//! Represents Techmino replay data structures.
 
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
 
-use derive_more::{From, Into};
-use serde_json::Map;
-
 use crate::{
-    InputAction, InputActionKey, InputActionKind,
     consts::TOTAL_PIECE_COUNT,
     convert::{
         json_to_bool, json_to_f64, json_to_modlist, json_to_piece_bytes, json_to_str, json_to_u8,
         json_to_u64, modlist_to_json,
     },
+    errors::{GameInputEventError, OwnedTypeError, TypeError, ValueVariant},
     macros::{metadata_getters_setters, setting_getters_setters},
+    replay::action::{InputAction, InputActionKey, InputActionKind},
 };
-use alloc::{
-    borrow::ToOwned,
-    fmt::{self},
-    format,
-    string::{FromUtf8Error, String},
-    vec::Vec,
-};
-use base64::DecodeError;
-use core::fmt::{Debug, Display};
-use libtechmino_vlq::VlqDecodeError;
-use miniz_oxide::{MZError, deflate::core::TDEFLStatus, inflate::TINFLStatus};
-use semver::Version;
+use alloc::{borrow::ToOwned, boxed::Box, fmt, format, string::String, vec::Vec};
+use core::{borrow::Borrow, fmt::Debug};
+use derive_more::{From, Into};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
+use serde_json::Map;
+
+pub mod action;
 
 /// A packed struct representing a single input event in the game.
 ///
@@ -137,165 +128,181 @@ impl Debug for GameInputEvent {
     }
 }
 
-/// An entry had an unexpected type and could not be converted into the
-/// standardized type.
+/// A serialized replay, in either `String` or `Vec<u8>` form, depending
+/// on the requested replay kind.
 ///
-/// This is the owned variant of [`TypeError`].
-#[derive(Debug, Error)]
-pub struct OwnedTypeError {
-    /// The key used to index into the map.
-    key: &'static str,
-    /// The expected variant to be retrieved.
-    exp_ty: ValueVariant,
-    /// The value retrieved from the JSON object.
-    value: serde_json::Value,
-}
-
-impl OwnedTypeError {
-    /// Borrows the inner value retrieved from the JSON object that
-    /// had an unexpected type.
-    #[must_use]
-    pub fn inner(&self) -> &serde_json::Value {
-        &self.value
-    }
-
-    /// Deconstructs this type to take its inner value.
-    #[must_use]
-    pub fn take_inner(self) -> serde_json::Value {
-        self.value
-    }
-
-    /// Create a borrowed [`TypeError`] from this owned variant.
-    #[must_use]
-    pub fn get_ref(&self) -> TypeError<'_> {
-        TypeError {
-            key: self.key,
-            exp_ty: self.exp_ty,
-            value: &self.value,
-        }
-    }
-}
-
-/// An entry had an unexpected type and could not be converted into the
-/// standardized type.
-#[derive(Debug, Error)]
-pub struct TypeError<'a> {
-    /// The key used to index into the map.
-    key: &'static str,
-    /// The expected variant to be retrieved.
-    exp_ty: ValueVariant,
-    /// The value retrieved from the JSON object.
-    value: &'a serde_json::Value,
-}
-
-impl<'a> TypeError<'a> {
-    /// Returns the inner value retrieved from the JSON object that
-    /// had an unexpected type.
-    #[must_use]
-    pub fn inner(&self) -> &'a serde_json::Value {
-        self.value
-    }
-}
-
-impl Display for TypeError<'_> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "Entry with key {key} had an unexpected type \
-            {val_ty} instead of the expected {exp_ty}",
-            key = self.key,
-            exp_ty = self.exp_ty.to_str(),
-            val_ty = ValueVariant::from(self.value).to_str(),
-        )
-    }
-}
-
-impl Display for OwnedTypeError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        <TypeError as Display>::fmt(&self.get_ref(), f)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ValueVariant {
-    /// Null.
-    Null,
-    /// A boolean.
-    Bool,
-    /// A number.
-    Number,
-    /// A floating-point number representable by binary64 (`f64`).
+/// [`Uncompressed`][rbk-unc] or [`Compressed`][rbk-com] replay kinds
+/// correspond to the [`Bytes`][Self::Bytes] variant, while the
+/// [`Base64`][rbk-b64] replay kind corresponds to the
+/// [`Base64`][Self::Base64] variant.
+///
+/// [rbk-unc]: crate::config::ReplayBufferKind::Uncompressed
+/// [rbk-com]: crate::config::ReplayBufferKind::Compressed
+/// [rbk-b64]: crate::config::ReplayBufferKind::Base64
+#[cfg_attr(feature = "strum", derive(strum::EnumIs))]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum SerializedReplay {
+    /// A serialized replay containing non-string bytes.
     ///
-    /// Subtype of [`Number`][Self::Number].
-    Float,
-    /// An integer number representable by an unsigned byte (`u8`).
+    /// This is what's returned when you call for a [`Compressed`][rbk-com]
+    /// or [`Uncompressed`][rbk-unc] replay buffer.
     ///
-    /// Subtype of [`Number`][Self::Number].
-    Byte,
-    /// An integer number representable by an unsigned long/quadword (`u64`).
+    /// [rbk-unc]: crate::config::ReplayBufferKind::Uncompressed
+    /// [rbk-com]: crate::config::ReplayBufferKind::Compressed
+    Bytes(Vec<u8>),
+    /// A serialized replay containing base64-encoded data.
     ///
-    /// Subtype of [`Number`][Self::Number].
-    Long,
-    /// A string.
-    String,
-    /// A JSON array of any length.
-    Array,
-    /// A JSON array specifically with a length of [`TOTAL_PIECE_COUNT`].
+    /// This is what's returned when you call for a [`Base64`][rbk-b64] replay buffer.
     ///
-    /// Subtype of [`Array`][Self::Array].
-    PieceArray,
-    /// A JSON object/map.
-    Object,
+    /// [rbk-b64]: crate::config::ReplayBufferKind::Base64
+    Base64(String),
 }
 
-impl ValueVariant {
-    const fn to_str(self) -> &'static str {
+impl SerializedReplay {
+    /// Gets the byte representation of this serialized replay.
+    ///
+    /// Returns a reference to the byte slice or the byte slice representation of the
+    /// string, based on the enum variant.
+    ///
+    /// This function never fails.
+    ///
+    /// # Example
+    /// ```
+    /// use libtechmino_replay::format::SerializedReplay;
+    ///
+    /// let serialized = SerializedReplay::Bytes(vec![1, 2, 3]);
+    /// assert_eq!(serialized.as_bytes(), &[1, 2, 3]);
+    ///
+    /// let serialized = SerializedReplay::Base64("VGVjaG1pbm8gaXMgZnVuIQo=".into());
+    /// assert_eq!(serialized.as_bytes(), b"VGVjaG1pbm8gaXMgZnVuIQo=".as_slice());
+    /// ```
+    #[must_use]
+    pub const fn as_bytes(&self) -> &[u8] {
         match self {
-            ValueVariant::Null => "null",
-            ValueVariant::Bool => "bool",
-            ValueVariant::Number => "(unspecified kind of) number",
-            ValueVariant::Float => "64-bit floating-point number",
-            ValueVariant::Byte => "8-bit unsigned integer",
-            ValueVariant::Long => "64-bit unsigned integer",
-            ValueVariant::String => "string",
-            ValueVariant::Array => "array",
-            ValueVariant::PieceArray => {
-                const_format::formatc!("array with {TOTAL_PIECE_COUNT} elements")
-            }
-            ValueVariant::Object => "object",
+            Self::Bytes(b) => b.as_slice(),
+            Self::Base64(str) => str.as_bytes(),
+        }
+    }
+
+    /// Attempts to get the base64 string representation of this
+    /// serialized replay.
+    ///
+    /// Returns `None` if this serialized replay does not use the base64
+    /// representation.
+    ///
+    /// This returns a reference to the string. If you want an owned version,
+    /// use the [`TryInto<String>`][core::convert::TryInto] implementation.
+    ///
+    /// # Example
+    /// ```
+    /// use libtechmino_replay::format::SerializedReplay;
+    ///
+    /// let serialized = SerializedReplay::Bytes(vec![1, 2, 3]);
+    /// assert_eq!(serialized.try_as_string(), None);
+    ///
+    /// let serialized = SerializedReplay::Base64("VGVjaG1pbm8gaXMgZnVuIQo=".into());
+    /// assert_eq!(serialized.try_as_string(), Some("VGVjaG1pbm8gaXMgZnVuIQo="));
+    /// ```
+    #[must_use]
+    pub const fn try_as_string(&self) -> Option<&str> {
+        match self {
+            Self::Bytes(_) => None,
+            Self::Base64(str) => Some(str.as_str()),
         }
     }
 }
 
-impl From<&serde_json::Value> for ValueVariant {
-    fn from(value: &serde_json::Value) -> Self {
+impl AsRef<[u8]> for SerializedReplay {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            Self::Bytes(bytes) => bytes.as_slice(),
+            Self::Base64(ascii) => ascii.as_bytes(),
+        }
+    }
+}
+
+impl Borrow<[u8]> for SerializedReplay {
+    fn borrow(&self) -> &[u8] {
+        match self {
+            Self::Bytes(bytes) => bytes.as_slice(),
+            Self::Base64(ascii) => ascii.as_bytes(),
+        }
+    }
+}
+
+impl From<SerializedReplay> for Vec<u8> {
+    fn from(val: SerializedReplay) -> Self {
+        match val {
+            SerializedReplay::Bytes(b) => b,
+            SerializedReplay::Base64(s) => s.into_bytes(),
+        }
+    }
+}
+
+impl From<SerializedReplay> for Box<[u8]> {
+    fn from(val: SerializedReplay) -> Self {
+        match val {
+            SerializedReplay::Bytes(b) => b.into_boxed_slice(),
+            SerializedReplay::Base64(s) => s.into_bytes().into_boxed_slice(),
+        }
+    }
+}
+
+impl TryFrom<SerializedReplay> for String {
+    /// The original serialized replay.
+    type Error = SerializedReplay;
+
+    fn try_from(value: SerializedReplay) -> Result<Self, Self::Error> {
         match value {
-            serde_json::Value::Null => Self::Null,
-            serde_json::Value::Bool(_) => Self::Bool,
-            serde_json::Value::Number(_) => Self::Number,
-            serde_json::Value::String(_) => Self::String,
-            serde_json::Value::Array(_) => Self::Array,
-            serde_json::Value::Object(_) => Self::Object,
+            SerializedReplay::Bytes(_) => Err(value),
+            SerializedReplay::Base64(string) => Ok(string),
         }
     }
 }
 
-/// The error type for when the game input event couldn't be created.
-#[derive(Debug, Error)]
-#[error(
-    "Failed to create GameInputEvent: Frame number {frame} is greater than max of {max_frame}",
-    max_frame = GameInputEvent::MAX_FRAME
-)]
-pub struct GameInputEventError {
-    frame: u64,
-}
+#[cfg(test)]
+mod tests {
+    use fastrand::Rng;
+    #[cfg(feature = "strum")]
+    use strum::IntoEnumIterator;
 
-/// The error type for when a u8 greater than 1 tried to be converted
-/// into a bool.
-#[derive(Debug, Error)]
-#[error("Expected value of either 0 or 1, found {value}")]
-pub struct NotABool {
-    pub(crate) value: u8,
+    use super::*;
+
+    #[cfg(feature = "strum")]
+    #[test]
+    fn test_event_roundtrip() {
+        const ROUNDS: usize = 10_000_000;
+
+        let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
+
+        for i in 0..ROUNDS {
+            let kind: InputActionKind = rng.bool().into();
+            let key = rng.choice(InputActionKey::iter()).unwrap();
+            let action = InputAction { kind, key };
+            let frame = rng.u64(0..=GameInputEvent::MAX_FRAME);
+
+            let Ok(event) = GameInputEvent::new(frame, action) else {
+                panic!(
+                    "Failed to create GameInputEvent from args:
+                    Kind: {kind:?} = {kind_discriminant:?}
+                    Key: {key:?} = {key_discriminant:?}
+                    Frame: {frame} = {frame:x}",
+                    kind_discriminant = core::mem::discriminant(&kind),
+                    key_discriminant = core::mem::discriminant(&key),
+                );
+            };
+
+            let (rt_kind, rt_key, rt_frame) = (event.kind(), event.key(), event.frame());
+
+            assert_eq!(kind, rt_kind);
+            assert_eq!(key, rt_key);
+            assert_eq!(frame, rt_frame);
+
+            if i % 1_000_000 == 0 {
+                eprintln!("{i} of {ROUNDS}");
+            }
+        }
+    }
 }
 
 /// A struct representing all the data contained within the game replay.
@@ -859,7 +866,7 @@ impl GameReplayMetadata {
     ///   convert the value.
     ///   (`Some(Err(OwnedTypeError)))`)
     ///   - You can then try to get the inner value using
-    ///     [`.inner()`][crate::types::OwnedTypeError::inner]
+    ///     [`.inner()`][crate::errors::OwnedTypeError::inner]
     ///
     /// # Errors
     /// Converting the old stored value into a strict form may fail.
@@ -868,7 +875,7 @@ impl GameReplayMetadata {
     ///
     /// You can then display the error using its `Display` impl or try
     /// to get the inner value using
-    /// [`.inner()`][crate::types::OwnedTypeError::inner].
+    /// [`.inner()`][crate::errors::OwnedTypeError::inner].
     pub fn set_settings(
         &mut self,
         value: serde_json::Map<String, serde_json::Value>,
@@ -925,7 +932,7 @@ impl GameReplayMetadata {
     ///   convert the value.
     ///   (`Some(Err(OwnedTypeError)))`)
     ///   - You can then try to get the inner value using
-    ///     [`.inner()`][crate::types::OwnedTypeError::inner]
+    ///     [`.inner()`][crate::errors::OwnedTypeError::inner]
     ///
     /// # Errors
     /// Converting the old stored value into a strict form may fail.
@@ -934,7 +941,7 @@ impl GameReplayMetadata {
     ///
     /// You can then display the error using its `Display` impl or try
     /// to get the inner value using
-    /// [`.inner()`][crate::types::OwnedTypeError::inner].
+    /// [`.inner()`][crate::errors::OwnedTypeError::inner].
     pub fn remove_settings(&mut self) -> Option<Result<PlayerSettings, OwnedTypeError>> {
         const EXPECTED_TYPE: ValueVariant = ValueVariant::Object;
 
@@ -999,351 +1006,5 @@ impl GameReplayMetadata {
         "mode" mode: &str | String where { from_json: json_to_str },
 
         // "setting" settings: PlayerSettings where { from_json: serde_json::Value::as_object },
-    }
-}
-
-/// An error from parsing the replay data.
-#[derive(Debug, Error)]
-#[non_exhaustive]
-pub enum ReplayParseError {
-    /// An error occurred when zlib tried to decompress the replay data.
-    #[error("zlib failed to decompress the replay data")]
-    ZlibDecompressError {
-        /// The internal zlib status.
-        status: TINFLStatus,
-        /// The miniz failure status code.
-        mz_error: MZError,
-    },
-
-    /// An error occurred while parsing the base64 string.
-    ///
-    /// See [`DecodeError`] for more information.
-    #[error("the given base64 string was not valid base64")]
-    Base64DecodeError(DecodeError),
-
-    /// The separator between the replay metadata and the input data was not found.
-    ///
-    /// The separator is a linefeed character (`b'\n'`).
-    #[error("failed to find separator between replay metadata and input data")]
-    MetadataSeparatorNotFound,
-
-    /// The metadata was found to not be valid UTF-8.
-    ///
-    /// See [`FromUtf8Error`] for more information.
-    #[error("metadata is not valid utf-8")]
-    MetadataNotUtf8(#[from] FromUtf8Error),
-
-    /// The metadata could not be deserialized into the [`GameReplayMetadata`] struct,
-    /// possibly due to missing values.
-    ///
-    /// See [`serde_json`'s Error type][serde_json::Error] for more information.
-    #[error("failed to deserialize metadata")]
-    MetadataDeserializeError(#[from] serde_json::Error),
-
-    /// The mode in which to parse the inputs could not be inferred from the version string.
-    ///
-    /// Contains the [`String`] or the [`serde_json::Value`] of the version
-    /// entry if it was found.
-    ///
-    /// To fix this error, consider passing in the input parse mode explicitly.
-    #[error("could not infer input parse mode from version metadata")]
-    UnknownInputParseMode(Option<Result<String, serde_json::Value>>),
-
-    /// The input data was malformed and could not be decoded from the VLQ stream.
-    #[error("input data contains invalid vlq")]
-    MalformedVlqData {
-        /// The inner VLQ decoding error.
-        #[from]
-        inner: VlqDecodeError,
-    },
-
-    /// The input data was malformed and could not be casted into the proper enum types.
-    #[error("malformed input data")]
-    MalformedInputData {
-        /// The unprocessed frame of the associated input event.
-        ///
-        /// This is what's actually stored in the input data, and is
-        /// the same as `frame` if [`InputParseMode`] is
-        /// [`Absolute`][InputParseMode::Absolute].
-        raw_frame: u64,
-        /// The "frame"/time value of the associated input event.
-        ///
-        /// This is the same as `raw_frame` if [`InputParseMode`] is
-        /// [`Absolute`][InputParseMode::Absolute].
-        frame: u64,
-        /// The action of the associated input event.
-        ///
-        /// See [`InputAction`] for more details.
-        action: u64,
-    },
-
-    /// Only a portion of the replay was given, i.e.,
-    /// more replay data should have been fed
-    #[error("replay data unexpectedly ended")]
-    UnexpectedEnd,
-}
-
-impl From<DecodeError> for ReplayParseError {
-    fn from(value: DecodeError) -> Self {
-        Self::Base64DecodeError(value)
-    }
-}
-
-/// An error from serializing the replay data, e.g. to base64.
-#[derive(Debug, Error)]
-#[non_exhaustive]
-pub enum ReplaySerializeError {
-    /// The mode in which to serialize the inputs could not be inferred from the version string.
-    ///
-    /// Contains the [`String`] or the [`serde_json::Value`] of the version
-    /// entry if it was found.
-    ///
-    /// To fix this error, consider passing in the input parse mode explicitly.
-    #[error("could not infer input parse mode from version metadata")]
-    UnknownInputParseMode(Option<Result<String, serde_json::Value>>),
-
-    /// There was an attempt to call a function at the wrong state.
-    ///
-    /// For example, if the replay encoder expects metadata, but input data
-    /// was given instead (or vice versa), this error will be returned.
-    #[error("attempted to call a function at the wrong state")]
-    InvalidOperation,
-
-    /// The input [`Vec`] isn't sorted in relative-mode encoding.
-    ///
-    /// The relative-mode serializer expects the input [`Vec`] to be sorted,
-    /// otherwise the replay is unrepresentable in that mode.
-    ///
-    /// The absolute-mode serializer does NOT explicitly check the input's
-    /// sorting state.
-    ///
-    /// In any case, the unmodified game will probably handle unsorted inputs in
-    /// a bizzare way.
-    ///
-    /// To fix this error, consider calling [`sort_inputs`][GameReplayData::sort_inputs] on the
-    /// [`GameReplayData`] before serializing it.
-    #[error(
-        "unsorted input data: found input for frame {unsorted_time} after input for frame {prev_time}"
-    )]
-    UnsortedInput {
-        /// The frame number of the previous data point.
-        prev_time: u64,
-        /// The frame number of the first data point which caused the array to not be sorted.
-        unsorted_time: u64,
-    },
-
-    /// The metadata could not be serialized into JSON.
-    ///
-    /// See [`serde_json`'s Error type][serde_json::Error] for more information.
-    #[error("failed to serialize metadata as JSON")]
-    MetadataSerializeError(serde_json::Error),
-
-    /// There was an attempt to encode an oversized `u64` into the VLQ format.
-    #[error("could not fit {number} into the VLQ format")]
-    VlqOverflow {
-        /// The `u64` value that couldn't be encoded into the VLQ format.
-        number: u64,
-    },
-
-    /// Something went wrong relating to compression.
-    #[error("compression error")]
-    ZlibError {
-        /// The TDEFL status returned from the compressor.
-        tdefl_status: TDEFLStatus,
-    },
-}
-
-impl From<serde_json::Error> for ReplaySerializeError {
-    fn from(value: serde_json::Error) -> Self {
-        Self::MetadataSerializeError(value)
-    }
-}
-
-impl From<TDEFLStatus> for ReplaySerializeError {
-    fn from(value: TDEFLStatus) -> Self {
-        Self::ZlibError {
-            tdefl_status: value,
-        }
-    }
-}
-
-/// Determines how to parse the inputs of the replay.
-///
-/// Replays made before version 0.17.22 of the game (i.e., 0.17.21 and before it)
-/// use relative timing for its inputs.\
-/// However, starting from version 0.17.22 of the game, absolute timing is used.
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum InputParseMode {
-    /// Relative timing.
-    ///
-    /// Replays made before version 0.17.22 of the game (i.e., 0.17.21 and before it)
-    /// use relative timing for its inputs. That is, the time in each key-time
-    /// pair are relative to the frame of the previous input.
-    ///
-    /// For example, if you press two keys at the exact same frame, the first input
-    /// has a stored time of the number of frames since the previous input,
-    /// while the second input has a time of 0.
-    Relative,
-    /// Absolute timing.
-    ///
-    /// Replays made after version 0.17.21 of the game (i.e., 0.17.22 and onwards)
-    /// use absolute timing for its inputs. That is, the time in each key-time
-    /// pair are relative to the beginning of the replay (i.e., frame zero).
-    ///
-    /// For example, if you press two keys at the exact same frame, the first input
-    /// has a time of the current frame number, as well as the second input.
-    Absolute,
-}
-
-impl InputParseMode {
-    /// The first version where absolute timing is used.
-    pub const ABSOLUTE_TIMING_START: Version = Version::new(0, 17, 22);
-
-    /// Tries to infer the input parse mode based on the game version.
-    ///
-    /// If parsing the version fails, it will return `None`.
-    #[must_use]
-    pub fn try_infer_from_version(version: &str) -> Option<InputParseMode> {
-        let lower = version.to_ascii_lowercase();
-        let lower = lower
-            .trim_start_matches('v')
-            .trim_start_matches("alpha")
-            .trim_start();
-
-        if lower.contains("wtf") {
-            // Matches Techmino WTF mod from April 2024
-            // https://github.com/MelloBoo44/Techmino-WTF
-            return Some(InputParseMode::Relative);
-        }
-
-        if lower.trim_start().starts_with("unofficial expansion") {
-            // Matches Techmino Unofficial Expansion mod from August 2023
-            // https://github.com/Another-Soul/Techmino-Unofficial-Expansion
-            return Some(InputParseMode::Relative);
-        }
-
-        // Snapshots use @ as version@commit delimiter
-        let lower = match lower.find('@') {
-            Some(idx) => &lower[..idx],
-            None => lower,
-        };
-
-        // Electra's mods have multiple elements to them
-        let lower = lower.split(' ').next().unwrap_or_default();
-
-        let filtered_version: String = lower
-            .chars()
-            .filter(|c| c.is_numeric() || *c == '.')
-            .collect();
-
-        let version = Version::parse(&filtered_version);
-
-        if let Ok(v) = version {
-            if v < Self::ABSOLUTE_TIMING_START {
-                return Some(InputParseMode::Relative);
-            }
-            return Some(InputParseMode::Absolute);
-        }
-
-        None
-    }
-
-    /// Tries to infer the input parse mode based on the input slice.
-    ///
-    /// Returns [`None`] if the input parse mode could not be inferred.
-    #[must_use]
-    #[deprecated = "this doesn't really fit in with the rest of the codebase that uses VlqReader instead"]
-    pub fn try_infer_from_input_data(input_slice: &[u64]) -> Option<InputParseMode> {
-        // Absolute mode: expects increasing frame times
-        let mut prev_time = 0;
-        for &time in input_slice.iter().step_by(2) {
-            if time < prev_time {
-                // Definitely not absolute!
-                return Some(InputParseMode::Relative);
-            }
-
-            prev_time = time;
-        }
-
-        // It's not really possible to "disprove" relative mode, so we're still unsure
-        None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use fastrand::Rng;
-    use strum::IntoEnumIterator;
-
-    use super::*;
-
-    #[test]
-    fn test_inferred_mode() {
-        use InputParseMode::*;
-        let cases = [
-            ("Techmino is fun!", None),
-            ("Alpha v0.15.1", Some(Relative)),
-            ("V0.16.2", Some(Relative)),
-            ("0.17.22", Some(Absolute)),
-            ("v0.17.6@26fc", Some(Relative)),
-            ("v 1.2.3", Some(Absolute)),
-            // https://github.com/MelloBoo44/Techmino-WTF/blob/main/version.lua
-            ("WTF", Some(Relative)),
-            // https://github.com/Another-Soul/Techmino-Unofficial-Expansion/blob/main/version.lua
-            ("Unofficial Expansion v0.2.1", Some(Relative)),
-            // https://github.com/electraminer/Techmino/blob/king_of_stackers/version.lua
-            (
-                "V0.17.22 IRSv1.1 PASSTHROUGHFIXv1.0 KOSv1.2beta TE:Cv1.0",
-                Some(Absolute),
-            ),
-            // https://github.com/electraminer/Techmino/blob/irs/version.lua
-            ("V0.17.22 + IRSv1.1.1", Some(Absolute)),
-            // https://github.com/electraminer/Techmino/blob/king_of_cheesers/version.lua
-            (
-                "V0.17.22 IRSv1.1 PASSTHROUGHFIXv1.0 KOCv0.1beta TE:Cv1.0",
-                Some(Absolute),
-            ),
-        ];
-
-        for (input, expected) in cases {
-            assert_eq!(InputParseMode::try_infer_from_version(input), expected);
-        }
-    }
-
-    #[cfg(feature = "strum")]
-    #[test]
-    fn test_event_roundtrip() {
-        const ROUNDS: usize = 10_000_000;
-
-        let mut rng = Rng::with_seed(0x4d59_5df4_d0f3_3173);
-
-        for i in 0..ROUNDS {
-            let kind: InputActionKind = rng.bool().into();
-            let key = rng.choice(InputActionKey::iter()).unwrap();
-            let action = InputAction { kind, key };
-            let frame = rng.u64(0..=GameInputEvent::MAX_FRAME);
-
-            let Ok(event) = GameInputEvent::new(frame, action) else {
-                panic!(
-                    "Failed to create GameInputEvent from args:
-                    Kind: {kind:?} = {kind_discriminant:?}
-                    Key: {key:?} = {key_discriminant:?}
-                    Frame: {frame} = {frame:x}",
-                    kind_discriminant = core::mem::discriminant(&kind),
-                    key_discriminant = core::mem::discriminant(&key),
-                );
-            };
-
-            let (rt_kind, rt_key, rt_frame) = (event.kind(), event.key(), event.frame());
-
-            assert_eq!(kind, rt_kind);
-            assert_eq!(key, rt_key);
-            assert_eq!(frame, rt_frame);
-
-            if i % 1_000_000 == 0 {
-                eprintln!("{i} of {ROUNDS}");
-            }
-        }
     }
 }

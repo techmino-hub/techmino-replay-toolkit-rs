@@ -59,8 +59,10 @@ use core::ops::ControlFlow;
 
 use crate::{
     InputAction,
+    config::InputParseMode,
+    errors::ReplayParseError,
     format::ReplayBufferKind,
-    types::{GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode, ReplayParseError},
+    replay::{GameInputEvent, GameReplayData, GameReplayMetadata},
 };
 use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
 use base64::Engine;
@@ -828,9 +830,9 @@ mod tests {
     use super::*;
     use crate::{
         GameInputEvent, InputParseMode,
-        action::{InputAction, InputActionKey, InputActionKind},
         deserialize::ReplayDecoderPreprocessor,
         format::ReplayBufferKind,
+        replay::action::{InputAction, InputActionKey, InputActionKind},
         test_utils::{ByteFeeder, slightly_random_data},
     };
     use base64::Engine;

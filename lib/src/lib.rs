@@ -44,17 +44,49 @@ pub mod consts {
     pub const TOTAL_PIECE_COUNT: usize = 29;
 }
 
-mod action;
+pub mod config;
 mod convert;
 pub mod deserialize;
+pub mod errors;
+#[deprecated(
+    since = "0.2.0",
+    note = "this is a compatibility layer and everything here has been relocated to either `replay` or `config`"
+)]
 pub mod format;
 mod macros;
+pub mod replay;
 pub mod serialize;
-mod types;
 
 #[cfg(test)]
 mod test_utils;
 
-pub use action::*;
-pub use format::*;
-pub use types::*;
+#[doc(hidden)]
+#[deprecated(since = "0.2.0", note = "import from the `config` module instead")]
+pub use crate::config::{InputParseMode, ReplayBufferKind};
+#[doc(hidden)]
+#[deprecated(since = "0.2.0", note = "import from the `errors` module instead")]
+pub use crate::errors::{
+    GameInputEventError, NotABool, OwnedTypeError, ReplayParseError, ReplaySerializeError,
+    TypeError,
+};
+#[cfg(feature = "strum")]
+#[doc(hidden)]
+#[deprecated(
+    since = "0.2.0",
+    note = "import from the `replay::action` module instead"
+)]
+pub use crate::replay::action::InputActionKeyIter;
+#[doc(hidden)]
+#[deprecated(
+    since = "0.2.0",
+    note = "import from the `replay::action` module instead"
+)]
+pub use crate::replay::action::{
+    InputAction, InputActionKey, InputActionKind, InvalidInputActionKey,
+};
+#[doc(hidden)]
+#[deprecated(since = "0.2.0", note = "import from the `replay` module instead")]
+pub use crate::replay::{
+    GameInputEvent, GameReplayData, GameReplayMetadata, PlayerSettings, PlayerSettingsMut,
+    PlayerSettingsRef, SerializedReplay,
+};

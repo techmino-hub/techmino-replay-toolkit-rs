@@ -587,16 +587,16 @@ macro_rules! getters_setters_defs {
             /// don't need the error reason.
             #[must_use]
             pub fn [<get_ $name>](&self) ->
-                ::core::option::Option<::core::result::Result<$type, $crate::types::TypeError<'_>>>
+                ::core::option::Option<::core::result::Result<$type, $crate::errors::TypeError<'_>>>
             {
                 let value: &::serde_json::Value = self.$innername.get(Self::[<KEY_ $name:snake:upper>])?;
 
-                let retval: ::core::result::Result<$type, $crate::types::ValueVariant> =
+                let retval: ::core::result::Result<$type, $crate::errors::ValueVariant> =
                     $from_json(value);
 
                 let retval = match retval {
                     Ok(v) => v,
-                    Err(exp_ty) => return Some(Err($crate::types::TypeError {
+                    Err(exp_ty) => return Some(Err($crate::errors::TypeError {
                         key: Self::[<KEY_ $name:snake:upper>],
                         exp_ty,
                         value,
@@ -698,7 +698,7 @@ macro_rules! getters_setters_defs {
             ///   convert the value.
             ///   (`Some(Err(OwnedTypeError)))`)
             ///   - You can then try to get the inner value using
-            ///   [`.inner()`][crate::types::OwnedTypeError::inner]
+            ///   [`.inner()`][crate::errors::OwnedTypeError::inner]
             ///
             /// # Errors
             /// Converting the old stored value into a strict form may fail.
@@ -707,12 +707,12 @@ macro_rules! getters_setters_defs {
             ///
             /// You can then display the error using its `Display` impl or try
             /// to get the inner value using
-            /// [`.inner()`][crate::types::OwnedTypeError::inner].
+            /// [`.inner()`][crate::errors::OwnedTypeError::inner].
             pub fn [<set_ $name>](
                 &mut self,
                 value: $type
             ) -> ::core::option::Option<
-                ::core::result::Result<$ownedtype, $crate::types::OwnedTypeError>
+                ::core::result::Result<$ownedtype, $crate::errors::OwnedTypeError>
             > {
                 let value: ::serde_json::Value = $to_json(value);
 
@@ -720,7 +720,7 @@ macro_rules! getters_setters_defs {
                     let json: ::serde_json::Value = ::core::mem::replace(mutref, value);
                     return match $from_json(&json) {
                         Ok(v) => Some(Ok(v.into())),
-                        Err(exp_ty) => Some(Err($crate::types::OwnedTypeError {
+                        Err(exp_ty) => Some(Err($crate::errors::OwnedTypeError {
                             key: Self::[<KEY_ $name:snake:upper>],
                             exp_ty,
                             value: json,
@@ -732,7 +732,7 @@ macro_rules! getters_setters_defs {
                     .insert(Self::[<KEY_ $name:snake:upper>].to_owned(), value)?;
                 match $from_json(&json) {
                     Ok(v) => Some(Ok(v.into())),
-                    Err(exp_ty) => Some(Err($crate::types::OwnedTypeError {
+                    Err(exp_ty) => Some(Err($crate::errors::OwnedTypeError {
                         key: Self::[<KEY_ $name:snake:upper>],
                         exp_ty,
                         value: json,
@@ -761,7 +761,7 @@ macro_rules! getters_setters_defs {
             ///   convert the value.
             ///   (`Some(Err(OwnedTypeError)))`)
             ///   - You can then try to get the inner value using
-            ///   [`.inner()`][crate::types::OwnedTypeError::inner]
+            ///   [`.inner()`][crate::errors::OwnedTypeError::inner]
             ///
             /// # Errors
             /// Converting the old stored value into a strict form may fail.
@@ -770,12 +770,12 @@ macro_rules! getters_setters_defs {
             ///
             /// You can then display the error using its `Display` impl or try
             /// to get the inner value using
-            /// [`.inner()`][crate::types::OwnedTypeError::inner].
+            /// [`.inner()`][crate::errors::OwnedTypeError::inner].
             pub fn [<remove_ $name>](&mut self) -> ::core::option::Option<
-                ::core::result::Result<$ownedtype, $crate::types::OwnedTypeError>
+                ::core::result::Result<$ownedtype, $crate::errors::OwnedTypeError>
             > {
                 let json = self.$innername.remove(Self::[<KEY_ $name:snake:upper>])?;
-                let res: ::core::result::Result<$type, $crate::types::ValueVariant> =
+                let res: ::core::result::Result<$type, $crate::errors::ValueVariant> =
                     $from_json(&json);
 
                 match res {
@@ -786,7 +786,7 @@ macro_rules! getters_setters_defs {
                         return Some(Ok(owned));
                     }
                     Err(exp_ty) => {
-                        return Some(Err($crate::types::OwnedTypeError {
+                        return Some(Err($crate::errors::OwnedTypeError {
                             key: Self::[<KEY_ $name:snake:upper>],
                             exp_ty,
                             value: json,

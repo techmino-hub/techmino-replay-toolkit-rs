@@ -1,6 +1,6 @@
 //! Module for free utility functions that convert between JSON and Rust types.
 
-use crate::{consts::TOTAL_PIECE_COUNT, types::ValueVariant};
+use crate::{consts::TOTAL_PIECE_COUNT, errors::ValueVariant};
 use alloc::{vec, vec::Vec};
 
 /// Attempts to convert a JSON value into a byte (`u8`).
