@@ -20,7 +20,7 @@
 //!
 //! ## Modules
 //! - [`consts`]: Some public constants e.g. the amount of pieces Techmino
-//! supports.
+//!   supports.
 //! - [`config`]: Structs related to replay ecnoder and parser configuration.
 //! - [`deserialize`]: Parse a replay.
 //! - [`errors`]: Error structs and enums for when something went wrong.
