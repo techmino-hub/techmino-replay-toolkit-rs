@@ -460,8 +460,7 @@ impl InputDecoderState {
         }
     }
 
-    /// Returns false if this struct has any leftover
-    /// partial data.
+    /// Returns false if this struct has any leftover partial data.
     #[must_use]
     fn is_finished(&self) -> bool {
         self.vlq_reader.is_finished() && !self.expecting_action
@@ -469,6 +468,32 @@ impl InputDecoderState {
 }
 
 /// Preprocesses different replay data forms into uncompressed form.
+///
+/// This is a state machine. You initialize it, then as you feed in formatted
+/// data, it trickles out the uncompressed/raw form of the data.
+///
+/// ```
+/// # use libtechmino_replay::deserialize::ReplayDecoderPreprocessor;
+/// # struct MyStream;
+/// # impl MyStream {
+/// #   fn new() -> Self { Self }
+/// #   fn next(&self) -> Option<&[u8]> { None }
+/// # }
+/// use libtechmino_replay::config::ReplayBufferKind;
+///
+/// let kind = ReplayBufferKind::Uncompressed;
+/// let mut preprocessor = ReplayDecoderPreprocessor::new(kind);
+///
+/// let mut stream: MyStream = MyStream::new();
+/// let mut out_buf = Vec::new();
+///
+/// while let Some(chunk) = stream.next() {
+///     preprocessor.preprocess(chunk, &mut out_buf)
+///         .expect("preprocessing failed");
+/// }
+///
+/// assert!(preprocessor.is_finished());
+/// ```
 #[instability::unstable(feature = "preprocessors")]
 pub enum ReplayDecoderPreprocessor {
     /// Preprocess by decoding base64 and then
@@ -497,7 +522,10 @@ pub enum ReplayDecoderPreprocessor {
 impl ReplayDecoderPreprocessor {
     const SCRATCH_BUFFER_SIZE: usize = 4096;
 
-    fn new(kind: ReplayBufferKind) -> Self {
+    /// Creates a new preprocessor of the specified kind.
+    #[must_use]
+    #[instability::unstable(feature = "preprocessors")]
+    pub fn new(kind: ReplayBufferKind) -> Self {
         match kind {
             ReplayBufferKind::Base64 => Self::Base64 {
                 b64_buffer: [0u8; 3],
@@ -515,7 +543,15 @@ impl ReplayDecoderPreprocessor {
     ///
     /// This function only ever appends into `out_buf` and never reads or
     /// overwrites it.
-    fn preprocess(&mut self, unprocessed: &[u8], out_buf: &mut Vec<u8>) -> Result<(), FormatError> {
+    ///
+    /// # Errors
+    /// Returns an error if the unprocessed slice contains malformed data.
+    #[instability::unstable(feature = "preprocessors")]
+    pub fn preprocess(
+        &mut self,
+        unprocessed: &[u8],
+        out_buf: &mut Vec<u8>,
+    ) -> Result<(), FormatError> {
         match self {
             Self::Uncompressed => {
                 out_buf.extend_from_slice(unprocessed);
@@ -716,9 +752,10 @@ impl ReplayDecoderPreprocessor {
         Ok(())
     }
 
-    /// Returns false if this struct has some leftover
-    /// partial data.
-    fn is_finished(&self) -> bool {
+    /// Returns false if this struct has some leftover partial data.
+    #[must_use]
+    #[instability::unstable(feature = "preprocessors")]
+    pub fn is_finished(&self) -> bool {
         match self {
             Self::Uncompressed => true,
             Self::Compressed { decompressor } => decompressor.last_status() == TINFLStatus::Done,
@@ -779,13 +816,16 @@ fn inflate_step(
 
 /// Something is wrong with the format of the given replay data.
 #[derive(Debug)]
-enum FormatError {
+#[instability::unstable(feature = "preprocessors")]
+pub enum FormatError {
     /// The given data is not valid zlib-compressed data.
     ///
     /// Or, the underlying data decoded from base64 is not valid
     /// zlib-compressed data.
     ZlibError {
+        /// The status of the decompressor.
         status: TINFLStatus,
+        /// An error returned by miniz.
         mz_error: MZError,
     },
     /// The given data is not valid base64.
@@ -805,6 +845,21 @@ impl From<FormatError> for ReplayParseError {
                 Self::ZlibDecompressError { status, mz_error }
             }
             FormatError::Base64Error(decode_error) => Self::Base64DecodeError(decode_error),
+        }
+    }
+}
+
+#[instability::unstable(feature = "preprocessors")]
+impl core::fmt::Display for FormatError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            FormatError::ZlibError { status, mz_error } => write!(
+                f,
+                "Zlib decompression failed (error {mz_error:?}) with status {status:?}"
+            ),
+            FormatError::Base64Error(decode_error) => {
+                write!(f, "Base64 decode faailed ({decode_error})")
+            }
         }
     }
 }

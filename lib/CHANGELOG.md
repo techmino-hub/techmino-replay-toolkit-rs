@@ -20,6 +20,7 @@ A massive refactoring:
 - Updated documentation on compression levels (now `1` is recommended)
 - Documentation "Input Parse Mode" sections now link to `InputParseMode`
 - (Unstable) new: "Preprocessors" API exposing internal structs for reading compressed/base64 streams.
+  - This new feature flag also enables some other things coupled with the preprocessors in one way or another
 - (Unstable) new: "Postprocessors" API exposing internal structs for creating compressed/base64 streams.
   - Beware, unstable means this can change at any time in between patch versions!
 - A LOT of internal changes.
