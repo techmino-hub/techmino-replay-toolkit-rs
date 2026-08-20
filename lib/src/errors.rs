@@ -348,3 +348,10 @@ impl From<TDEFLStatus> for ReplaySerializeError {
         }
     }
 }
+
+/// Could not infer the replay kind.
+#[derive(Debug, thiserror::Error)]
+#[error("Unknown first byte in replay stream: {first_byte}")]
+pub struct UnknownReplayKind {
+    pub(crate) first_byte: u8,
+}

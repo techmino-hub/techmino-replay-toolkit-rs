@@ -5,6 +5,11 @@ use alloc::string::String;
 use arbitrary::Arbitrary;
 use semver::Version;
 
+use crate::{
+    consts::{BASE64_ZLIB_FIRST_BYTE, UNCOMPRESSED_FIRST_BYTE, ZLIB_HEADER_FIRST_BYTE},
+    errors::UnknownReplayKind,
+};
+
 /// Represents the different kinds of ways that Techmino replays could be represented.
 ///
 /// The most common ones are [`Base64`][Self::Base64] for copy-pasteable text from the
@@ -31,6 +36,79 @@ pub enum ReplayBufferKind {
     ///
     /// This format will not be directly playable using the unmodified game.
     Uncompressed,
+}
+
+impl ReplayBufferKind {
+    /// Returns whether or not this replay kind involves non-ASCII characters.
+    ///
+    /// # Disambiguation
+    /// Note that this does NOT just refer to the binary `.rep` files; this
+    /// functions not only detect the compressed binary `.rep` files, but also
+    /// any decompressed forms of replays.
+    ///
+    /// If you want to narrow down to ONLY `.rep` file formats (compressed
+    /// binary), use the [`Self::is_binary_compressed`].
+    ///
+    /// For more information on replay kinds, see [`ReplayBufferKind`].
+    #[must_use]
+    pub const fn is_binary(self) -> bool {
+        match self {
+            ReplayBufferKind::Base64 => false,
+            ReplayBufferKind::Compressed | ReplayBufferKind::Uncompressed => true,
+        }
+    }
+
+    /// Returns whether or not this replay kind is *specifically* the
+    /// compressed binary form.
+    #[must_use]
+    pub const fn is_binary_compressed(self) -> bool {
+        match self {
+            ReplayBufferKind::Compressed => true,
+            ReplayBufferKind::Base64 | ReplayBufferKind::Uncompressed => false,
+        }
+    }
+
+    /// Returns whether or not this replay kind is *specifically* the
+    /// uncompressed binary form.
+    ///
+    /// # Uncommon
+    /// Uncompressed binary replays aren't created by the game and may be the
+    /// result of external tooling. If you mean to detect `.rep` files, they
+    /// use the **compressed** form instead, in which case you should
+    /// consider using [`Self::is_binary_compressed`] instead.
+    #[must_use]
+    pub const fn is_binary_uncompressed(self) -> bool {
+        match self {
+            ReplayBufferKind::Base64 | ReplayBufferKind::Compressed => false,
+            ReplayBufferKind::Uncompressed => true,
+        }
+    }
+
+    /// Returns whether or not this replay kind is of the compressed base64
+    /// form.
+    #[must_use]
+    pub const fn is_base64(self) -> bool {
+        match self {
+            ReplayBufferKind::Base64 => true,
+            ReplayBufferKind::Compressed | ReplayBufferKind::Uncompressed => false,
+        }
+    }
+
+    /// Tries to infer the replay kind from the first byte of the replay stream.
+    ///
+    /// # Heuristics
+    /// This function is heuristics-based and may not be 100% accurate.
+    ///
+    /// # Errors
+    /// Returns if the given byte does not match any known first byte patterns.
+    pub const fn try_from_first_byte(byte: u8) -> Result<Self, UnknownReplayKind> {
+        match byte {
+            UNCOMPRESSED_FIRST_BYTE => Ok(Self::Uncompressed),
+            ZLIB_HEADER_FIRST_BYTE => Ok(Self::Compressed),
+            BASE64_ZLIB_FIRST_BYTE => Ok(Self::Base64),
+            _ => Err(UnknownReplayKind { first_byte: byte }),
+        }
+    }
 }
 
 /// Determines how to parse the inputs of the replay.
