@@ -60,6 +60,7 @@ use core::ops::ControlFlow;
 use crate::{
     InputAction,
     config::InputParseMode,
+    consts::METADATA_EVENTDATA_SEPARATOR,
     errors::ReplayParseError,
     format::ReplayBufferKind,
     replay::{GameInputEvent, GameReplayData, GameReplayMetadata},
@@ -294,7 +295,9 @@ impl ReplayDecoderState {
 
 struct MetadataDecoderState {
     /// The current cumulative decompressed buffer while waiting for the
-    /// newline (`\n` = `0xA`) character to get produced.
+    /// [metadata-inputdata character][sep] to get produced.
+    ///
+    /// [sep]: METADATA_EVENTDATA_SEPARATOR
     buf: Vec<u8>,
 }
 
@@ -313,7 +316,10 @@ impl MetadataDecoderState {
         let prev_buf_len = self.buf.len();
         self.buf.extend_from_slice(bytes);
 
-        let Some(newline_pos_in_input) = bytes.iter().position(|b| *b == b'\n') else {
+        let Some(newline_pos_in_input) = bytes
+            .iter()
+            .position(|b| *b == METADATA_EVENTDATA_SEPARATOR)
+        else {
             return Ok(MetadataDecoderStatus::NotDone);
         };
 

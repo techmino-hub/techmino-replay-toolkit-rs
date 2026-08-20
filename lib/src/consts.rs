@@ -17,3 +17,7 @@ pub const ZLIB_HEADER_FIRST_BYTE: u8 = b'x';
 pub const BASE64_ZLIB_FIRST_BYTE: u8 = b'e';
 /// Raw uncompressed game data begins with a JSON object, which begins with a `{`
 pub const UNCOMPRESSED_FIRST_BYTE: u8 = b'{';
+
+/// The separator between the metadata and input event data sections of the raw
+/// (uncompressed) versions of the replay.
+pub const METADATA_EVENTDATA_SEPARATOR: u8 = b'\n';
