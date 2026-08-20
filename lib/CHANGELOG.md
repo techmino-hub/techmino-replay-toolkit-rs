@@ -8,6 +8,7 @@ A massive refactoring:
 - NEW: Metadata `remove_*()` methods.
 - NEW: `OwnedTypeError`: variant of `TypeError` that owns the `serde_json::Value` instead of just having a reference.
   - You can use `.inner()` to get its inner `serde_json::Value`
+- NEW: Utility methods in `ReplayBufferKind`: `is_binary()`, `is_binary_compressed()`, `is_binary_uncompressed()`, `is_base64()`, and `infer_from_first_byte()`.
 - Restructured the codebase. Now things are much better structured:
   - `replay` for replay data structs
   - `config` for encoder/decoder config-related structs
