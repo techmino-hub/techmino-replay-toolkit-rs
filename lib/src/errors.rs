@@ -282,13 +282,6 @@ pub enum ReplaySerializeError {
     #[error("could not infer input parse mode from version metadata")]
     UnknownInputParseMode(Option<Result<String, serde_json::Value>>),
 
-    /// There was an attempt to call a function at the wrong state.
-    ///
-    /// For example, if the replay encoder expects metadata, but input data
-    /// was given instead (or vice versa), this error will be returned.
-    #[error("attempted to call a function at the wrong state")]
-    InvalidOperation,
-
     /// The input [`Vec`] isn't sorted in relative-mode encoding.
     ///
     /// The relative-mode serializer expects the input [`Vec`] to be sorted,

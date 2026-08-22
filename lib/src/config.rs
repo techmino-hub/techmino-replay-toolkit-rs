@@ -1,13 +1,15 @@
 //! Configurations for the replay encoder/decoder.
 
-use alloc::string::String;
+use alloc::{string::String, vec::Vec};
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
 use semver::Version;
 
 use crate::{
+    GameReplayMetadata, ReplaySerializeError,
     consts::{BASE64_ZLIB_FIRST_BYTE, UNCOMPRESSED_FIRST_BYTE, ZLIB_HEADER_FIRST_BYTE},
     errors::UnknownReplayKind,
+    serialize::ReplayEncoder,
 };
 
 /// Represents the different kinds of ways that Techmino replays could be represented.
@@ -46,25 +48,28 @@ impl ReplayBufferKind {
     /// functions not only detect the compressed binary `.rep` files, but also
     /// any decompressed forms of replays.
     ///
+    /// # General
     /// If you want to narrow down to ONLY `.rep` file formats (compressed
-    /// binary), use the [`Self::is_binary_compressed`].
-    ///
-    /// For more information on replay kinds, see [`ReplayBufferKind`].
+    /// binary), use the [`Self::is_binary_compressed`] method.
     #[must_use]
     pub const fn is_binary(self) -> bool {
         match self {
-            ReplayBufferKind::Base64 => false,
-            ReplayBufferKind::Compressed | ReplayBufferKind::Uncompressed => true,
+            Self::Base64 => false,
+            Self::Compressed | Self::Uncompressed => true,
         }
     }
 
     /// Returns whether or not this replay kind is *specifically* the
     /// compressed binary form.
+    ///
+    /// # Specialized
+    /// If you want to generalize to all kinds that use compression in any way,
+    /// use the [`Self::is_compressed`] method.
     #[must_use]
     pub const fn is_binary_compressed(self) -> bool {
         match self {
-            ReplayBufferKind::Compressed => true,
-            ReplayBufferKind::Base64 | ReplayBufferKind::Uncompressed => false,
+            Self::Compressed => true,
+            Self::Base64 | Self::Uncompressed => false,
         }
     }
 
@@ -79,8 +84,8 @@ impl ReplayBufferKind {
     #[must_use]
     pub const fn is_binary_uncompressed(self) -> bool {
         match self {
-            ReplayBufferKind::Base64 | ReplayBufferKind::Compressed => false,
-            ReplayBufferKind::Uncompressed => true,
+            Self::Base64 | Self::Compressed => false,
+            Self::Uncompressed => true,
         }
     }
 
@@ -89,8 +94,23 @@ impl ReplayBufferKind {
     #[must_use]
     pub const fn is_base64(self) -> bool {
         match self {
-            ReplayBufferKind::Base64 => true,
-            ReplayBufferKind::Compressed | ReplayBufferKind::Uncompressed => false,
+            Self::Base64 => true,
+            Self::Compressed | Self::Uncompressed => false,
+        }
+    }
+
+    /// Returns whether or not this replay kind utilizes compression to shrink
+    /// the final size.
+    ///
+    /// # General
+    /// This function covers both compressed binary and compressed base64. If
+    /// you specifically want to detect either of these, consider using
+    /// [`Self::is_binary_compressed`] or [`Self::is_base64`] instead.
+    #[must_use]
+    pub const fn is_compressed(self) -> bool {
+        match self {
+            Self::Base64 | Self::Compressed => true,
+            Self::Uncompressed => false,
         }
     }
 
@@ -212,6 +232,188 @@ impl InputParseMode {
 
         // It's not really possible to "disprove" relative mode, so we're still unsure
         None
+    }
+}
+
+/// Configures a [`ReplayEncoder`].
+///
+/// # Defaults
+/// By default, the encoder is configured to make a replay in a compatible
+/// format as `.rep` files.
+///
+/// # Example
+/// ```
+/// use libtechmino_replay::{
+///     config::{EncoderConfig, ReplayBufferKind},
+///     replay::GameReplayMetadata,
+///     serialize::ReplayEncoder,
+/// };
+///
+/// let mut metadata: GameReplayMetadata = GameReplayMetadata::new();
+/// metadata.set_version("V0.17.21");
+///
+/// let (mut encoder, mut buffer): (ReplayEncoder, Vec<u8>) = EncoderConfig::DEFAULT
+///     .kind(ReplayBufferKind::Base64)
+///     .build(&metadata)
+///     .unwrap();
+/// ```
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Clone, Debug)]
+pub struct EncoderConfig {
+    /// The target format of the replay.
+    pub(crate) replay_kind: ReplayBufferKind,
+    /// The level of compression to apply to the replay, if the replay kind
+    /// is compressed.
+    pub(crate) compression_level: u8,
+    /// The input mode to use, if overridden.
+    pub(crate) input_mode_override: Option<InputParseMode>,
+}
+
+impl EncoderConfig {
+    /// The default encoder config.
+    ///
+    /// By default, the encoder is configured to make a replay in a format
+    /// compatible with the `.rep` files made by the game.
+    pub const DEFAULT: Self = Self {
+        replay_kind: ReplayBufferKind::Compressed,
+        compression_level: 1,
+        input_mode_override: None,
+    };
+
+    /// Creates a new encoder config for a given replay format.
+    #[must_use]
+    pub const fn new(replay_kind: ReplayBufferKind) -> Self {
+        Self::DEFAULT.kind(replay_kind)
+    }
+
+    /// Sets the desired target format of the replay.
+    ///
+    /// Defaults to [`ReplayBufferKind::Compressed`].
+    ///
+    /// # Example
+    /// ```
+    /// # use libtechmino_replay::config::{EncoderConfig, ReplayBufferKind};
+    /// let conf = EncoderConfig::DEFAULT
+    ///     .kind(ReplayBufferKind::Compressed);
+    /// ```
+    #[must_use = "this function returns the modified self"]
+    pub const fn kind(mut self, replay_kind: ReplayBufferKind) -> Self {
+        self.replay_kind = replay_kind;
+        self
+    }
+
+    /// Gets the current desired target format of the replay.
+    ///
+    /// # Example
+    /// ```
+    /// # use libtechmino_replay::config::{EncoderConfig, ReplayBufferKind};
+    /// let conf = EncoderConfig::DEFAULT;
+    ///
+    /// assert_eq!(conf.get_kind(), ReplayBufferKind::Compressed);
+    /// ```
+    #[must_use]
+    pub const fn get_kind(&self) -> ReplayBufferKind {
+        self.replay_kind
+    }
+
+    /// The DEFLATE compression level to apply to the replay.
+    ///
+    /// The default of 1 is a decent trade-off between time and size for
+    /// Techmino TASes and replays.
+    ///
+    /// This has no effect on the uncompressed replay data format.\
+    /// For more information, see [`ReplayBufferKind::is_compressed()`].
+    ///
+    /// Note that the given level will be processed by miniz-oxide. It decides
+    /// what do to with the number given. Currently it clamps it to a maximum
+    /// of 10.
+    ///
+    /// For more information, see [`miniz_oxide::deflate::CompressionLevel`].
+    ///
+    /// # Example
+    /// ```
+    /// # use libtechmino_replay::config::EncoderConfig;
+    /// let conf = EncoderConfig::DEFAULT
+    ///     .compression_level(1);
+    /// ```
+    #[must_use = "this function returns the modified self"]
+    pub const fn compression_level(mut self, level: u8) -> Self {
+        self.compression_level = level;
+        self
+    }
+
+    /// Gets the stored desired compression level for the replay.
+    ///
+    /// For more information, see [the setter][Self::compression_level].
+    #[must_use]
+    pub const fn get_compression_level(&self) -> u8 {
+        self.compression_level
+    }
+
+    /// Overrides the input parse mode.
+    ///
+    /// Default: None (no override).
+    ///
+    /// # Input Parse Mode
+    /// This function takes in an input parse mode override. This is often not required, but can be useful
+    /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
+    ///
+    /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
+    /// best to give a `None` and let the library infer the input parse mode from the metadata's version
+    /// string.
+    ///
+    /// For more information, see [`InputParseMode`].
+    #[must_use = "this function returns the modified self"]
+    pub const fn input_mode(mut self, mode: Option<InputParseMode>) -> Self {
+        self.input_mode_override = mode;
+        self
+    }
+
+    /// Gets the current input parse mode override, if any.
+    ///
+    /// For more information, see [the setter][Self::input_mode].
+    #[must_use]
+    pub const fn get_input_mode(&self) -> Option<InputParseMode> {
+        self.input_mode_override
+    }
+
+    /// Initializes the [`ReplayEncoder`] based on the current config.
+    ///
+    /// # Metadata
+    /// This function takes in a metadata input, where the version is checked in
+    /// order to determine the input parse mode.
+    ///
+    /// If you'd like to skip this check, use [`Self::input_mode`] to give your
+    /// own input mode instead.
+    ///
+    /// # Errors
+    /// For more information on errors, see [`ReplayEncoder::with_config()`].
+    ///
+    /// # Example
+    /// ```
+    /// # use libtechmino_replay::{config::EncoderConfig, serialize::ReplayEncoder, replay::GameReplayMetadata};
+    ///
+    /// let mut metadata = GameReplayMetadata::new();
+    /// metadata.set_version("V0.17.22");
+    ///
+    /// let (mut encoder, mut buffer): (ReplayEncoder, Vec<u8>) = EncoderConfig::DEFAULT
+    ///     .build(&metadata)
+    ///     .unwrap();
+    ///
+    /// // Use the encoder...
+    /// ```
+    #[must_use = "encode a replay with the encoder"]
+    pub fn build(
+        &self,
+        metadata: &GameReplayMetadata,
+    ) -> Result<(ReplayEncoder, Vec<u8>), ReplaySerializeError> {
+        ReplayEncoder::with_config(metadata, self)
+    }
+}
+
+impl Default for EncoderConfig {
+    fn default() -> Self {
+        Self::DEFAULT
     }
 }
 

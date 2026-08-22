@@ -18,8 +18,8 @@
 
 extern crate std;
 use crate::{
-    GameInputEvent, GameReplayMetadata, InputAction, InputActionKey, InputActionKind,
-    PlayerSettings,
+    GameInputEvent, GameReplayData, GameReplayMetadata, InputAction, InputActionKey,
+    InputActionKind, PlayerSettings,
 };
 #[allow(
     unused_imports,

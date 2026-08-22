@@ -1,4 +1,4 @@
-use crate::GameReplayData;
+use super::GameReplayData;
 use serde::{Deserialize, Serialize};
 use std::{boxed::Box, collections::HashMap, fs::DirEntry, string::String, vec::Vec};
 

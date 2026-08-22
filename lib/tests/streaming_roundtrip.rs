@@ -6,7 +6,7 @@
 
 use fastrand::Rng;
 use libtechmino_replay::{
-    deserialize::ReplayDecoder, format::ReplayBufferKind, serialize::ReplayEncoder, *,
+    config::EncoderConfig, deserialize::ReplayDecoder, format::ReplayBufferKind, *,
 };
 
 use crate::common::{
@@ -78,10 +78,10 @@ fn test_streaming_with_params(
         total_inputs = STREAMING_INPUTS_PER_ROUND * round_count
     );
 
-    let mut encoder = ReplayEncoder::new(replay_kind, 1);
-    let metadata_bytes = encoder
-        .feed_metadata(&SAMPLE_METADATA, Some(input_mode))
-        .expect("feeding metadata should succeed");
+    let (mut encoder, output_buf) = EncoderConfig::new(replay_kind)
+        .input_mode(Some(input_mode))
+        .build(&SAMPLE_METADATA)
+        .expect("Metadata should be valid");
 
     let mut decoder = ReplayDecoder::new(replay_kind, Some(input_mode));
 
@@ -98,7 +98,7 @@ fn test_streaming_with_params(
     // Temp buffer to be fed to serialization
     let mut this_frame_input_data = Vec::with_capacity(STREAMING_INPUTS_PER_ROUND);
     // Temp buffer from serialization to be fed into deser
-    let mut ser_out_buf = metadata_bytes;
+    let mut ser_out_buf = output_buf;
     // Accumulative length of serialization output
     let mut ser_out_acc_len = 0;
 

@@ -9,9 +9,10 @@
 //! ```
 //! # use std::collections::HashMap;
 //! use libtechmino_replay::{
-//!    GameReplayData, format::ReplayBufferKind, serialize::ReplayEncoder, GameReplayMetadata,
-//!    GameInputEvent, PlayerSettings, InputParseMode
+//!     replay::{GameReplayData, GameReplayMetadata, GameInputEvent, PlayerSettings},
+//!     config::{ReplayBufferKind, EncoderConfig, InputParseMode},
 //! };
+//!
 //! # struct MyStream;
 //! # impl MyStream {
 //! #   fn new() -> Self {
@@ -25,10 +26,12 @@
 //! #   }
 //! # }
 //!
-//! let metadata = GameReplayMetadata {
+//! let mut metadata = GameReplayMetadata {
 //!     // ...
+//!     // make sure to set the game version
 //! #   map: serde_json::Map::new(),
 //! };
+//! # metadata.set_version("V0.17.21");
 //! let inputs: Vec<GameInputEvent> = vec![
 //!     // ...
 //! ];
@@ -37,8 +40,8 @@
 //! // This is the simplest method and covers most usecases.
 //! let replay = GameReplayData { inputs, metadata: metadata.clone() };
 //!
-//! let rep_file = replay.serialize(ReplayBufferKind::Compressed, Some(InputParseMode::Relative), 1);
-//! let copiable_b64 = replay.serialize(ReplayBufferKind::Base64, Some(InputParseMode::Relative), 1);
+//! let rep_file = replay.serialize(ReplayBufferKind::Compressed, None, 1);
+//! let copiable_b64 = replay.serialize(ReplayBufferKind::Base64, None, 1);
 //!
 //! // You can then write the `rep_file` into a .rep file or put the
 //! // `copiable_b64` into the clipboard
@@ -46,8 +49,10 @@
 //! // Example: Streaming serialization
 //! // This is useful if the input stream is extremely long.
 //! let mut input_stream = MyStream::new();
-//! let mut encoder = ReplayEncoder::new(ReplayBufferKind::Compressed, 1);
-//! let mut replay_bytes: Vec<u8> = encoder.feed_metadata(&metadata, Some(InputParseMode::Relative)).unwrap();
+//! let (mut encoder, mut replay_bytes) = EncoderConfig::new(ReplayBufferKind::Compressed)
+//!     .compression_level(1)
+//!     .build(&metadata)
+//!     .unwrap();
 //!
 //! while !input_stream.is_empty() {
 //!     let inputs: &[GameInputEvent] = input_stream.next();
@@ -59,7 +64,8 @@
 
 use crate::{
     SerializedReplay,
-    config::InputParseMode,
+    config::{EncoderConfig, InputParseMode},
+    consts::METADATA_EVENTDATA_SEPARATOR,
     errors::ReplaySerializeError,
     format::ReplayBufferKind,
     replay::{GameInputEvent, GameReplayData, GameReplayMetadata},
@@ -202,8 +208,10 @@ impl GameReplayData {
         &self,
         input_mode: Option<InputParseMode>,
     ) -> Result<SerializedReplay, ReplaySerializeError> {
-        let mut encoder = ReplayEncoder::new(ReplayBufferKind::Uncompressed, 0);
-        let mut output = encoder.feed_metadata(&self.metadata, input_mode)?;
+        let (mut encoder, mut output) = EncoderConfig::DEFAULT
+            .kind(ReplayBufferKind::Uncompressed)
+            .input_mode(input_mode)
+            .build(&self.metadata)?;
         encoder.feed_input_data(&self.inputs, &mut output)?;
         encoder.finish(&mut output)?;
 
@@ -264,8 +272,11 @@ impl GameReplayData {
         input_mode: Option<InputParseMode>,
         compression_level: u8,
     ) -> Result<SerializedReplay, ReplaySerializeError> {
-        let mut encoder = ReplayEncoder::new(ReplayBufferKind::Compressed, compression_level);
-        let mut output = encoder.feed_metadata(&self.metadata, input_mode)?;
+        let (mut encoder, mut output) = EncoderConfig::DEFAULT
+            .input_mode(input_mode)
+            .compression_level(compression_level)
+            .build(&self.metadata)?;
+
         encoder.feed_input_data(&self.inputs, &mut output)?;
         encoder.finish(&mut output)?;
 
@@ -325,8 +336,11 @@ impl GameReplayData {
         input_mode: Option<InputParseMode>,
         compression_level: u8,
     ) -> Result<SerializedReplay, ReplaySerializeError> {
-        let mut encoder = ReplayEncoder::new(ReplayBufferKind::Base64, compression_level);
-        let mut output = encoder.feed_metadata(&self.metadata, input_mode)?;
+        let (mut encoder, mut output) = EncoderConfig::DEFAULT
+            .compression_level(compression_level)
+            .input_mode(input_mode)
+            .build(&self.metadata)?;
+
         encoder.feed_input_data(&self.inputs, &mut output)?;
         encoder.finish(&mut output)?;
 
@@ -339,9 +353,13 @@ impl GameReplayData {
 
 /// An encoder for Techmino replays.
 ///
-/// This encoder is NOT cumulative, you are expected to
-/// create an external buffer to store its output or stream
-/// it elsewhere.
+/// # Usage
+/// You can use the [`new`][Self::new] function to create a new encoder with
+/// default settings, or use the [`with_config`][Self::with_config] function to
+/// create one using an [`EncoderConfig`].
+///
+/// Both require [`GameReplayMetadata`] because it's needed to infer configs
+/// such as input parse modes.
 pub struct ReplayEncoder {
     /// The inner state machine for the encoder, that outputs into
     /// raw uncompressed form.
@@ -352,67 +370,94 @@ pub struct ReplayEncoder {
 }
 
 impl ReplayEncoder {
-    /// Creates a new [`ReplayEncoder`] instance.
+    /// Creates a replay encoder based on the given encoder config.
     ///
-    /// # Compression Level
-    /// You can choose how hard to try to compress the output using zlib.
-    /// A value of `1` is usually good enough.
-    /// For more information, see [`miniz_oxide::deflate::CompressionLevel`].
+    /// For more information, see [`EncoderConfig`].
     ///
-    /// For uncompressed replays, this parameter is ignored.
+    /// # Metadata
+    /// This function takes in a metadata input, where the version is checked in
+    /// order to determine the input parse mode.
     ///
-    /// # Next Steps
-    /// After creating the [`ReplayEncoder`], start by feeding it some metadata to serialize \
-    /// using [`feed_metadata`][Self::feed_metadata]. Note that that step can
-    /// only be done once per encoding since there's only one metadata segment
-    /// in the replay structure.
-    #[must_use]
-    pub fn new(rep_kind: ReplayBufferKind, compression_level: u8) -> Self {
-        Self {
-            state: ReplayEncoderState::DEFAULT,
-            postprocessor: ReplayEncoderPostprocessor::new(rep_kind, compression_level),
-        }
-    }
-
-    /// Feeds some metadata into this [`ReplayEncoder`].
-    ///
-    /// # Input Parse Mode
-    /// This function takes in an input parse mode override. This is often not required, but can be useful
-    /// if you're targeting a mod and this library fails to infer the input parse mode from the version.
-    ///
-    /// Passing in the wrong input parse mode will result in nonsensical inputs, though, so it's usually
-    /// best to give a `None` and let the library infer the input parse mode from the metadata's version
-    /// string.
-    ///
-    /// For more information, see [`InputParseMode`].
-    ///
-    /// # Returns
-    /// If this function succeeds, returns a `Vec` of encoded replay bytes. The form of this
-    /// depends on the specific replay kind you chose. In the case of [`ReplayBufferKind::Base64`],
-    /// the output is guaranteed to be a valid UTF-8 string.
-    ///
-    /// Note that the output is still incomplete, and may not be a valid replay yet.
+    /// If you'd like to skip this check, use [`EncoderConfig::input_mode`] to give your
+    /// own input mode instead.
     ///
     /// # Errors
-    /// This function errors if the metadata is invalid or if the encoder isn't expecting metadata
-    /// (i.e., it's already been given metadata and is now expecting input data).
+    /// Returns an error if serialization fails or the input parse mode could
+    /// not be inferred from the version entry in the metadata.
     ///
-    /// # Next Steps
-    /// After feeding the [`ReplayEncoder`] metadata, the last step is to feed it
-    /// input data using [`feed_input_data`][Self::feed_input_data]. Note that
-    /// unlike feeding metadata, you can feed input data in multiple batches.
-    pub fn feed_metadata(
-        &mut self,
+    /// Other errors might be possible (like base64 encode failure?) but
+    /// it's not obvious if that's possible or not.
+    ///
+    /// # Returns
+    ///
+    /// Returns the encoder in the given tuple's first element (`.0`), and the
+    /// partially-written vector file is given as the tuple's second element (`.1`).
+    ///
+    /// You are meant to use the tuple's second element for your heap allocation.
+    pub fn with_config(
         metadata: &GameReplayMetadata,
-        input_mode: Option<InputParseMode>,
-    ) -> Result<Vec<u8>, ReplaySerializeError> {
-        let metadata_bytes = self.state.feed_metadata(metadata, input_mode)?;
+        config: &EncoderConfig,
+    ) -> Result<(Self, Vec<u8>), ReplaySerializeError> {
+        let parse_mode = if let Some(m) = config.input_mode_override {
+            m
+        } else {
+            let version = match metadata.get_version_or_raw() {
+                Some(Ok(v)) => v,
+                Some(Err(raw)) => {
+                    return Err(ReplaySerializeError::UnknownInputParseMode(Some(Err(
+                        raw.clone()
+                    ))));
+                }
+                None => {
+                    return Err(ReplaySerializeError::UnknownInputParseMode(None));
+                }
+            };
+
+            let Some(mode) = InputParseMode::try_infer_from_version(version) else {
+                return Err(ReplaySerializeError::UnknownInputParseMode(Some(Ok(
+                    version.to_string(),
+                ))));
+            };
+
+            mode
+        };
+
+        let state = ReplayEncoderState::new(parse_mode);
+        let mut metadata_bytes = serde_json::to_vec(metadata)?;
+        metadata_bytes.push(METADATA_EVENTDATA_SEPARATOR);
         let mut postprocessed = Vec::with_capacity(metadata_bytes.len());
 
-        self.postprocessor
-            .postprocess_into_vec(&metadata_bytes, &mut postprocessed)?;
+        let mut postprocessor =
+            ReplayEncoderPostprocessor::new(config.replay_kind, config.compression_level);
+        postprocessor.postprocess_into_vec(&metadata_bytes, &mut postprocessed)?;
 
-        Ok(postprocessed)
+        Ok((
+            Self {
+                state,
+                postprocessor,
+            },
+            postprocessed,
+        ))
+    }
+
+    /// Creates a new [`ReplayEncoder`] instance given the metadata.
+    ///
+    /// # Metadata
+    /// This function takes in a metadata input, where the version is checked in
+    /// order to determine the input parse mode.
+    ///
+    /// If you'd like to skip this check (e.g. if you don't have a `version`
+    /// entry in your metadata), use [`Self::with_config`] using a custom config
+    /// with a defined [`EncoderConfig::input_mode`].
+    ///
+    /// # Errors
+    /// Returns an error if serialization fails or the input parse mode could
+    /// not be inferred from the version entry in the metadata.
+    ///
+    /// Other errors might be possible (like base64 encode failure?) but
+    /// it's not obvious if that's possible or not.
+    pub fn new(metadata: &GameReplayMetadata) -> Result<(Self, Vec<u8>), ReplaySerializeError> {
+        Self::with_config(metadata, &EncoderConfig::DEFAULT)
     }
 
     /// Feeds some input data into this [`ReplayEncoder`].
@@ -422,13 +467,25 @@ impl ReplayEncoder {
     /// to place any output.
     ///
     /// # Errors
-    /// This function errors if the input data is invalid (e.g., unsorted), or if the encoder
-    /// isn't expecting input data right now (i.e., it's not yet been given metadata).
+    /// This function errors if the input data is invalid (e.g., unsorted).
     ///
-    /// # Requirements
-    /// This function requires the input data to be sorted, otherwise returns an error.
-    /// This function also requires that metadata has been fed to the [`ReplayEncoder`] using
-    /// [`feed_metadata`][Self::feed_metadata].
+    /// # Unsorted Inputs
+    /// TL;DR: For normal use-cases, if you're not sure if the inputs are sorted
+    /// in time, **consider calling [`sort_inputs`][GameReplayData::sort_inputs]
+    /// to sort them**, otherwise you may get an error or unorthodox playback
+    /// behaviour.
+    ///
+    /// Unsorted inputs are handled by the unmodified game weirdly. However, since
+    /// this library is made with leniency and mods/forks in mind (which may or
+    /// may not assign a new meaning to unsorted inputs), this library *can*
+    /// serialize using unsorted inputs, **if the input parse mode is set to
+    /// [`Absolute`][InputParseMode::Absolute]**.
+    ///
+    /// Note that this library will return an
+    /// [`UnsortedInput`][ReplaySerializeError::UnsortedInput] error if the
+    /// inputs aren't sorted and the [`InputParseMode`] is set to
+    /// [`Relative`][InputParseMode::Relative] as it is currently not possible
+    /// to have a negative relative offset.
     ///
     /// # Repeatable
     /// You can safely call this function multiple times with chunks of input data.
@@ -478,75 +535,20 @@ impl ReplayEncoder {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum ReplayEncoderState {
-    WaitingForMetadata,
-    InputData {
-        prev_frame: u64,
-        parse_mode: InputParseMode,
-    },
+struct ReplayEncoderState {
+    prev_frame: u64,
+    input_mode: InputParseMode,
 }
 
 impl ReplayEncoderState {
-    /// The starting replay encoder state.
-    const DEFAULT: Self = Self::WaitingForMetadata;
-
-    /// Tries to encode metadata.
+    /// Creates a new encoder state.
     ///
-    /// # Returns
-    /// If the operation succeeds, returns bytes consisting of the serialized metadata
-    /// *and the separator between metadata and input data* in raw format, to be given
-    /// to the postprocessors.
-    ///
-    /// # Errors
-    /// This function errors if:
-    /// - The current encoder state is not expecting metadata
-    /// - The serialization failed
-    /// - The input parse mode could not be inferred from the metadata's game version
-    ///   and there was no override
-    fn feed_metadata(
-        &mut self,
-        metadata: &GameReplayMetadata,
-        parse_mode_override: Option<InputParseMode>,
-    ) -> Result<Vec<u8>, ReplaySerializeError> {
-        if !matches!(self, Self::WaitingForMetadata) {
-            return Err(ReplaySerializeError::InvalidOperation);
-        }
-
-        let parse_mode = if let Some(m) = parse_mode_override {
-            m
-        } else {
-            let Some(result) = metadata.get_version_or_raw() else {
-                return Err(ReplaySerializeError::UnknownInputParseMode(None));
-            };
-
-            let version = match result {
-                Ok(v) => v,
-                Err(raw) => {
-                    return Err(ReplaySerializeError::UnknownInputParseMode(Some(Err(
-                        raw.clone()
-                    ))));
-                }
-            };
-
-            let Some(mode) = InputParseMode::try_infer_from_version(version) else {
-                return Err(ReplaySerializeError::UnknownInputParseMode(Some(Ok(
-                    version.to_string(),
-                ))));
-            };
-
-            mode
-        };
-
-        *self = Self::InputData {
+    /// Takes in an input parse mode.
+    fn new(input_mode: InputParseMode) -> Self {
+        Self {
             prev_frame: 0,
-            parse_mode,
-        };
-
-        let mut vec = serde_json::to_vec(&metadata)?;
-
-        vec.push(b'\n');
-
-        Ok(vec)
+            input_mode,
+        }
     }
 
     /// Tries to encode input data into the given output buffer.
@@ -574,21 +576,14 @@ impl ReplayEncoderState {
         input_data: &[GameInputEvent],
         output_buffer: &mut [u8],
     ) -> Result<(usize, usize), ReplaySerializeError> {
-        let Self::InputData {
-            prev_frame,
-            parse_mode,
-        } = self
-        else {
-            return Err(ReplaySerializeError::InvalidOperation);
-        };
-        let parse_mode = *parse_mode;
+        let parse_mode = self.input_mode;
 
         let mut inputs_processed = 0;
         let mut output_idx = 0;
 
         for &input in input_data {
             let res = Self::feed_input_data_inner(
-                prev_frame,
+                &mut self.prev_frame,
                 parse_mode,
                 input,
                 &mut output_buffer[output_idx..],
@@ -1027,10 +1022,7 @@ impl ReplayEncoderPostprocessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{
-        ByteFeeder, SAMPLE_INPUT_DATA, SAMPLE_METADATA, SAMPLE_UNSORTED_INPUT_DATA,
-        TEST_CHUNK_MAX_SIZE, slightly_random_data,
-    };
+    use crate::test_utils::{ByteFeeder, TEST_CHUNK_MAX_SIZE, slightly_random_data};
     use fastrand::Rng;
 
     #[test]
@@ -1175,60 +1167,6 @@ mod tests {
 
             assert_eq!(&*data, decoded.as_slice());
         }
-    }
-
-    #[test]
-    fn metadata_encoder_state() {
-        let mut encoder = ReplayEncoderState::WaitingForMetadata;
-
-        assert!(matches!(
-            encoder
-                .feed_input_data(&[], &mut [])
-                .expect_err("this should error"),
-            ReplaySerializeError::InvalidOperation,
-        ));
-
-        encoder
-            .feed_metadata(&SAMPLE_METADATA, None)
-            .expect("this should work");
-    }
-
-    #[test]
-    fn input_encoder_state() {
-        let mut encoder = ReplayEncoderState::InputData {
-            prev_frame: 0,
-            parse_mode: InputParseMode::Relative,
-        };
-
-        assert!(matches!(
-            encoder
-                .feed_metadata(&SAMPLE_METADATA, None)
-                .expect_err("this should error"),
-            ReplaySerializeError::InvalidOperation,
-        ));
-
-        let mut output_buffer = [0u8; 16];
-
-        let tuple = encoder
-            .feed_input_data(SAMPLE_INPUT_DATA.as_slice(), &mut output_buffer)
-            .expect("serialization should work");
-
-        assert_eq!(tuple, (2, 4));
-
-        let mut encoder = ReplayEncoderState::InputData {
-            prev_frame: 0,
-            parse_mode: InputParseMode::Relative,
-        };
-
-        assert!(matches!(
-            encoder
-                .feed_input_data(SAMPLE_UNSORTED_INPUT_DATA.as_slice(), &mut output_buffer)
-                .expect_err("this should not work"),
-            ReplaySerializeError::UnsortedInput {
-                prev_time: 9,
-                unsorted_time: 3
-            }
-        ));
     }
 
     #[test]

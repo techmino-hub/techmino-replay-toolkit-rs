@@ -2,6 +2,12 @@
 A massive refactoring:
 - BREAKING: Metadata `set_*()` methods now return a new `OwnedTypeError` type as the error variant instead of `serde_json::Value`.
 - BREAKING: Metadata `set_*()` methods now accept `T` directly instead of `Option<T>`, for removing values use the new `remove_*()` methods instead.
+- BREAKING: Streaming encoding using `ReplayEncoder` reworked
+  - Specifically, the constructor was reworked:
+    - `.new()` + `.feed_metadata()` is now combined to just `.new()`
+      - Therefore `InvalidOperation` error is no longer possible (yay!)
+    - `.with_config()` + the NEW `EncoderConfig` used for encoder config instead of many optional parameters
+    - Or you can `EncoderConfig::build()`
 - DEPRECATION: Deprecated all crate-level type shortcuts. Things are more structured now.
 - DEPRECATION: Deprecated the `format` module as its contents has moved elsewhere.
 - DEPRECATION: Deprecated the `action` module as it was moved to `replay::action`

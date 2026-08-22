@@ -1,7 +1,7 @@
 use libfuzzer_sys::arbitrary::{unstructured::Unstructured, Arbitrary};
 use libtechmino_replay::{
+    config::EncoderConfig,
     deserialize::ReplayDecoder,
-    serialize::ReplayEncoder,
     GameInputEvent, GameReplayData, GameReplayMetadata, InputParseMode,
     ReplayBufferKind::{self},
     ReplayParseError,
@@ -25,9 +25,10 @@ pub struct EncodeStream {
     /// `.update()` using `inputs[indices[p - 1]..indices[p]]`,
     /// or if p == 0, then `inputs[..indices[p]]`
     pub indices: Vec<usize>,
-    pub rep_kind: ReplayBufferKind,
-    pub compression_level: u8,
-    pub input_mode_override: Option<InputParseMode>,
+    pub encoder_cfg: EncoderConfig,
+    // pub rep_kind: ReplayBufferKind,
+    // pub compression_level: u8,
+    // pub input_mode_override: Option<InputParseMode>,
 }
 
 impl EncodeStream {
@@ -40,8 +41,7 @@ impl EncodeStream {
     }
 
     pub fn test(&self) -> Result<Vec<u8>, libtechmino_replay::ReplaySerializeError> {
-        let mut encoder = ReplayEncoder::new(self.rep_kind, self.compression_level);
-        let mut serialized = encoder.feed_metadata(self.metadata(), self.input_mode_override)?;
+        let (mut encoder, mut serialized) = self.encoder_cfg.build(self.metadata())?;
 
         for pass in 0..self.indices.len() {
             let lower_bound = pass.checked_sub(1).map(|p| self.indices[p]).unwrap_or(0);
@@ -55,9 +55,12 @@ impl EncodeStream {
 
         drop(encoder);
 
-        let decoded =
-            GameReplayData::parse_replay(&serialized, self.rep_kind, self.input_mode_override)
-                .expect("decode failed");
+        let decoded = GameReplayData::parse_replay(
+            &serialized,
+            self.encoder_cfg.get_kind(),
+            self.encoder_cfg.get_input_mode(),
+        )
+        .expect("decode failed");
 
         assert_eq!(self.total_game_data, decoded);
 
@@ -67,9 +70,7 @@ impl EncodeStream {
 
 impl<'a> Arbitrary<'a> for EncodeStream {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        let rep_kind = ReplayBufferKind::arbitrary(u)?;
-        let compression_level = u.int_in_range(0u8..=10u8)?;
-        let input_mode_override = u.arbitrary()?;
+        let encoder_cfg = EncoderConfig::arbitrary(u)?;
 
         let total_game_data = GameReplayData::arbitrary(u)?;
 
@@ -96,9 +97,7 @@ impl<'a> Arbitrary<'a> for EncodeStream {
         Ok(Self {
             total_game_data,
             indices,
-            rep_kind,
-            compression_level,
-            input_mode_override,
+            encoder_cfg,
         })
     }
 }
