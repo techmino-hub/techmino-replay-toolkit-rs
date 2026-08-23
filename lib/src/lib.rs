@@ -12,6 +12,18 @@
 //!             - [`InputActionKind`] tells whether or not it was a key press or a key release.
 //!             - [`InputActionKey`] tells which key was acted upon.
 //!
+//! ## A note on `serde` implementations
+//! **For input event data, `serde` implementations do not
+//! serialize/deserialize to the game's expected format.**
+//!
+//! The game uses JSON for metadata, so that should be in the game's expected
+//! format.
+//!
+//! However, for input event data (i.e., keypresses), it uses a specialized
+//! VLQ-based format. Therefore, `Serialize`/`Deserialize` implementations on
+//! their related structs have **no use in interopping with the game** and may
+//! only be useful for if you want to e.g. store it in another format.
+//!
 //! ## Serialization and Parsing
 //!
 //! For more information about how to serialize (encode) and deserialize (parse)

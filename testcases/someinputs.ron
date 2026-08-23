@@ -1,15 +1,75 @@
 GameReplayData(
     inputs: [
-        GameInputEvent(432345564227567678),
-        GameInputEvent(-8791026472627208130),
-        GameInputEvent(144115188075855958),
-        GameInputEvent(-9079256848778919850),
-        GameInputEvent(504403158265495651),
-        GameInputEvent(-8718968878589280157),
-        GameInputEvent(72057594037928064),
-        GameInputEvent(-9151314442816847744),
-        GameInputEvent(216172782113783988),
-        GameInputEvent(-9007199254740991820),
+        GameInputEvent(
+            action: InputAction(
+                kind: Press,
+                key: HardDrop,
+            ),
+            frame: 62,
+        ),
+        GameInputEvent(
+            action: InputAction(
+                kind: Release,
+                key: HardDrop,
+            ),
+            frame: 62,
+        ),
+        GameInputEvent(
+            action: InputAction(
+                kind: Press,
+                key: MoveRight,
+            ),
+            frame: 86,
+        ),
+        GameInputEvent(
+            action: InputAction(
+                kind: Release,
+                key: MoveRight,
+            ),
+            frame: 86,
+        ),
+        GameInputEvent(
+            action: InputAction(
+                kind: Press,
+                key: SoftDrop,
+            ),
+            frame: 99,
+        ),
+        GameInputEvent(
+            action: InputAction(
+                kind: Release,
+                key: SoftDrop,
+            ),
+            frame: 99,
+        ),
+        GameInputEvent(
+            action: InputAction(
+                kind: Press,
+                key: MoveLeft,
+            ),
+            frame: 128,
+        ),
+        GameInputEvent(
+            action: InputAction(
+                kind: Release,
+                key: MoveLeft,
+            ),
+            frame: 128,
+        ),
+        GameInputEvent(
+            action: InputAction(
+                kind: Press,
+                key: RotateRight,
+            ),
+            frame: 180,
+        ),
+        GameInputEvent(
+            action: InputAction(
+                kind: Release,
+                key: RotateRight,
+            ),
+            frame: 180,
+        ),
     ],
     metadata: {
         "tasUsed": true,

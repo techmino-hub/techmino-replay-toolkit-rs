@@ -16,15 +16,26 @@
 //! - `B` denotes the [input action key][InputActionKey], where `0` is
 //!   mapped to [`MoveLeft`][InputActionKey::MoveLeft], etc.
 
+use crate::errors::NotABool;
 #[cfg(feature = "arbitrary")]
 use arbitrary::{Arbitrary, Unstructured};
 use core::fmt::{self, Display};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::NotABool;
-
 /// Represents an action associated with a certain input event.
+///
+/// ## A note on `serde` implementations
+/// **For input event data, `serde` implementations do not
+/// serialize/deserialize to the game's expected format.**
+///
+/// The game uses JSON for metadata, so that should be in the game's expected
+/// format.
+///
+/// However, for input event data (i.e., keypresses), it uses a specialized
+/// VLQ-based format. Therefore, `Serialize`/`Deserialize` implementations on
+/// their related structs have **no use in interopping with the game** and may
+/// only be useful for if you want to e.g. store it in another format.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct InputAction {
     /// Whether or not this is a press action or a release action.
@@ -101,6 +112,18 @@ impl From<InputAction> for u8 {
 }
 
 /// Whether this is a press action or a release action.
+///
+/// ## A note on `serde` implementations
+/// **For input event data, `serde` implementations do not
+/// serialize/deserialize to the game's expected format.**
+///
+/// The game uses JSON for metadata, so that should be in the game's expected
+/// format.
+///
+/// However, for input event data (i.e., keypresses), it uses a specialized
+/// VLQ-based format. Therefore, `Serialize`/`Deserialize` implementations on
+/// their related structs have **no use in interopping with the game** and may
+/// only be useful for if you want to e.g. store it in another format.
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -163,6 +186,18 @@ impl From<InputActionKind> for bool {
 }
 
 /// Represents the key/button that was acted upon.
+///
+/// ## A note on `serde` implementations
+/// **For input event data, `serde` implementations do not
+/// serialize/deserialize to the game's expected format.**
+///
+/// The game uses JSON for metadata, so that should be in the game's expected
+/// format.
+///
+/// However, for input event data (i.e., keypresses), it uses a specialized
+/// VLQ-based format. Therefore, `Serialize`/`Deserialize` implementations on
+/// their related structs have **no use in interopping with the game** and may
+/// only be useful for if you want to e.g. store it in another format.
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 #[cfg_attr(feature = "strum", derive(strum::EnumIter))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

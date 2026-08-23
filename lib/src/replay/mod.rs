@@ -45,7 +45,20 @@ pub mod action;
 ///   Note that since the original game uses Lua, which uses floats, it wouldn't
 ///   handle integers above 2^53 properly, which is why this one was given 54 bits.
 ///   Also see [`Self::MAX_FRAME`].
+///
+/// ## A note on `serde` implementations
+/// **For input event data, `serde` implementations do not
+/// serialize/deserialize to the game's expected format.**
+///
+/// The game uses JSON for metadata, so that should be in the game's expected
+/// format.
+///
+/// However, for input event data (i.e., keypresses), it uses a specialized
+/// VLQ-based format. Therefore, `Serialize`/`Deserialize` implementations on
+/// their related structs have **no use in interopping with the game** and may
+/// only be useful for if you want to e.g. store it in another format.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "GameInputEventRepr", into = "GameInputEventRepr")]
 #[repr(transparent)]
 pub struct GameInputEvent(i64);
 
@@ -126,6 +139,43 @@ impl Debug for GameInputEvent {
             .field("_calc_frame", &self.frame())
             .finish()
     }
+}
+
+impl From<GameInputEvent> for GameInputEventRepr {
+    fn from(value: GameInputEvent) -> Self {
+        Self {
+            action: value.action(),
+            frame: value.frame(),
+        }
+    }
+}
+
+impl TryFrom<GameInputEventRepr> for GameInputEvent {
+    type Error = GameInputEventError;
+
+    fn try_from(value: GameInputEventRepr) -> Result<Self, Self::Error> {
+        Self::new(value.frame, value.action)
+    }
+}
+
+/// A serializable representation of [`GameInputEvent`] used for serde.
+///
+/// ## A note on `serde` implementations
+/// **For input event data, `serde` implementations do not
+/// serialize/deserialize to the game's expected format.**
+///
+/// The game uses JSON for metadata, so that should be in the game's expected
+/// format.
+///
+/// However, for input event data (i.e., keypresses), it uses a specialized
+/// VLQ-based format. Therefore, `Serialize`/`Deserialize` implementations on
+/// their related structs have **no use in interopping with the game** and may
+/// only be useful for if you want to e.g. store it in another format.
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "GameInputEvent")]
+struct GameInputEventRepr {
+    action: InputAction,
+    frame: u64,
 }
 
 /// A serialized replay, in either `String` or `Vec<u8>` form, depending
@@ -307,16 +357,17 @@ mod tests {
 
 /// A struct representing all the data contained within the game replay.
 ///
-/// # A note on the `serde` implementations
-/// Although this struct derives `Serialize` and `Deserialize`, these
-/// impls do not serialize or deserialize to/from the format used by
-/// the game.
+/// ## A note on `serde` implementations
+/// **For input event data, `serde` implementations do not
+/// serialize/deserialize to the game's expected format.**
 ///
-/// Please use the inherent parse and serialize methods for interacting
-/// with the game's expected formats.
+/// The game uses JSON for metadata, so that should be in the game's expected
+/// format.
 ///
-/// This struct derives `Serialize` and `Deserialize` mainly if you want
-/// to serialize/deserialize to your own format, e.g. RON or CBOR.
+/// However, for input event data (i.e., keypresses), it uses a specialized
+/// VLQ-based format. Therefore, `Serialize`/`Deserialize` implementations on
+/// their related structs have **no use in interopping with the game** and may
+/// only be useful for if you want to e.g. store it in another format.
 #[expect(
     clippy::unsafe_derive_deserialize,
     reason = "this is for internal testing purposes only"
@@ -330,6 +381,18 @@ pub struct GameReplayData {
 }
 
 /// A struct representing the settings of the player who made the replay.
+///
+/// ## A note on `serde` implementations
+/// **For input event data, `serde` implementations do not
+/// serialize/deserialize to the game's expected format.**
+///
+/// The game uses JSON for metadata, so that should be in the game's expected
+/// format.
+///
+/// However, for input event data (i.e., keypresses), it uses a specialized
+/// VLQ-based format. Therefore, `Serialize`/`Deserialize` implementations on
+/// their related structs have **no use in interopping with the game** and may
+/// only be useful for if you want to e.g. store it in another format.
 #[derive(Debug, PartialEq, From, Into, Default, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PlayerSettings {
@@ -659,6 +722,18 @@ setting_getters_setters! {
 }
 
 /// A struct representing the metadata stored within the replay.
+///
+/// ## A note on `serde` implementations
+/// **For input event data, `serde` implementations do not
+/// serialize/deserialize to the game's expected format.**
+///
+/// The game uses JSON for metadata, so that should be in the game's expected
+/// format.
+///
+/// However, for input event data (i.e., keypresses), it uses a specialized
+/// VLQ-based format. Therefore, `Serialize`/`Deserialize` implementations on
+/// their related structs have **no use in interopping with the game** and may
+/// only be useful for if you want to e.g. store it in another format.
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize, From, Into)]
 #[serde(transparent)]

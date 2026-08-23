@@ -8,6 +8,11 @@ A massive refactoring:
       - Therefore `InvalidOperation` error is no longer possible (yay!)
     - `.with_config()` + the NEW `EncoderConfig` used for encoder config instead of many optional parameters
     - Or you can `EncoderConfig::build()`
+- BREAKING: `GameInputEvent`'s `serde::Serialize/Deserialize` implementations changed
+  - Previously it returned an opaque number e.g. `GameInputEvent(72057594037927937)`
+    - This relied on the unstable packed internal representation of game input events.
+  - Now it is more descriptive e.g. `GameInputEvent(action: InputAction(kind: Press, key: MoveLeft), frame: 1)`
+  - Old `GameInputEvent` serializations are now no longer valid
 - DEPRECATION: Deprecated all crate-level type shortcuts. Things are more structured now.
 - DEPRECATION: Deprecated the `format` module as its contents has moved elsewhere.
 - DEPRECATION: Deprecated the `action` module as it was moved to `replay::action`

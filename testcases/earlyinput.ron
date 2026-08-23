@@ -1,7 +1,19 @@
 GameReplayData(
     inputs: [
-        GameInputEvent(72057594037927937),
-        GameInputEvent(-9151314442816847693),
+        GameInputEvent(
+            action: InputAction(
+                kind: Press,
+                key: MoveLeft,
+            ),
+            frame: 1,
+        ),
+        GameInputEvent(
+            action: InputAction(
+                kind: Release,
+                key: MoveLeft,
+            ),
+            frame: 179,
+        ),
     ],
     metadata: {
         "tasUsed": true,
