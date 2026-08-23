@@ -21,3 +21,6 @@ pub const UNCOMPRESSED_FIRST_BYTE: u8 = b'{';
 /// The separator between the metadata and input event data sections of the raw
 /// (uncompressed) versions of the replay.
 pub const METADATA_EVENTDATA_SEPARATOR: u8 = b'\n';
+
+/// The format string the game uses to format the date for the replay's metadata.
+pub static METADATA_DATE_FORMAT: &str = "%Y/%m/%d %H:%M:%S";
