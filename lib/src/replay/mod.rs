@@ -1064,7 +1064,26 @@ impl GameReplayMetadata {
         /// may use a different or custom format.
         "version" version: &str | String where { from_json: json_to_str },
 
-        /// The date and time the replay was initially created.
+        /// The local date and time that the replay was initially created.
+        ///
+        /// The `date` entry contains a string with the format
+        /// `%Y/%m/%d %H:%M:%S` (following the C `strftime` function format).
+        ///
+        /// (This format string is available in
+        /// [the `consts` module][crate::consts])
+        ///
+        /// The timezone used is the player's timezone, **not UTC**.
+        ///
+        /// Example outputs:
+        /// - `2022/09/28 23:09:59`
+        /// - `2024/02/29 21:08:54`
+        /// - `2016/12/31 23:59:60`
+        ///     - The [Lua 5.4 documentation on os.date][os.date] specifically
+        ///       mentioned that `%S` ranges between 0–61 because of
+        ///       the possibility of [leap seconds][wp-leap-secs]
+        ///
+        /// [os.date]: https://www.lua.org/manual/5.4/manual.html#pdf-os.date
+        /// [wp-leap-secs]: https://en.wikipedia.org/wiki/Leap_second
         "date" date: &str | String where { from_json: json_to_str },
 
         /// A list of mods applied to the run.
