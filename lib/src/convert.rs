@@ -1,6 +1,6 @@
 //! Module for free utility functions that convert between JSON and Rust types.
 
-use crate::{consts::TOTAL_PIECE_COUNT, errors::ValueVariant};
+use crate::{consts::TOTAL_PIECE_COUNT, errors::ValueVariant, replay::PieceColor};
 use alloc::{vec, vec::Vec};
 
 /// Attempts to convert a JSON value into a byte (`u8`).
@@ -85,6 +85,30 @@ pub(crate) fn json_to_piece_bytes(
     Ok(bytes)
 }
 
+/// Attempts to convert a JSON value into a byte array for every piece in the game.
+///
+/// # Errors
+/// Returns a `ValueVariant` of the expected type if something went wrong.
+pub(crate) fn json_to_piece_colors(
+    value: &serde_json::Value,
+) -> Result<[PieceColor; TOTAL_PIECE_COUNT], ValueVariant> {
+    const EXPECTED_TYPE: ValueVariant = ValueVariant::PieceColorArray;
+
+    let values: &[serde_json::Value] = value.as_array().ok_or(EXPECTED_TYPE)?.as_slice();
+    let arr =
+        <&[serde_json::Value; TOTAL_PIECE_COUNT]>::try_from(values).map_err(|_| EXPECTED_TYPE)?;
+
+    let mut colors = [PieceColor::Invisible; TOTAL_PIECE_COUNT];
+
+    for i in 0..TOTAL_PIECE_COUNT {
+        let byte = json_to_u8(&arr[i])?;
+        let color = PieceColor::try_from_u8(byte).ok_or(EXPECTED_TYPE)?;
+        colors[i] = color;
+    }
+
+    Ok(colors)
+}
+
 /// Attempts to convert a JSON value into a mod list type.
 ///
 /// # Errors
@@ -122,6 +146,18 @@ pub(crate) fn modlist_to_json(modlist: Vec<(u64, serde_json::Value)>) -> serde_j
                 mod_value,
             ])
         })
+        .collect();
+
+    serde_json::Value::Array(values)
+}
+
+/// Converts a piece color array into JSON format.
+pub(crate) fn piece_colors_to_json<const N: usize>(
+    color_arr: [PieceColor; N],
+) -> serde_json::Value {
+    let values: Vec<serde_json::Value> = color_arr
+        .into_iter()
+        .map(|i| serde_json::Value::from(i.as_u8()))
         .collect();
 
     serde_json::Value::Array(values)

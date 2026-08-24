@@ -20,6 +20,11 @@ A massive refactoring:
 - NEW: `OwnedTypeError`: variant of `TypeError` that owns the `serde_json::Value` instead of just having a reference.
   - You can use `.inner()` to get its inner `serde_json::Value`
 - NEW: Utility methods in `ReplayBufferKind`: `is_binary()`, `is_binary_compressed()`, `is_binary_uncompressed()`, `is_base64()`, and `infer_from_first_byte()`.
+- NEW: `Piece` enum to help index into per-piece metadata (e.g. skin color, face)
+  - Includes a bit of metadata e.g. amount of minos.
+- NEW: `PieceColor` enum to help interpret piece skin color data
+  - Get from player settings data using `.get_skin_enum()` instead of `.get_skin()`
+  - Default skin color array from the game: `consts::DEFAULT_SKIN_COLORS`
 - Restructured the codebase. Now things are much better structured:
   - `replay` for replay data structs
   - `config` for encoder/decoder config-related structs

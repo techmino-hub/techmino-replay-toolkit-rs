@@ -6,8 +6,8 @@ use arbitrary::Arbitrary;
 use crate::{
     consts::TOTAL_PIECE_COUNT,
     convert::{
-        json_to_bool, json_to_f64, json_to_modlist, json_to_piece_bytes, json_to_str, json_to_u8,
-        json_to_u64, modlist_to_json,
+        json_to_bool, json_to_f64, json_to_modlist, json_to_piece_bytes, json_to_piece_colors,
+        json_to_str, json_to_u8, json_to_u64, modlist_to_json, piece_colors_to_json,
     },
     errors::{GameInputEventError, OwnedTypeError, TypeError, ValueVariant},
     macros::{metadata_getters_setters, setting_getters_setters},
@@ -20,6 +20,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Map;
 
 pub mod action;
+mod settings;
+
+pub use settings::{PieceColor, PieceColorIter};
 
 /// A packed struct representing a single input event in the game.
 ///
@@ -679,10 +682,20 @@ setting_getters_setters! {
     /// The rotation center opacity option in the video settings.
     "center" center: f64 where { from_json: json_to_f64 },
 
-    // TODO: Figure out the order of the specific elements
     /// The starting orientations of all the pieces.
     ///
-    /// Normally contains 29 elements: 7 tetrominoes, 18 pentominoes, 2 trominoes, 1 domino, and 1 monomino, in that order.
+    /// # Piece-Specific Information
+    /// Use the [`Piece`][Piece] enum to help index into the given array.
+    ///
+    /// ```
+    /// use libtechmino_replay::consts::{TOTAL_PIECE_COUNT, Piece};
+    ///
+    /// let faces = [0u8; TOTAL_PIECE_COUNT];
+    ///
+    /// let t_face = faces[Piece::T.get_index()];
+    /// ```
+    ///
+    /// [Piece]: crate::consts::Piece
     "face" face: [u8; TOTAL_PIECE_COUNT] where { from_json: json_to_piece_bytes },
 
     /// The ghost piece opacity option in the video settings.
@@ -700,11 +713,49 @@ setting_getters_setters! {
     /// The "score pop-ups" option in the video settings.
     "score" score: bool where { from_json: json_to_bool },
 
-    // TODO: Figure out the order of the specific elements
-    /// The colors of all the pieces.
+    /// The colors of all the pieces, represented as `u8`.
     ///
-    /// Normally contains 29 elements: 7 tetrominoes, 18 pentominoes, 2 trominoes, 1 domino, and 1 monomino, in that order.
+    /// For the getter/setter that accepts/returns [`PieceColor`]s instead of
+    /// `u8`s, see `*_skin_enum()` (e.g. `.get_skin_enum()`).
+    ///
+    /// # Piece-Specific Information
+    /// Use the [`Piece`][Piece] enum to help index into the given array.
+    ///
+    /// ```
+    /// use libtechmino_replay::consts::{TOTAL_PIECE_COUNT, Piece};
+    ///
+    /// let skins = [0u8; TOTAL_PIECE_COUNT];
+    ///
+    /// let t_skin = skins[Piece::T.get_index()];
+    /// ```
+    ///
+    /// [Piece]: crate::consts::Piece
     "skin" skin: [u8; TOTAL_PIECE_COUNT] where { from_json: json_to_piece_bytes },
+
+    /// The colors of all the pieces, represented as [`PieceColor`].
+    ///
+    /// For the getter/setter that accepts/returns `u8`s instead of
+    /// [`PieceColor`]s, see `*_skin()` (e.g. `.get_skin()`).
+    ///
+    /// # Piece-Specific Information
+    /// Use the [`Piece`][Piece] enum to help index into the given array.
+    ///
+    /// ```
+    /// use libtechmino_replay::{
+    ///     consts::{TOTAL_PIECE_COUNT, Piece},
+    ///     replay::PieceColor,
+    /// };
+    ///
+    /// let skins = [PieceColor::Purple; TOTAL_PIECE_COUNT];
+    ///
+    /// let t_skin = skins[Piece::T.get_index()];
+    /// ```
+    ///
+    /// [Piece]: crate::consts::Piece
+    "skin" skin_enum: [PieceColor; TOTAL_PIECE_COUNT] where {
+        from_json: json_to_piece_colors,
+        to_json: piece_colors_to_json,
+    },
 
     /// The smooth falling option option in the video settings.
     "smooth" smooth: bool where { from_json: json_to_bool },

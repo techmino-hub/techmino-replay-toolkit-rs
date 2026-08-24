@@ -119,6 +119,11 @@ pub(crate) enum ValueVariant {
     ///
     /// Subtype of [`Array`][Self::Array].
     PieceArray,
+    /// A JSON array specifically with a length of [`TOTAL_PIECE_COUNT`] that
+    /// contains valid color indices.
+    ///
+    /// Subtype of [`Array`][Self::Array].
+    PieceColorArray,
     /// A JSON object/map.
     Object,
 }
@@ -137,6 +142,11 @@ impl ValueVariant {
             ValueVariant::PieceArray => {
                 const_format::formatc!("array with {TOTAL_PIECE_COUNT} elements")
             }
+            ValueVariant::PieceColorArray => {
+                const_format::formatc!(
+                    "array of valid color indices with {TOTAL_PIECE_COUNT} elements"
+                )
+            }
             ValueVariant::Object => "object",
         }
     }
@@ -149,6 +159,7 @@ impl From<&serde_json::Value> for ValueVariant {
             serde_json::Value::Bool(_) => Self::Bool,
             serde_json::Value::Number(_) => Self::Number,
             serde_json::Value::String(_) => Self::String,
+            serde_json::Value::Array(v) if v.len() == TOTAL_PIECE_COUNT => Self::PieceArray,
             serde_json::Value::Array(_) => Self::Array,
             serde_json::Value::Object(_) => Self::Object,
         }
