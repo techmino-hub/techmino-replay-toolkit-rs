@@ -315,6 +315,9 @@ setting_getters_setters! {
 
     /// The starting orientations of all the pieces.
     ///
+    /// The default is all zeroes. `1` means it's rotated 90° clockwise,
+    /// `2` means 180°, `3` means 90° counterclockwise.
+    ///
     /// # Piece-Specific Information
     /// Use the [`Piece`][Piece] enum to help index into the given array.
     ///
