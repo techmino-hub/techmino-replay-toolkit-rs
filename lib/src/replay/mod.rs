@@ -18,9 +18,9 @@ use serde_json::Map;
 pub mod action;
 mod settings;
 
-pub use settings::{
-    PieceColor, PieceColorIter, PlayerSettings, PlayerSettingsMut, PlayerSettingsRef,
-};
+#[cfg(feature = "strum")]
+pub use settings::PieceColorIter;
+pub use settings::{PieceColor, PlayerSettings, PlayerSettingsMut, PlayerSettingsRef};
 
 /// A packed struct representing a single input event in the game.
 ///

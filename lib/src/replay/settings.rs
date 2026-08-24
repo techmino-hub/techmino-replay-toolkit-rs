@@ -10,6 +10,7 @@ use crate::{
     macros::setting_getters_setters,
     replay::GameReplayMetadata,
 };
+use alloc::{borrow::ToOwned, string::String};
 use derive_more::{From, Into};
 use serde::{Deserialize, Serialize};
 
