@@ -116,6 +116,7 @@ impl GameInputEvent {
         clippy::missing_panics_doc,
         reason = "This function should never panic"
     )]
+    #[expect(clippy::expect_used, reason = "This function should never panic")]
     pub fn key(self) -> InputActionKey {
         let shifted = (self.0.cast_unsigned() >> 56) as u8;
         let masked = shifted & 0x1F;

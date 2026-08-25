@@ -41,6 +41,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
+#![deny(clippy::expect_used)]
+#![deny(clippy::unwrap_used)]
+#![deny(clippy::unreachable)]
+#![deny(clippy::unimplemented)]
+#![deny(clippy::panic)]
+#![deny(clippy::missing_assert_message)]
 
 #[cfg(all(feature = "std", feature = "alloc"))]
 compile_error!("Only one of `std` or `alloc` features may be enabled");

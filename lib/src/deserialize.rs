@@ -708,8 +708,14 @@ impl ReplayDecoderPreprocessor {
                 if !consumed_len.is_multiple_of(4) {
                     consumed_len = consumed_len.next_multiple_of(4) - 4;
                 }
-                debug_assert!(consumed_len.is_multiple_of(4));
-                debug_assert!(consumed_len <= unprocessed.len());
+                debug_assert!(
+                    consumed_len.is_multiple_of(4),
+                    "consumed len must be a multiple of four"
+                );
+                debug_assert!(
+                    consumed_len <= unprocessed.len(),
+                    "consumed len should be at most unprocessed len"
+                );
 
                 // SAFETY: We just bounded consumed_len to be at most unprocessed.len()
                 let (consumed, unproc_bind) =
@@ -952,7 +958,7 @@ mod tests {
             }
 
             let ReplayDecoderPreprocessor::Compressed { decompressor, .. } = preprocessor else {
-                unreachable!();
+                panic!("Compressed preprocessor ctor returned non-`Compressed` variant")
             };
 
             assert_eq!(
@@ -1004,7 +1010,7 @@ mod tests {
                         )
                         .expect("preprocessor should not error");
                     }
-                    _ => unreachable!(),
+                    _ => panic!("Base64 preprocessor ctor returned non-`Base64` variant"),
                 }
             }
 

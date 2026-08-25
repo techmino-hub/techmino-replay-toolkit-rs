@@ -15,6 +15,9 @@
     clippy::missing_panics_doc,
     reason = "test utils module isn't meant to be panic-free"
 )]
+#![allow(clippy::expect_used, reason = "test utils module can panic")]
+#![allow(clippy::unwrap_used, reason = "test utils module can panic")]
+#![allow(clippy::panic, reason = "test utils module can panic")]
 
 extern crate std;
 use crate::{

@@ -612,6 +612,7 @@ impl ReplayEncoderState {
     /// be returned instead.
     /// If the input data is unsorted, nothing will be written and `Err` will
     /// be returned instead.
+    #[expect(clippy::expect_used, reason = "this function never panics")]
     fn feed_input_data_inner(
         prev_frame: &mut u64,
         parse_mode: InputParseMode,
@@ -632,7 +633,12 @@ impl ReplayEncoderState {
 
         // GameInputEvent is more restrictive than VlqData's requirements
         // (2^54 < 2^56).  This will never panic
-        let frame_vlq = VlqData::from_value(encoded_frame).unwrap();
+        let frame_vlq = VlqData::from_value(encoded_frame).expect(
+            "invariant breached! \
+            GameInputEvent should have more restrictive \
+            frame ranges than VlqData \
+            (this is a bug in libtechmino-replay and libtechmino-vlq)",
+        );
         let action = u8::from(input.action());
 
         let frame_len = frame_vlq.len().get() as usize;
@@ -764,9 +770,17 @@ impl ReplayEncoderPostprocessor {
         loop {
             let (status, raw_idx, buf_idx) = compress(compressor, raw, &mut buf, TDEFLFlush::None);
 
+            #[expect(
+                clippy::panic,
+                reason = "the panicking path represents a bug likely with miniz-oxide"
+            )]
             match status {
                 TDEFLStatus::Okay => (),
-                TDEFLStatus::Done => unreachable!(), // we're not flushing
+                TDEFLStatus::Done => panic!(
+                    "compression ended prematurely \
+                    even though flushing is turned off \
+                    (this is likely a bug with miniz-oxide or libtechmino-replay)"
+                ),
                 TDEFLStatus::BadParam | TDEFLStatus::PutBufFailed => return Err(status),
             }
 
@@ -796,9 +810,17 @@ impl ReplayEncoderPostprocessor {
             let (status, raw_idx, cmp_buf_idx) =
                 compress(compressor, raw, &mut compressed_buf, TDEFLFlush::None);
 
+            #[expect(
+                clippy::panic,
+                reason = "the panicking path represents a bug likely with miniz-oxide"
+            )]
             match status {
                 TDEFLStatus::Okay => (),
-                TDEFLStatus::Done => unreachable!(), // we're not flushing
+                TDEFLStatus::Done => panic!(
+                    "compression ended prematurely \
+                    even though flushing is turned off \
+                    (this is likely a bug with libtechmino-replay or miniz-oxide)"
+                ),
                 TDEFLStatus::BadParam | TDEFLStatus::PutBufFailed => return Err(status),
             }
 
@@ -867,15 +889,24 @@ impl ReplayEncoderPostprocessor {
             }
         });
 
+        #[expect(
+            clippy::expect_used,
+            reason = "the output buffer for the first chunk is correctly-sized, \
+            so the panic should never happen"
+        )]
         B64.encode_slice(first_chunk, &mut b64_output_buffer[..4])
-            .unwrap();
+            .expect("the first chunk should be three bytes in, four bytes out");
 
         if processable_len == 3 {
             // That first chunk is all we could encode
 
             let unused_len = total_len - processable_len;
 
-            debug_assert!(unused_len < 3);
+            debug_assert!(
+                unused_len < 3,
+                "the unused length must be less than three \
+                (we process three bytes at a time)"
+            );
 
             #[expect(
                 clippy::cast_possible_truncation,
@@ -899,10 +930,26 @@ impl ReplayEncoderPostprocessor {
         let rest_end = rest_start + rest_length;
         let rest = &compressed_slice[rest_start..rest_end];
 
-        debug_assert!(rest.len().is_multiple_of(3));
-        debug_assert!(compressed_slice.len() >= rest_end);
+        debug_assert!(
+            rest.len().is_multiple_of(3),
+            "the remaining length should be a multiple of three \
+            (we process every 3 bytes)"
+        );
+        debug_assert!(
+            compressed_slice.len() >= rest_end,
+            "rest_end should be less than compressed slice length \
+            (else it would be a buffer overflow)"
+        );
 
-        let bytes = B64.encode_slice(rest, &mut b64_output_buffer[4..]).unwrap() + 4;
+        #[expect(
+            clippy::expect_used,
+            reason = "the output buffer length is already checked \
+            in the start of the function"
+        )]
+        let bytes = B64
+            .encode_slice(rest, &mut b64_output_buffer[4..])
+            .expect("b64 output buffer size is too small")
+            + 4;
 
         #[expect(
             clippy::cast_possible_truncation,
@@ -1011,7 +1058,12 @@ impl ReplayEncoderPostprocessor {
         let mut rem_buf = [0u8; 4];
 
         let res = B64.encode_slice(b64_rem, &mut rem_buf);
-        debug_assert_eq!(res, Ok(4));
+        debug_assert_eq!(
+            res,
+            Ok(4),
+            "the input slice shouldn't have enough data for more than one \
+            4-byte base64 chunk"
+        );
 
         output.extend_from_slice(rem_buf.as_slice());
 
