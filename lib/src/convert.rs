@@ -2,6 +2,8 @@
 
 use crate::{consts::TOTAL_PIECE_COUNT, errors::ValueVariant, replay::PieceColor};
 use alloc::{vec, vec::Vec};
+#[cfg(feature = "chrono")]
+use chrono::prelude::NaiveDateTime;
 
 /// Attempts to convert a JSON value into a byte (`u8`).
 ///
@@ -136,6 +138,23 @@ pub(crate) fn json_to_modlist(
     Ok(processed_list)
 }
 
+/// Attempts to convert a JSON value into a naive data time using the game's
+/// custom replay date format.
+///
+/// # Errors
+/// Returns a `ValueVariant` of the expected type if something went wrong.
+#[cfg(feature = "chrono")]
+pub(crate) fn json_to_naive_date_time(
+    value: &serde_json::Value,
+) -> Result<NaiveDateTime, ValueVariant> {
+    use crate::consts::METADATA_DATE_FORMAT as DATE_FORMAT;
+    const EXPECTED_TYPE: ValueVariant = ValueVariant::NaiveDateTimeString;
+
+    let value = value.as_str().ok_or(EXPECTED_TYPE)?;
+
+    NaiveDateTime::parse_from_str(value, DATE_FORMAT).map_err(|_| EXPECTED_TYPE)
+}
+
 /// Converts a modlist into JSON format.
 pub(crate) fn modlist_to_json(modlist: Vec<(u64, serde_json::Value)>) -> serde_json::Value {
     let values: Vec<serde_json::Value> = modlist
@@ -161,4 +180,15 @@ pub(crate) fn piece_colors_to_json<const N: usize>(
         .collect();
 
     serde_json::Value::Array(values)
+}
+
+/// Converts a naive date time into a JSON string with the game's custom replay
+/// date format.
+#[cfg(feature = "chrono")]
+pub(crate) fn naive_date_time_to_json(naive_date_time: NaiveDateTime) -> serde_json::Value {
+    use crate::consts::METADATA_DATE_FORMAT as DATE_FORMAT;
+    use alloc::string::ToString;
+
+    let string = naive_date_time.format(DATE_FORMAT).to_string();
+    serde_json::Value::String(string)
 }

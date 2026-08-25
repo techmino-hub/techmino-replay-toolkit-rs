@@ -20,9 +20,9 @@ default = ["std"]
 # Implements `Arbitrary` on structs. Used mainly for testing.
 arbitrary = ["dep:arbitrary", "std"]
 # Either std or alloc must be enabled, but not both
-std = ["serde/std", "serde_json/std", "strum/std", "thiserror/std", "libtechmino-vlq/std"]
+std = ["serde/std", "serde_json/std", "strum/std", "thiserror/std", "libtechmino-vlq/std", "chrono/std"]
 # Either std or alloc must be enabled, but not both
-alloc = ["serde/alloc", "serde_json/alloc"]
+alloc = ["serde/alloc", "serde_json/alloc", "chrono/alloc"]
 # Adds strum utilities for certain enums
 strum = ["dep:strum"]
 # Preserves the order of elements in the metadata.
@@ -40,6 +40,8 @@ float_roundtrip = ["serde_json/float_roundtrip"]
 unstable-preprocessors = []
 # Unstable feature: Exposes the currently-unstable Postprocessors API.
 unstable-postprocessors = []
+# Add chrono getters/setters in time-based metadata entries.
+chrono = ["dep:chrono"]
 
 [dependencies]
 libtechmino-vlq = "0.1.0"
@@ -65,6 +67,7 @@ pastey = "0.2.3"
 derive_more = { version = "2.1.1", default-features = false, features = ["deref", "deref_mut", "from", "into"] }
 const_format = { version = "0.2.36", default-features = false, features = ["fmt"] }
 instability = "0.3.10"
+chrono = { version = "0.4.45", optional = true, default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 ascii = { version = "1.1.0", default-features = false, features = ["alloc"] }

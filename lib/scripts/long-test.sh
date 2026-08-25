@@ -77,14 +77,21 @@ while read featureset; do
 done << FEATURES_END
 std
 std,arbitrary
+std,chrono
+std,arbitrary,chrono
 std,strum
+std,strum,chrono
 std,strum,preserve_metadata_order,float_roundtrip
 std,arbitrary,strum,preserve_metadata_order,float_roundtrip
 std,arbitrary,strum,preserve_metadata_order,float_roundtrip,unstable-preprocessors,unstable-postprocessors
+std,arbitrary,strum,chrono,preserve_metadata_order,float_roundtrip,unstable-preprocessors,unstable-postprocessors
 alloc
+alloc,chrono
 alloc,strum
+alloc,strum,chrono
 alloc,strum,preserve_metadata_order,float_roundtrip
 alloc,strum,preserve_metadata_order,float_roundtrip,unstable-preprocessors,unstable-postprocessors
+alloc,strum,chrono,preserve_metadata_order,float_roundtrip,unstable-preprocessors,unstable-postprocessors
 FEATURES_END
 
 echo "all tests launched, awaiting completion..."

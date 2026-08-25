@@ -72,6 +72,11 @@ pub mod format;
 mod macros;
 pub mod replay;
 pub mod serialize;
+/// Re-exports of libraries.
+pub mod reexports {
+    #[cfg(feature = "chrono")]
+    pub use chrono;
+}
 
 #[cfg(test)]
 mod test_utils;

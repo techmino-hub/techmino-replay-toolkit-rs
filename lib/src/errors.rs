@@ -113,6 +113,9 @@ pub(crate) enum ValueVariant {
     Long,
     /// A string.
     String,
+    /// A formatted string representing a naive date/time with no timezone.
+    #[cfg(feature = "chrono")]
+    NaiveDateTimeString,
     /// A JSON array of any length.
     Array,
     /// A JSON array specifically with a length of [`TOTAL_PIECE_COUNT`].
@@ -138,6 +141,11 @@ impl ValueVariant {
             ValueVariant::Byte => "8-bit unsigned integer",
             ValueVariant::Long => "64-bit unsigned integer",
             ValueVariant::String => "string",
+            #[cfg(feature = "chrono")]
+            ValueVariant::NaiveDateTimeString => {
+                use crate::consts::METADATA_DATE_FORMAT;
+                const_format::formatc!("datetime string with format '{METADATA_DATE_FORMAT}'")
+            }
             ValueVariant::Array => "array",
             ValueVariant::PieceArray => {
                 const_format::formatc!("array with {TOTAL_PIECE_COUNT} elements")

@@ -1,8 +1,7 @@
 //! Represents Techmino replay data structures.
 
-#[cfg(feature = "arbitrary")]
-use arbitrary::Arbitrary;
-
+#[cfg(feature = "chrono")]
+use crate::convert::{json_to_naive_date_time, naive_date_time_to_json};
 use crate::{
     convert::{json_to_bool, json_to_modlist, json_to_str, json_to_u64, modlist_to_json},
     errors::{GameInputEventError, OwnedTypeError, TypeError, ValueVariant},
@@ -10,6 +9,10 @@ use crate::{
     replay::action::{InputAction, InputActionKey, InputActionKind},
 };
 use alloc::{borrow::ToOwned, boxed::Box, fmt, format, string::String, vec::Vec};
+#[cfg(feature = "arbitrary")]
+use arbitrary::Arbitrary;
+#[cfg(feature = "chrono")]
+use chrono::NaiveDateTime;
 use core::{borrow::Borrow, fmt::Debug};
 use derive_more::{From, Into};
 use serde::{Deserialize, Serialize};
@@ -761,5 +764,17 @@ impl GameReplayMetadata {
         "mode" mode: &str | String where { from_json: json_to_str },
 
         // "setting" settings: PlayerSettings where { from_json: serde_json::Value::as_object },
+    }
+
+    #[cfg(feature = "chrono")]
+    metadata_getters_setters! {
+        (map);
+        /// The local date and time that the replay was initially created.
+        ///
+        /// The timezone used is the player's timezone, **not UTC**.
+        "date" date_chrono: NaiveDateTime where {
+            from_json: json_to_naive_date_time,
+            to_json: naive_date_time_to_json,
+        }
     }
 }

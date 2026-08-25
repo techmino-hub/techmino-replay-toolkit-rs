@@ -25,6 +25,8 @@ A massive refactoring:
 - NEW: `PieceColor` enum to help interpret piece skin color data
   - Get from player settings data using `.get_skin_enum()` instead of `.get_skin()`
   - Default skin color array from the game: `consts::DEFAULT_SKIN_COLORS`
+- NEW: `chrono` feature to add `chrono::NaiveDateTime` metadata getters/setters
+  - For getting/setting the date the replay was created.
 - Restructured the codebase. Now things are much better structured:
   - `replay` for replay data structs
   - `config` for encoder/decoder config-related structs
