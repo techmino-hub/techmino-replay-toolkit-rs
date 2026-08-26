@@ -5,25 +5,25 @@ use ratatui::{crossterm, prelude::Frame};
 
 use crate::{
     backend::{BackendConnection, BackendReply},
-    tui::scenes::explorer::{ExplorerScene, ExplorerTransition},
+    tui::scenes::{
+        explorer::{ExplorerScene, ExplorerTransition},
+        operations::{OperationsScene, OperationsTransition},
+    },
 };
 
 pub(in crate::tui) mod explorer;
+pub(in crate::tui) mod operations;
 
 /// Represents the currently-displayed UI scene.
 #[derive(Debug)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "The operations scene is currently unimplemented"
-)]
+
 pub(in crate::tui) enum Scene {
     /// The explorer scene, where the user can traverse directories and
     /// select a file.
     Explorer(ExplorerScene),
     /// The operations scene, where the user can select an operation to perform on
     /// that file.
-    #[expect(unused, reason = "The operations scene is currently unimplemented")]
-    Operations(core::convert::Infallible),
+    Operations(OperationsScene),
 }
 
 impl Scene {
@@ -33,7 +33,7 @@ impl Scene {
     /// Otherwise, initializes at the explorer scene.
     pub(in crate::tui) fn new(path: &Path) -> Self {
         if path.is_file() {
-            todo!("Open operations scene at path {path:?}");
+            Self::Operations(OperationsScene::new(path.to_owned()))
         } else {
             Self::Explorer(ExplorerScene::new(path))
         }
@@ -43,7 +43,7 @@ impl Scene {
     pub(in crate::tui) fn render(&self, frame: &mut Frame) {
         match self {
             Self::Explorer(inner) => inner.render(frame),
-            _ => todo!("Rendering not implemented yet for this state: {self:?}"),
+            Self::Operations(inner) => inner.render(frame),
         }
     }
 
@@ -56,16 +56,25 @@ impl Scene {
         ret_path: &mut PathBuf,
     ) -> ControlFlow<()> {
         match self {
-            Scene::Explorer(explorer_scene) => {
-                match explorer_scene.handle_event(event, terminal, ret_path) {
-                    Some(ExplorerTransition::OperationsScene { file_path }) => {
-                        todo!("Go to operations scene: {file_path:?}")
-                    }
-                    Some(ExplorerTransition::Quit) => ControlFlow::Break(()),
-                    None => ControlFlow::Continue(()),
+            Scene::Explorer(scene) => match scene.handle_event(event, terminal, ret_path) {
+                Some(ExplorerTransition::OperationsScene { file_path }) => {
+                    *self = Scene::Operations(OperationsScene::new(file_path));
+                    ControlFlow::Continue(())
                 }
-            }
-            _ => todo!("Handle event for other scenes"),
+                Some(ExplorerTransition::Quit) => ControlFlow::Break(()),
+                None => ControlFlow::Continue(()),
+            },
+            Scene::Operations(scene) => match scene.handle_event(event) {
+                Some(OperationsTransition::SelectOperation(o)) => {
+                    todo!("Go to specific operation scene: {o}")
+                }
+                Some(OperationsTransition::Explorer) => {
+                    *self = Scene::Explorer(ExplorerScene::new(ret_path));
+                    ControlFlow::Continue(())
+                }
+                Some(OperationsTransition::Quit) => ControlFlow::Break(()),
+                None => ControlFlow::Continue(()),
+            },
         }
     }
 
@@ -73,7 +82,7 @@ impl Scene {
     pub(in crate::tui) fn handle_reply(&mut self, reply: BackendReply) {
         match self {
             Scene::Explorer(explorer_scene) => explorer_scene.handle_reply(reply),
-            _ => todo!("Handle reply for other scenes"),
+            Scene::Operations(operations_scene) => operations_scene.handle_reply(reply),
         }
     }
 }

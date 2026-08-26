@@ -84,10 +84,9 @@ pub(crate) const EXP_SEC_CONTENT_LENGTH: usize = 24;
 /// is deemed to be a replay file.
 pub(crate) static EXP_SEC_HINT_IS_REPLAY: &str = "replay file";
 
-// TODO(metadata_hint): Change this to "not replay"
 /// The file hint in the bottom left of the secondary block if the selected file
 /// is deemed not to be a replay file.
-pub(crate) static EXP_SEC_HINT_NOT_REPLAY: &str = "unknown";
+pub(crate) static EXP_SEC_HINT_NOT_REPLAY: &str = "not replay";
 
 /// The scroll hint in the bottom right of the secondary block if the terminal
 /// is wide enough.

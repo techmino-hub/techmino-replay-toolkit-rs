@@ -404,8 +404,8 @@ impl ExplorerScene {
     }
 
     /// Handle a reply from the backend.
-    pub(in crate::tui::scenes) fn handle_reply(&mut self, reply: BackendReply) {
-        todo!("Handle backend reply: {reply:?}");
+    pub(in crate::tui::scenes) fn handle_reply(&mut self, _reply: BackendReply) {
+        // Backend replies are ignored here
     }
 }
 
@@ -573,9 +573,6 @@ impl SelectedFile {
     /// - `folder`: The directory containing the directory entry.
     /// - `entry`: The desired entry to read from.
     fn read_entry(folder: &Path, entry: &UiDirEntry) -> Result<GameReplayMetadata, ParseOrIoError> {
-        // TODO: Read the metadata.
-        // Blockers: Stabilize preprocessors
-
         let file_path = entry.resolve(folder);
         let file = File::open(file_path)?;
         let mut file = BufReader::new(file);

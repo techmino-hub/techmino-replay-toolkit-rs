@@ -10,6 +10,7 @@ use crate::consts::tui::{
 };
 
 pub(in crate::tui) mod explorer;
+pub(in crate::tui) mod operations;
 
 /// A logical event in the context of a vertical UI list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
