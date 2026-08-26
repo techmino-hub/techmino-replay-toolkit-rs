@@ -2900,24 +2900,6 @@ dependencies = [
 
 [[package]]
 name = "libtechmino-replay"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87e76bb35113dead3b9c6da87685ba751dd4ed495027311646dbd284b75b7e35"
-dependencies = [
- "base64",
- "derive_more",
- "libtechmino-vlq 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "miniz_oxide 0.9.1",
- "pastey",
- "semver",
- "serde",
- "serde_json",
- "strum",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "libtechmino-replay"
 version = "0.2.0"
 dependencies = [
  "arbitrary",
@@ -2932,6 +2914,27 @@ dependencies = [
  "miniz_oxide 0.9.1",
  "pastey",
  "ron",
+ "semver",
+ "serde",
+ "serde_json",
+ "strum",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "libtechmino-replay"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c22750d0b2d8d575c1c6364a85787849968011c381750b80c659b34e4664bb07"
+dependencies = [
+ "base64",
+ "chrono",
+ "const_format",
+ "derive_more",
+ "instability",
+ "libtechmino-vlq 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "miniz_oxide 0.9.1",
+ "pastey",
  "semver",
  "serde",
  "serde_json",
@@ -5209,9 +5212,10 @@ dependencies = [
  "base64",
  "chrono",
  "clap",
+ "const_format",
  "dirs",
  "fastrand",
- "libtechmino-replay 0.1.0",
+ "libtechmino-replay 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "miniz_oxide 0.9.1",
  "rand 0.10.2",
  "ratatui",

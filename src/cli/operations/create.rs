@@ -4,8 +4,11 @@ use core::num::NonZeroUsize;
 use std::borrow::Cow;
 
 use libtechmino_replay::{
-    GameInputEvent, GameReplayData, GameReplayMetadata, InputAction, InputActionKey,
-    InputActionKind, InputParseMode, serialize::ReplayEncoder,
+    config::{EncoderConfig, InputParseMode},
+    replay::{
+        GameInputEvent, GameReplayData, GameReplayMetadata,
+        action::{InputAction, InputActionKey, InputActionKind},
+    },
 };
 use serde_json::{Map, Value as JsonValue};
 
@@ -50,11 +53,10 @@ pub(super) fn create(args: &CreateArguments) -> Result<(), CliOpError> {
         .map_err(|e| CliOpError::ReplayJsonParseError { inner: e })??;
 
     let mut out_stream = out_stream.into_buffered();
-    let mut encoder = ReplayEncoder::new(args.replay_format.into(), args.compression_level);
-    let mut out_buf = encoder.feed_metadata(
-        &data.metadata,
-        args.override_input_mode.map(InputParseMode::from),
-    )?;
+    let (mut encoder, mut out_buf) = EncoderConfig::new(args.replay_format.into())
+        .compression_level(args.compression_level)
+        .input_mode(args.override_input_mode.map(InputParseMode::from))
+        .build(&data.metadata)?;
 
     out_stream.append_with_retry(&out_buf, &mut retry_counter, args.io_args.retry_args)?;
     out_buf.clear();

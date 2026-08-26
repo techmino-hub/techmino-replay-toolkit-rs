@@ -97,3 +97,6 @@ pub(crate) static EXP_SEC_HINT_SCROLL: &str = "ctrl+↑↓ to scroll";
 
 /// The padding for the secondary block.
 pub(crate) const EXP_SEC_BLOCK_PADDING: Padding = Padding::horizontal(1);
+
+/// The maximum allowed buffer lengths for metadata viewers.
+pub(crate) const EXP_MAX_METADATA_LEN: usize = 131072;

@@ -7,13 +7,17 @@ use core::{
 use std::{
     borrow::Cow,
     ffi::{OsStr, OsString},
-    fs::{self, Metadata},
-    io::{self},
+    fs::{self, File, Metadata},
+    io::{self, BufReader, prelude::BufRead},
     path::{self, Path, PathBuf},
 };
 
 use chrono::prelude::{DateTime, Local};
-use libtechmino_replay::GameReplayMetadata;
+use const_format::formatc;
+use libtechmino_replay::{
+    config::ReplayBufferKind, consts::METADATA_EVENTDATA_SEPARATOR,
+    deserialize::ReplayDecoderPreprocessor, errors::ReplayParseError, replay::GameReplayMetadata,
+};
 use ratatui::{
     crossterm,
     prelude::{
@@ -26,12 +30,12 @@ use crate::{
     backend::BackendReply,
     consts::tui::{
         EXP_ERROR_HEADING, EXP_ERROR_HINT, EXP_ERROR_PADDING_CONSTRAINT,
-        EXP_ERROR_PADDING_MIN_HEIGHT, EXP_PRIM_STYLE_FILENAME_SEL, EXP_PRIM_STYLE_FILENAME_UNSEL,
-        EXP_PRIM_STYLE_LINE_SEL, EXP_PRIM_STYLE_LINE_UNSEL, EXP_PRIM_STYLE_SPACER_SEL,
-        EXP_PRIM_STYLE_SPACER_UNSEL, EXP_PRIM_TEXT_PARENT, EXP_PRIM_TEXT_SPACER_SEL,
-        EXP_PRIM_TEXT_SPACER_UNSEL, EXP_SEC_BLOCK_PADDING, EXP_SEC_CONTENT_LENGTH,
-        EXP_SEC_HINT_IS_REPLAY, EXP_SEC_HINT_NOT_REPLAY, EXP_SEC_HINT_SCROLL,
-        EXP_SEC_SCROLL_HINT_MIN_BLOCK_WIDTH,
+        EXP_ERROR_PADDING_MIN_HEIGHT, EXP_MAX_METADATA_LEN, EXP_PRIM_STYLE_FILENAME_SEL,
+        EXP_PRIM_STYLE_FILENAME_UNSEL, EXP_PRIM_STYLE_LINE_SEL, EXP_PRIM_STYLE_LINE_UNSEL,
+        EXP_PRIM_STYLE_SPACER_SEL, EXP_PRIM_STYLE_SPACER_UNSEL, EXP_PRIM_TEXT_PARENT,
+        EXP_PRIM_TEXT_SPACER_SEL, EXP_PRIM_TEXT_SPACER_UNSEL, EXP_SEC_BLOCK_PADDING,
+        EXP_SEC_CONTENT_LENGTH, EXP_SEC_HINT_IS_REPLAY, EXP_SEC_HINT_NOT_REPLAY,
+        EXP_SEC_HINT_SCROLL, EXP_SEC_SCROLL_HINT_MIN_BLOCK_WIDTH,
     },
     paths::truncate_folder_path,
     tui::{
@@ -568,17 +572,67 @@ impl SelectedFile {
     /// # Parameters
     /// - `folder`: The directory containing the directory entry.
     /// - `entry`: The desired entry to read from.
-    fn read_entry(
-        _folder: &Path,
-        _entry: &UiDirEntry,
-    ) -> Result<GameReplayMetadata, ParseOrIoError> {
+    fn read_entry(folder: &Path, entry: &UiDirEntry) -> Result<GameReplayMetadata, ParseOrIoError> {
         // TODO: Read the metadata.
         // Blockers: Stabilize preprocessors
 
-        Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "Metadata preview is not implemented yet",
-        ))?
+        let file_path = entry.resolve(folder);
+        let file = File::open(file_path)?;
+        let mut file = BufReader::new(file);
+
+        let first_chunk = file.fill_buf()?;
+        let first_byte = first_chunk
+            .first()
+            .copied()
+            .ok_or(ReplayParseError::UnexpectedEnd)?;
+
+        let kind = ReplayBufferKind::try_from_first_byte(first_byte)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("{e}")))?;
+
+        let mut preprocessor = ReplayDecoderPreprocessor::new(kind);
+        let mut processed = Vec::new();
+
+        preprocessor
+            .preprocess(first_chunk, &mut processed)
+            .map_err(ReplayParseError::from)?;
+
+        let mut last_appended = processed.as_slice();
+
+        loop {
+            if last_appended.contains(&METADATA_EVENTDATA_SEPARATOR) {
+                break;
+            }
+
+            file.consume(file.buffer().len());
+
+            let buffer = file.fill_buf()?;
+            if buffer.is_empty() {
+                return Err(ReplayParseError::UnexpectedEnd.into());
+            }
+
+            let pre_len = processed.len();
+            preprocessor
+                .preprocess(buffer, &mut processed)
+                .map_err(ReplayParseError::from)?;
+
+            if processed.len() > EXP_MAX_METADATA_LEN {
+                return Err(io::Error::new(
+                    io::ErrorKind::FileTooLarge,
+                    formatc!("File metadata section exceeds limit of {EXP_MAX_METADATA_LEN} bytes"),
+                )
+                .into());
+            }
+
+            last_appended = &processed[pre_len..];
+        }
+
+        let metadata_bytes = processed
+            .split(|&b| b == METADATA_EVENTDATA_SEPARATOR)
+            .next()
+            .ok_or(ReplayParseError::MetadataSeparatorNotFound)?;
+
+        Ok(serde_json::from_slice(metadata_bytes)
+            .map_err(ReplayParseError::MetadataDeserializeError)?)
     }
 }
 

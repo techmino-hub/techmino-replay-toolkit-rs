@@ -8,7 +8,10 @@ use crate::cli::{
     operations::infer_replay_kind,
     types::{CliOpError, UnpackedInputEvent},
 };
-use libtechmino_replay::{GameInputEvent, GameReplayMetadata, deserialize::ReplayDecoder};
+use libtechmino_replay::{
+    deserialize::ReplayDecoder,
+    replay::{GameInputEvent, GameReplayMetadata},
+};
 
 // TODO: Optimize: Skip unnecessary sections by stabilizing preprocessors
 pub(super) fn extract(args: &ExtractArguments) -> Result<(), CliOpError> {

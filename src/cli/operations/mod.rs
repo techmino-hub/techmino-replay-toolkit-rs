@@ -1,13 +1,10 @@
 //! Handles specifically CLI operations and one-off commands.
 
-use crate::{
-    cli::{
-        clap::{CliOperation, CliReplayFormat},
-        types::CliOpError,
-    },
-    consts::{BASE64_ZLIB_FIRST_BYTE, UNCOMPRESSED_FIRST_BYTE, ZLIB_HEADER_FIRST_BYTE},
+use crate::cli::{
+    clap::{CliOperation, CliReplayFormat},
+    types::CliOpError,
 };
-use libtechmino_replay::ReplayBufferKind;
+use libtechmino_replay::config::ReplayBufferKind;
 
 mod base64ify;
 mod binaryify;
@@ -34,10 +31,6 @@ fn infer_replay_kind(
 
     let first_byte = first_chunk.first().copied().ok_or(CliOpError::InputEmpty)?;
 
-    match first_byte {
-        ZLIB_HEADER_FIRST_BYTE => Ok(ReplayBufferKind::Compressed),
-        BASE64_ZLIB_FIRST_BYTE => Ok(ReplayBufferKind::Base64),
-        UNCOMPRESSED_FIRST_BYTE => Ok(ReplayBufferKind::Uncompressed),
-        _ => Err(CliOpError::ReplayKindInferFailed { first_byte }),
-    }
+    ReplayBufferKind::try_from_first_byte(first_byte)
+        .map_err(|_| CliOpError::ReplayKindInferFailed { first_byte })
 }

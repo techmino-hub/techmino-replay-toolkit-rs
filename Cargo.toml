@@ -47,8 +47,9 @@ alphanumeric-sort = {version = "1.5.8", optional = true}
 base64 = "0.22.1"
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"], optional = true }
 clap = { version = "4.6.1", features = ["derive"] }
+const_format = { version = "0.2.36", features = ["fmt"] }
 dirs = { version = "5.0", optional = true }
-libtechmino-replay = { version = "0.1.0", features = ["preserve_metadata_order", "float_roundtrip"]}
+libtechmino-replay = { version = "0.2.0", features = ["preserve_metadata_order", "float_roundtrip", "chrono", "unstable-preprocessors", "unstable-postprocessors"]}
 miniz_oxide = { version = "0.9.1", optional = true }
 rand = { version = "0.10.2", optional = true }
 ratatui = { version = "0.30.2", optional = true }

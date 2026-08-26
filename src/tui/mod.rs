@@ -3,7 +3,7 @@
 use core::num::NonZeroI32;
 use std::io;
 
-use libtechmino_replay::ReplayParseError;
+use libtechmino_replay::errors::ReplayParseError;
 
 use crate::{backend::BackendState, cli::clap::TuiArguments};
 

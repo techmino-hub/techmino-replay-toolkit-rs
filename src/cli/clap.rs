@@ -2,7 +2,7 @@
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use core::{fmt::Display, num::IntErrorKind};
-use libtechmino_replay::{InputParseMode, ReplayBufferKind};
+use libtechmino_replay::config::{InputParseMode, ReplayBufferKind};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -256,7 +256,7 @@ pub struct CreateArguments {
     /// smaller replays.
     ///
     /// Valid values are between 0 and 10, inclusively.
-    #[arg(short = 'c', long, value_parser = clap::value_parser!(u8).range(0..=10), default_value_t = 7)]
+    #[arg(short = 'c', long, value_parser = clap::value_parser!(u8).range(0..=10), default_value_t = 1)]
     pub(super) compression_level: u8,
     /// An override for the input mode.
     ///
