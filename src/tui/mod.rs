@@ -1,11 +1,7 @@
 //! A terminal user interface powered by Ratatui.
 
-use core::num::NonZeroI32;
-use std::io;
-
-use libtechmino_replay::errors::ReplayParseError;
-
 use crate::{backend::BackendState, cli::clap::TuiArguments};
+use core::num::NonZeroI32;
 
 mod event;
 mod frontend;
@@ -41,13 +37,4 @@ pub fn start(args: TuiArguments) -> Result<(), NonZeroI32> {
     }
 
     Ok(())
-}
-
-/// Either a replay-parsing or I/O error.
-#[derive(Debug, thiserror::Error)]
-enum ParseOrIoError {
-    #[error("Failed to parse replay file: {0}")]
-    Parse(#[from] ReplayParseError),
-    #[error("Failed to read from replay file: {0}")]
-    Io(#[from] io::Error),
 }

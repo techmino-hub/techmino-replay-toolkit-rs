@@ -9,7 +9,13 @@
 //! This is not used in the CLI, which uses the main thread for everything,
 //! since it is not interactive.
 
-use std::{io, sync::mpsc, thread};
+use std::{io, path::PathBuf, sync::mpsc, thread};
+
+use libtechmino_replay::replay::{GameInputEvent, GameReplayMetadata};
+
+use crate::ParseOrIoError;
+
+mod fetch;
 
 const BACKEND_THREAD_NAME: &str = "TRT-Backend";
 
@@ -22,8 +28,8 @@ pub(crate) struct BackendState {
 impl BackendState {
     /// Create a new backend state and its connection, without running it.
     pub(crate) fn new() -> (Self, BackendConnection) {
-        let mes = mpsc::channel::<BackendMessage>();
-        let rep = mpsc::channel::<BackendReply>();
+        let mes = mpsc::channel::<BackendRequest>();
+        let rep = mpsc::channel::<BackendResponse>();
 
         let fconn = FrontendConnection {
             tx: rep.0,
@@ -70,9 +76,9 @@ impl BackendState {
 /// the backend.
 struct FrontendConnection {
     /// Sender of replies destined to (presumably) the frontend.
-    tx: mpsc::Sender<BackendReply>,
+    tx: mpsc::Sender<BackendResponse>,
     /// Receiver of messages received from (presumably) the frontend.
-    rx: mpsc::Receiver<BackendMessage>,
+    rx: mpsc::Receiver<BackendRequest>,
 }
 
 /// Represents a bidirectional connection to the backend (presumably held by
@@ -82,35 +88,75 @@ struct FrontendConnection {
 #[derive(Debug)]
 pub(crate) struct BackendConnection {
     /// Sender of messages destined to the backend.
-    pub(crate) tx: mpsc::Sender<BackendMessage>,
+    pub(crate) tx: mpsc::Sender<BackendRequest>,
     /// Receiver of replies received from the backend.
-    pub(crate) rx: mpsc::Receiver<BackendReply>,
+    pub(crate) rx: mpsc::Receiver<BackendResponse>,
 }
 
 /// Represents a message destined to the backend.
 #[derive(Debug)]
-pub(crate) enum BackendMessage {
-    /// An message to test the backend connection.
+pub(crate) enum BackendRequest {
+    /// A message to test the backend connection.
     ///
     /// If responsive, the backend should reply with [`BackendReply::Pong`] with
     /// the specified ping ID.
     Ping { ping_id: u64 },
+    /// A request to process the metadata of a certain replay.
+    FetchMetadata {
+        /// The path to the replay.
+        path: PathBuf,
+        /// The ID of this request, for disambiguation.
+        request_id: u64,
+    },
+    /// A request to process the input event data of a certain replay.
+    FetchEventData {
+        /// The path to the replay.
+        path: PathBuf,
+        /// The ID of this request, for disambiguation.
+        request_id: u64,
+    },
 }
 
-impl BackendMessage {
+impl BackendRequest {
     /// Process this message, returning a reply.
     ///
     /// This function is to be called in the backend.
-    fn process(self) -> BackendReply {
+    fn process(self) -> BackendResponse {
         match self {
-            Self::Ping { ping_id } => BackendReply::Pong { ping_id },
+            Self::Ping { ping_id } => BackendResponse::Pong { ping_id },
+            Self::FetchMetadata { path, request_id } => BackendResponse::MetadataFetch {
+                result: fetch::fetch_metadata(&path),
+                request_id,
+            },
+            Self::FetchEventData { path, request_id } => BackendResponse::EventDataFetch {
+                result: fetch::fetch_input_data(&path),
+                request_id,
+            },
         }
     }
 }
 
 /// Represents a reply from the backend.
 #[derive(Debug)]
-pub(crate) enum BackendReply {
-    /// The reply to the [`BackendMessage::Ping`] message.
+pub(crate) enum BackendResponse {
+    /// The reply to the [`BackendRequest::Ping`] message.
     Pong { ping_id: u64 },
+    /// The result of [the metadata getter request][req].
+    ///
+    /// [req]: BackendRequest::FetchMetadata
+    MetadataFetch {
+        /// The result of this operation.
+        result: Result<GameReplayMetadata, ParseOrIoError>,
+        /// The ID of the associated request, for disambiguation.
+        request_id: u64,
+    },
+    /// The result of [the input event data getter request][req].
+    ///
+    /// [req]: BackendRequest::FetchEventData
+    EventDataFetch {
+        /// The result of this operation.
+        result: Result<Vec<GameInputEvent>, ParseOrIoError>,
+        /// The ID of the associated request, for disambiguation.
+        request_id: u64,
+    },
 }

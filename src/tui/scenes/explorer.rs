@@ -25,7 +25,8 @@ use ratatui::{
 };
 
 use crate::{
-    backend::BackendReply,
+    ParseOrIoError,
+    backend::BackendResponse,
     consts::tui::{
         EXP_ERROR_HEADING, EXP_ERROR_HINT, EXP_ERROR_PADDING_CONSTRAINT,
         EXP_ERROR_PADDING_MIN_HEIGHT, EXP_MAX_METADATA_LEN, EXP_PRIM_TEXT_PARENT,
@@ -34,7 +35,6 @@ use crate::{
     },
     paths::truncate_folder_path,
     tui::{
-        ParseOrIoError,
         event::{VerticalListEvent, explorer::ExplorerEvent},
         ui::get_selectable_entry_el,
     },
@@ -400,7 +400,7 @@ impl ExplorerScene {
     }
 
     /// Handle a reply from the backend.
-    pub(in crate::tui::scenes) fn handle_reply(&mut self, _reply: BackendReply) {
+    pub(in crate::tui::scenes) fn handle_response(&mut self, _reply: BackendResponse) {
         // Backend replies are ignored here
     }
 }

@@ -11,7 +11,7 @@ use std::{
 use ratatui::crossterm;
 
 use crate::{
-    backend::{BackendConnection, BackendMessage, BackendReply},
+    backend::{BackendConnection, BackendRequest, BackendResponse},
     cli::clap::TuiArguments,
     consts::backend::{EMSG_BACKEND_CONNECTION_BROKE, EMSG_BACKEND_UNRESPONSIVE},
     paths,
@@ -54,7 +54,7 @@ impl AppFrontend {
     /// in a reasonable amount of time.
     fn check_backend_connection(conn: &BackendConnection) -> io::Result<()> {
         let id: u64 = rand::random();
-        let mes = BackendMessage::Ping { ping_id: id };
+        let mes = BackendRequest::Ping { ping_id: id };
         if let Err(e) = conn.tx.send(mes) {
             return Err(io::Error::new(io::ErrorKind::BrokenPipe, e));
         }
@@ -85,7 +85,7 @@ impl AppFrontend {
                 ));
             }
 
-            if let BackendReply::Pong { ping_id } = reply
+            if let BackendResponse::Pong { ping_id } = reply
                 && ping_id == id
             {
                 return Ok(());
@@ -146,7 +146,7 @@ impl AppFrontend {
                 }
             };
 
-            self.scene.handle_reply(reply);
+            self.scene.handle_response(reply);
         }
     }
 }

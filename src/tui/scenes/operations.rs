@@ -9,7 +9,7 @@ use ratatui::{
 use strum::{EnumCount, IntoEnumIterator};
 
 use crate::{
-    backend::BackendReply,
+    backend::BackendResponse,
     consts::tui::{OPS_HINT_BACK, OPS_HINT_QUIT},
     paths::truncate_folder_path,
     tui::{
@@ -123,7 +123,7 @@ impl OperationsScene {
         }
     }
 
-    pub(in crate::tui) fn handle_reply(&self, _reply: BackendReply) {
+    pub(in crate::tui) fn handle_response(&self, _reply: BackendResponse) {
         // Backend replies are ignored here
     }
 }
@@ -136,7 +136,7 @@ pub(in crate::tui) enum OperationChoice {
     InspectMetadata,
     /// Inspect the replay's input event data.
     InspectEvents,
-    Remux,
+    // Remux,
 }
 
 impl OperationChoice {
@@ -145,7 +145,7 @@ impl OperationChoice {
         match self {
             OperationChoice::InspectMetadata => "Inspect metadata",
             OperationChoice::InspectEvents => "Inspect input events",
-            OperationChoice::Remux => "Convert to another format",
+            // OperationChoice::Remux => "Convert to another format",
         }
     }
 
@@ -154,7 +154,7 @@ impl OperationChoice {
         match index {
             0 => Some(Self::InspectMetadata),
             1 => Some(Self::InspectEvents),
-            2 => Some(Self::Remux),
+            // 2 => Some(Self::Remux),
             _ => None,
         }
     }
