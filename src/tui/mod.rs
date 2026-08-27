@@ -10,6 +10,7 @@ use crate::{backend::BackendState, cli::clap::TuiArguments};
 mod event;
 mod frontend;
 mod scenes;
+mod ui;
 
 /// Starts a TUI instance.
 ///

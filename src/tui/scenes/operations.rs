@@ -1,12 +1,21 @@
 use core::fmt::Display;
 use std::path::PathBuf;
 
-use ratatui::{crossterm, prelude::Frame};
-use strum::EnumCount;
+use ratatui::{
+    crossterm,
+    prelude::{Frame, Line},
+    widgets::Block,
+};
+use strum::{EnumCount, IntoEnumIterator};
 
 use crate::{
     backend::BackendReply,
-    tui::event::{VerticalListEvent, operations::OperationsEvent},
+    consts::tui::{OPS_HINT_BACK, OPS_HINT_QUIT},
+    paths::truncate_folder_path,
+    tui::{
+        event::{VerticalListEvent, operations::OperationsEvent},
+        ui::get_selectable_entry_el,
+    },
 };
 
 /// Represents the state of the operations scene.
@@ -37,7 +46,7 @@ impl OperationsScene {
         self.selection_index = self
             .selection_index
             .saturating_add(1)
-            .max(const { OperationChoice::COUNT - 1 });
+            .min(const { OperationChoice::COUNT - 1 });
     }
 
     /// Moves the selection to the first option.
@@ -51,7 +60,33 @@ impl OperationsScene {
     }
 
     pub(in crate::tui) fn render(&self, frame: &mut Frame) {
-        todo!("Render operations scene")
+        let path_str = self.rep_path.to_string_lossy();
+        let max_len = frame.area().width.saturating_sub(2) as usize;
+        let path = truncate_folder_path(&path_str, max_len);
+        let block = Block::bordered()
+            .title(path)
+            .title_bottom(Line::from(OPS_HINT_BACK).left_aligned())
+            .title_bottom(Line::from(OPS_HINT_QUIT).right_aligned());
+
+        let mut remaining_size = block.inner(frame.area());
+
+        frame.render_widget(block, frame.area());
+
+        for op in OperationChoice::iter() {
+            let op_str = op.to_str();
+            let selected = op.into_index() == self.selection_index;
+
+            let entry = get_selectable_entry_el(op_str, selected);
+
+            frame.render_widget(entry, remaining_size);
+
+            remaining_size.y = remaining_size.y.saturating_add(1);
+            remaining_size.height = remaining_size.height.saturating_sub(1);
+
+            if remaining_size.is_empty() {
+                break;
+            }
+        }
     }
 
     pub(in crate::tui) fn handle_event(
@@ -95,6 +130,7 @@ impl OperationsScene {
 
 /// An operation to perform.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, strum::EnumCount, strum::EnumIter)]
+#[repr(usize)]
 pub(in crate::tui) enum OperationChoice {
     /// Inspect the replay's metadata.
     InspectMetadata,
@@ -122,6 +158,11 @@ impl OperationChoice {
             _ => None,
         }
     }
+
+    /// Converts this operation choice to its own index.
+    const fn into_index(self) -> usize {
+        self as usize
+    }
 }
 
 impl Display for OperationChoice {
@@ -140,4 +181,17 @@ pub(in crate::tui) enum OperationsTransition {
     Explorer,
     /// Quit the application.
     Quit,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn operation_choice_roundtrip() {
+        for op in OperationChoice::iter() {
+            let idx = op.into_index();
+            assert_eq!(OperationChoice::try_from_index(idx), Some(op));
+        }
+    }
 }

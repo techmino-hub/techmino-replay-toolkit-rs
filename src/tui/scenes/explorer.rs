@@ -20,9 +20,7 @@ use libtechmino_replay::{
 };
 use ratatui::{
     crossterm,
-    prelude::{
-        Constraint, Frame, HorizontalAlignment, Layout, Line, Rect, Span, StatefulWidget, Widget,
-    },
+    prelude::{Constraint, Frame, Layout, Line, Rect, StatefulWidget, Widget},
     widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
 
@@ -30,17 +28,15 @@ use crate::{
     backend::BackendReply,
     consts::tui::{
         EXP_ERROR_HEADING, EXP_ERROR_HINT, EXP_ERROR_PADDING_CONSTRAINT,
-        EXP_ERROR_PADDING_MIN_HEIGHT, EXP_MAX_METADATA_LEN, EXP_PRIM_STYLE_FILENAME_SEL,
-        EXP_PRIM_STYLE_FILENAME_UNSEL, EXP_PRIM_STYLE_LINE_SEL, EXP_PRIM_STYLE_LINE_UNSEL,
-        EXP_PRIM_STYLE_SPACER_SEL, EXP_PRIM_STYLE_SPACER_UNSEL, EXP_PRIM_TEXT_PARENT,
-        EXP_PRIM_TEXT_SPACER_SEL, EXP_PRIM_TEXT_SPACER_UNSEL, EXP_SEC_BLOCK_PADDING,
-        EXP_SEC_CONTENT_LENGTH, EXP_SEC_HINT_IS_REPLAY, EXP_SEC_HINT_NOT_REPLAY,
-        EXP_SEC_HINT_SCROLL, EXP_SEC_SCROLL_HINT_MIN_BLOCK_WIDTH,
+        EXP_ERROR_PADDING_MIN_HEIGHT, EXP_MAX_METADATA_LEN, EXP_PRIM_TEXT_PARENT,
+        EXP_SEC_BLOCK_PADDING, EXP_SEC_CONTENT_LENGTH, EXP_SEC_HINT_IS_REPLAY,
+        EXP_SEC_HINT_NOT_REPLAY, EXP_SEC_HINT_SCROLL, EXP_SEC_SCROLL_HINT_MIN_BLOCK_WIDTH,
     },
     paths::truncate_folder_path,
     tui::{
         ParseOrIoError,
         event::{VerticalListEvent, explorer::ExplorerEvent},
+        ui::get_selectable_entry_el,
     },
 };
 
@@ -853,37 +849,11 @@ impl Widget for ExplorerPrimaryContents<'_> {
 
             let is_selected = entry_idx == list.selected.index;
 
-            let (line_style, spacer_style, filename_style) = if is_selected {
-                (
-                    EXP_PRIM_STYLE_LINE_SEL,
-                    EXP_PRIM_STYLE_SPACER_SEL,
-                    EXP_PRIM_STYLE_FILENAME_SEL,
-                )
-            } else {
-                (
-                    EXP_PRIM_STYLE_LINE_UNSEL,
-                    EXP_PRIM_STYLE_SPACER_UNSEL,
-                    EXP_PRIM_STYLE_FILENAME_UNSEL,
-                )
-            };
+            let label_text = entry.name().to_string_lossy();
 
-            let spacer_text = if is_selected {
-                EXP_PRIM_TEXT_SPACER_SEL
-            } else {
-                EXP_PRIM_TEXT_SPACER_UNSEL
-            };
-
-            let spacer = Span::raw(spacer_text).style(spacer_style);
-            let filename = Span::raw(entry.name().to_string_lossy()).style(filename_style);
-
-            let line = Line {
-                style: line_style,
-                spans: vec![spacer, filename],
-                alignment: Some(HorizontalAlignment::Left),
-            };
+            let line = get_selectable_entry_el(&label_text, is_selected);
 
             line.render(area, buf);
-            // let line = Line::raw(entry.name().to_string_lossy()).;
         }
     }
 }

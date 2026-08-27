@@ -25,6 +25,30 @@ pub(crate) const KC_GEN_END: [KeyCode; 1] = [KeyCode::End];
 /// General keycode list for activating a value in a list.
 pub(crate) const KC_GEN_ACTIVATE: [KeyCode; 1] = [KeyCode::Enter];
 
+/// The text for an unselected list entry's spacer.
+pub(crate) static ENTRY_TEXT_SPACER_UNSEL: &str = " ";
+
+/// The text for a selected list entry's spacer.
+pub(crate) static ENTRY_TEXT_SPACER_SEL: &str = "→ ";
+
+/// The style to give to the list entry's unselected line.
+pub(crate) const ENTRY_STYLE_LINE_UNSEL: Style = Style::new();
+
+/// The style to give to the list entry's selected line.
+pub(crate) const ENTRY_STYLE_LINE_SEL: Style = Style::new().on_red().bold();
+
+/// The style to give to the list entry's unselected spacer.
+pub(crate) const ENTRY_STYLE_SPACER_UNSEL: Style = ENTRY_STYLE_LINE_UNSEL;
+
+/// The style to give to the list entry's selected spacer.
+pub(crate) const ENTRY_STYLE_SPACER_SEL: Style = ENTRY_STYLE_LINE_SEL.light_red();
+
+/// The style to give to the list entry's unselected main text.
+pub(crate) const ENTRY_STYLE_LABEL_UNSEL: Style = ENTRY_STYLE_LINE_UNSEL;
+
+/// The style to give to the list entry's selected main text.
+pub(crate) const ENTRY_STYLE_LABEL_SEL: Style = ENTRY_STYLE_LINE_SEL.light_cyan().underlined();
+
 /// The heading text for the "error" version of the explorer scene.
 pub(crate) static EXP_ERROR_HEADING: &str = "Could not read file list";
 
@@ -42,33 +66,8 @@ pub(crate) const EXP_ERROR_PADDING_MIN_HEIGHT: u16 = 16;
 /// [`EXP_ERROR_PADDING_MIN_HEIGHT`].
 pub(crate) const EXP_ERROR_PADDING_CONSTRAINT: Constraint = Constraint::Percentage(20);
 
-/// The text for the unselected entry's spacer.
-pub(crate) const EXP_PRIM_TEXT_SPACER_UNSEL: &str = " ";
-
-/// The text for the selected entry's spacer.
-pub(crate) const EXP_PRIM_TEXT_SPACER_SEL: &str = "→ ";
-
 /// The text for the parent directory entry.
 pub(crate) const EXP_PRIM_TEXT_PARENT: &str = "../   (Alt+↑)";
-
-/// The style to give to the primary block's unselected line.
-pub(crate) const EXP_PRIM_STYLE_LINE_UNSEL: Style = Style::new();
-
-/// The style to give to the primary block's selected line.
-pub(crate) const EXP_PRIM_STYLE_LINE_SEL: Style = Style::new().on_red().bold();
-
-/// The style to give to the primary block's unselected spacer.
-pub(crate) const EXP_PRIM_STYLE_SPACER_UNSEL: Style = EXP_PRIM_STYLE_LINE_UNSEL;
-
-/// The style to give to the primary block's selected spacer.
-pub(crate) const EXP_PRIM_STYLE_SPACER_SEL: Style = EXP_PRIM_STYLE_LINE_SEL.light_red();
-
-/// The style to give to the primary block's unselected filename.
-pub(crate) const EXP_PRIM_STYLE_FILENAME_UNSEL: Style = EXP_PRIM_STYLE_LINE_UNSEL;
-
-/// The style to give to the primary block's selected filename.
-pub(crate) const EXP_PRIM_STYLE_FILENAME_SEL: Style =
-    EXP_PRIM_STYLE_LINE_SEL.light_cyan().underlined();
 
 /// The minimum width of the secondary block for it to contain a
 /// scroll hint in the bottom right.
@@ -99,3 +98,11 @@ pub(crate) const EXP_SEC_BLOCK_PADDING: Padding = Padding::horizontal(1);
 
 /// The maximum allowed buffer lengths for metadata viewers.
 pub(crate) const EXP_MAX_METADATA_LEN: usize = 131072;
+
+/// The control hint in the bottom left of the operations menu to tell the user
+/// how to go back to the explorer menu.
+pub(crate) static OPS_HINT_BACK: &str = "[Esc] back";
+
+/// The control hint in the bottom right of the operations menu to tell the user
+/// how to quit the application
+pub(crate) static OPS_HINT_QUIT: &str = "[q] quit";
