@@ -115,8 +115,12 @@ impl OperationsScene {
                 None
             }
             OperationsEvent::ListEvent(VerticalListEvent::Activate) => {
-                OperationChoice::try_from_index(self.selection_index)
-                    .map(OperationsTransition::SelectOperation)
+                OperationChoice::try_from_index(self.selection_index).map(|operation| {
+                    OperationsTransition::SelectOperation {
+                        operation,
+                        rep_path: self.rep_path.clone(),
+                    }
+                })
             }
             OperationsEvent::Explorer => Some(OperationsTransition::Explorer),
             OperationsEvent::Quit => Some(OperationsTransition::Quit),
@@ -173,10 +177,15 @@ impl Display for OperationChoice {
 
 /// A struct representing an instruction to navigate to another scene, and
 /// any associated/related data.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(in crate::tui) enum OperationsTransition {
     /// An operation was selected.
-    SelectOperation(OperationChoice),
+    SelectOperation {
+        /// The specific operation that was selected.
+        operation: OperationChoice,
+        /// The path to the replay file to perform the operation on.
+        rep_path: PathBuf,
+    },
     /// Go back to the explorer scene.
     Explorer,
     /// Quit the application.

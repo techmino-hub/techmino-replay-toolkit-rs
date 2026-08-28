@@ -9,7 +9,7 @@ use crate::{
         event_inspect::EventInspectScene,
         explorer::{ExplorerScene, ExplorerTransition},
         meta_inspect::MetaInspectScene,
-        operations::{OperationsScene, OperationsTransition},
+        operations::{OperationChoice, OperationsScene, OperationsTransition},
     },
 };
 
@@ -64,7 +64,7 @@ impl Scene {
         &mut self,
         event: crossterm::event::Event,
         terminal: &ratatui::DefaultTerminal,
-        _backend: &mut BackendConnection,
+        backend: &mut BackendConnection,
         ret_path: &mut PathBuf,
     ) -> ControlFlow<()> {
         match self {
@@ -77,8 +77,19 @@ impl Scene {
                 None => ControlFlow::Continue(()),
             },
             Scene::Operations(scene) => match scene.handle_event(event) {
-                Some(OperationsTransition::SelectOperation(o)) => {
-                    todo!("Go to specific operation scene: {o}")
+                Some(OperationsTransition::SelectOperation {
+                    operation: OperationChoice::InspectEvents,
+                    rep_path: path,
+                }) => {
+                    *self = Scene::EventDataInspect(EventInspectScene::new(path, backend));
+                    ControlFlow::Continue(())
+                }
+                Some(OperationsTransition::SelectOperation {
+                    operation: OperationChoice::InspectMetadata,
+                    rep_path: path,
+                }) => {
+                    *self = Scene::MetadataInspect(MetaInspectScene::new(path, backend));
+                    ControlFlow::Continue(())
                 }
                 Some(OperationsTransition::Explorer) => {
                     *self = Scene::Explorer(ExplorerScene::new(ret_path));
