@@ -5219,6 +5219,7 @@ dependencies = [
  "miniz_oxide 0.9.1",
  "rand 0.10.2",
  "ratatui",
+ "ron",
  "serde",
  "serde_json",
  "slint",

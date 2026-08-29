@@ -1,3 +1,5 @@
+use core::time::Duration;
+
 use ratatui::{
     crossterm::event::KeyCode,
     prelude::{Constraint, Style},
@@ -99,10 +101,24 @@ pub(crate) const EXP_SEC_BLOCK_PADDING: Padding = Padding::horizontal(1);
 /// The maximum allowed buffer lengths for metadata viewers.
 pub(crate) const EXP_MAX_METADATA_LEN: usize = 131072;
 
-/// The control hint in the bottom left of the operations menu to tell the user
-/// how to go back to the explorer menu.
+/// The control hint in the bottom left of the operation scenes to tell the
+/// user how to go back to the explorer menu.
 pub(crate) static OPS_HINT_BACK: &str = "[Esc] back";
 
-/// The control hint in the bottom right of the operations menu to tell the user
-/// how to quit the application
+/// The control hint in the bottom right of the operation scenes to tell the
+/// user how to quit the application.
 pub(crate) static OPS_HINT_QUIT: &str = "[q] quit";
+
+/// The text to display when an operation is taking too long.
+pub(crate) static OPS_HINT_TIMEOUT_TEXT: &str = "Operation taking longer than expected\n\
+    Is something stuck?\n\
+    For gigantic/streaming data processing consider using the `libtechmino-replay` library directly.";
+
+/// The amount of time to wait until displaying [`OPS_HINT_TIMEOUT_TEXT`].
+pub(crate) const OPS_HINT_TIMEOUT_DURATION: Duration = Duration::from_secs(10);
+
+/// The loading message for the metadata inspection operation scene.
+pub(crate) static OP_METAINSP_LOADING_MSG: &str = "Loading metadata...";
+
+/// The loading message for the input event data inspection operation scene.
+pub(crate) static OP_EVEINSP_LOADING_MSG: &str = "Loading input event data...";

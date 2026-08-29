@@ -61,3 +61,4 @@ thiserror = "2.0.18"
 
 [dev-dependencies]
 fastrand = "2.5.0"
+ron = "0.12.2"

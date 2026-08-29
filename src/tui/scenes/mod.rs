@@ -13,6 +13,7 @@ use crate::{
     },
 };
 
+mod common_inspect;
 pub(in crate::tui) mod event_inspect;
 pub(in crate::tui) mod explorer;
 pub(in crate::tui) mod meta_inspect;
