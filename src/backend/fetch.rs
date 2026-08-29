@@ -25,9 +25,18 @@ pub(in crate::backend) fn fetch_metadata(
     path: &Path,
 ) -> Result<GameReplayMetadata, ParseOrIoError> {
     let file = File::open(path)?;
-    let mut file = BufReader::new(file);
+    fetch_metadata_inner(BufReader::new(file))
+}
 
-    let first_chunk = file.fill_buf()?;
+/// The inner, I/O-abstracted version of [`fetch_metadata`].
+///
+/// # Errors
+/// Returns an error if something went wrong while extracting the metadata.
+fn fetch_metadata_inner<R>(mut reader: R) -> Result<GameReplayMetadata, ParseOrIoError>
+where
+    R: BufRead,
+{
+    let first_chunk = reader.fill_buf()?;
     let first_byte = first_chunk.first().ok_or(ReplayParseError::UnexpectedEnd)?;
     let replay_kind = ReplayBufferKind::try_from_first_byte(*first_byte)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("{e}")))?;
@@ -38,7 +47,7 @@ pub(in crate::backend) fn fetch_metadata(
     let mut preprocessor = ReplayDecoderPreprocessor::new(replay_kind);
 
     while !newly_appended.contains(&METADATA_EVENTDATA_SEPARATOR) {
-        let input_buf = file.fill_buf()?;
+        let input_buf = reader.fill_buf()?;
 
         if input_buf.is_empty() {
             break;
@@ -51,7 +60,7 @@ pub(in crate::backend) fn fetch_metadata(
             .preprocess(input_buf, &mut processed)
             .map_err(ReplayParseError::from)?;
 
-        file.consume(input_len);
+        reader.consume(input_len);
         newly_appended = &processed[old_output_len..];
     }
 
@@ -81,10 +90,19 @@ pub(in crate::backend) fn fetch_input_data(
     path: &Path,
 ) -> Result<Vec<GameInputEvent>, ParseOrIoError> {
     let file = File::open(path)?;
+    fetch_input_data_inner(BufReader::new(file))
+}
 
-    let mut file = BufReader::new(file);
-
-    let first_chunk = file.fill_buf()?;
+/// The inner, I/O-abstracted version of [`fetch_input_data`].
+///
+/// # Errors
+/// Returns an error if something went wrong while extracting the input event
+/// data.
+fn fetch_input_data_inner<R>(mut reader: R) -> Result<Vec<GameInputEvent>, ParseOrIoError>
+where
+    R: BufRead,
+{
+    let first_chunk = reader.fill_buf()?;
     let first_byte = first_chunk.first().ok_or(ReplayParseError::UnexpectedEnd)?;
     let replay_kind = ReplayBufferKind::try_from_first_byte(*first_byte)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("{e}")))?;
@@ -93,7 +111,7 @@ pub(in crate::backend) fn fetch_input_data(
     let mut events: Vec<GameInputEvent> = Vec::new();
 
     loop {
-        let in_buf = file.fill_buf()?;
+        let in_buf = reader.fill_buf()?;
 
         if in_buf.is_empty() {
             break;
@@ -107,9 +125,9 @@ pub(in crate::backend) fn fetch_input_data(
             ..
         } = decoder.update(in_buf)?;
 
-        events.copy_from_slice(&new_evs);
+        events.extend_from_slice(&new_evs);
 
-        file.consume(in_len);
+        reader.consume(in_len);
     }
 
     if !decoder.is_finished() {
@@ -117,4 +135,37 @@ pub(in crate::backend) fn fetch_input_data(
     }
 
     Ok(events)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::backend::test_utils::get_test_cases;
+
+    #[test]
+    fn fetchers() {
+        let cases = get_test_cases();
+
+        for (name, case) in cases {
+            let Some(data) = case.data else {
+                eprintln!("Skipping {name} as it does not have a deserialized form");
+                continue;
+            };
+
+            let Some(path) = case.serialized_path else {
+                eprintln!("Skipping {name} as it does not have the path to the deserialized form");
+                continue;
+            };
+
+            let meta = fetch_metadata(&path).unwrap_or_else(|e| {
+                panic!("metadata for {name} should be valid: {e}");
+            });
+            assert_eq!(data.metadata, meta, "metadata mismatch");
+
+            let events = fetch_input_data(&path).unwrap_or_else(|e| {
+                panic!("input event data for {name} should be valid: {e}");
+            });
+            assert_eq!(data.inputs, events, "input data mismatch");
+        }
+    }
 }

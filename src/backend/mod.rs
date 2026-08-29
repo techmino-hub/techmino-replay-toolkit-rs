@@ -16,6 +16,8 @@ use libtechmino_replay::replay::{GameInputEvent, GameReplayMetadata};
 use crate::ParseOrIoError;
 
 mod fetch;
+#[cfg(test)]
+mod test_utils;
 
 const BACKEND_THREAD_NAME: &str = "TRT-Backend";
 
