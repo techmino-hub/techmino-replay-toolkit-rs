@@ -122,3 +122,35 @@ pub(crate) static OP_METAINSP_LOADING_MSG: &str = "Loading metadata...";
 
 /// The loading message for the input event data inspection operation scene.
 pub(crate) static OP_EVEINSP_LOADING_MSG: &str = "Loading input event data...";
+
+/// The text for when an input event is the "press" kind.
+pub(crate) static OP_EVEINSP_TEXT_PRESS: &str = "   Press ";
+
+/// The text for when an input event is the "release" kind.
+pub(crate) static OP_EVEINSP_TEXT_RELEASE: &str = " Release ";
+
+/// The style for the "frame" section in the input event, when the entry is
+/// not selected.
+pub(crate) const OP_EVEINSP_STYLE_FRAME_UNSEL: Style =
+    ENTRY_STYLE_LABEL_UNSEL.underlined().italic();
+
+/// The style for the "frame" section in the input event, when the entry is
+/// selected.
+pub(crate) const OP_EVEINSP_STYLE_FRAME_SEL: Style = ENTRY_STYLE_LABEL_SEL.underlined().italic();
+
+/// The style for the "kind" section in the input event, when the entry is
+/// not selected.
+pub(crate) const OP_EVEINSP_STYLE_KIND_UNSEL: Style = ENTRY_STYLE_LABEL_UNSEL.not_underlined();
+
+/// The style for the "kind" section in the input event, when the entry is
+/// selected.
+pub(crate) const OP_EVEINSP_STYLE_KIND_SEL: Style = ENTRY_STYLE_LABEL_SEL.not_underlined();
+
+/// The style for the "key" section in the input event, when the entry is
+/// not selected.
+pub(crate) const OP_EVEINSP_STYLE_KEY_UNSEL: Style =
+    ENTRY_STYLE_LABEL_UNSEL.not_underlined().bold();
+
+/// The style for the "key" section in the input event, when the entry is
+/// selected.
+pub(crate) const OP_EVEINSP_STYLE_KEY_SEL: Style = ENTRY_STYLE_LABEL_SEL.not_underlined().bold();
