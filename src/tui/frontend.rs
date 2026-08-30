@@ -146,7 +146,7 @@ impl AppFrontend {
                 }
             };
 
-            self.scene.handle_response(reply);
+            self.scene.handle_response(reply, &self.conn.tx);
         }
     }
 }

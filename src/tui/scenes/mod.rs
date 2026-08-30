@@ -1,10 +1,13 @@
 use core::ops::ControlFlow;
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::mpsc,
+};
 
 use ratatui::{crossterm, prelude::Frame};
 
 use crate::{
-    backend::{BackendConnection, BackendResponse},
+    backend::{BackendConnection, BackendRequest, BackendResponse},
     tui::scenes::{
         common_inspect::InspectionTransition,
         event_inspect::EventInspectScene,
@@ -100,10 +103,14 @@ impl Scene {
                 Some(OperationsTransition::Quit) => ControlFlow::Break(()),
                 None => ControlFlow::Continue(()),
             },
-            Scene::MetadataInspect(scene) => {
-                scene.handle_event(event);
-                todo!("Handle event")
-            }
+            Scene::MetadataInspect(scene) => match scene.handle_event(event, terminal) {
+                Some(InspectionTransition::Back { path }) => {
+                    *self = Self::Operations(OperationsScene::new(path));
+                    ControlFlow::Continue(())
+                }
+                Some(InspectionTransition::Quit) => ControlFlow::Break(()),
+                None => ControlFlow::Continue(()),
+            },
             Scene::EventDataInspect(scene) => match scene.handle_event(event, terminal) {
                 Some(InspectionTransition::Back { path }) => {
                     *self = Self::Operations(OperationsScene::new(path));
@@ -116,11 +123,15 @@ impl Scene {
     }
 
     /// Handle a reply from the backend.
-    pub(in crate::tui) fn handle_response(&mut self, response: BackendResponse) {
+    pub(in crate::tui) fn handle_response(
+        &mut self,
+        response: BackendResponse,
+        tx: &mpsc::Sender<BackendRequest>,
+    ) {
         match self {
             Scene::Explorer(scene) => scene.handle_response(response),
             Scene::Operations(scene) => scene.handle_response(response),
-            Scene::MetadataInspect(scene) => scene.handle_response(response),
+            Scene::MetadataInspect(scene) => scene.handle_response(response, tx),
             Scene::EventDataInspect(scene) => scene.handle_response(response),
         }
     }

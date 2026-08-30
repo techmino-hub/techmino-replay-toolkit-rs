@@ -14,8 +14,11 @@ use std::{io, path::PathBuf, sync::mpsc, thread};
 use libtechmino_replay::replay::{GameInputEvent, GameReplayMetadata};
 
 use crate::ParseOrIoError;
+#[cfg(feature = "tui")]
+use crate::backend::presentation::tui::TuiPresentableMeta;
 
 mod fetch;
+pub(crate) mod presentation;
 #[cfg(test)]
 mod test_utils;
 
@@ -117,6 +120,14 @@ pub(crate) enum BackendRequest {
         /// The ID of this request, for disambiguation.
         request_id: u64,
     },
+    /// A request to convert the metadata to its TUI presentable form.
+    #[cfg(feature = "tui")]
+    TuiPresentMetadata {
+        /// The metadata to convert to its presentable form.
+        metadata: GameReplayMetadata,
+        /// The ID of this request, for disambiguation.
+        request_id: u64,
+    },
 }
 
 impl BackendRequest {
@@ -132,6 +143,14 @@ impl BackendRequest {
             },
             Self::FetchEventData { path, request_id } => BackendResponse::EventDataFetch {
                 result: fetch::fetch_input_data(&path),
+                request_id,
+            },
+            #[cfg(feature = "tui")]
+            Self::TuiPresentMetadata {
+                metadata,
+                request_id,
+            } => BackendResponse::TuiPresentMetadata {
+                metadata: TuiPresentableMeta::from(&metadata),
                 request_id,
             },
         }
@@ -158,6 +177,16 @@ pub(crate) enum BackendResponse {
     EventDataFetch {
         /// The result of this operation.
         result: Result<Vec<GameInputEvent>, ParseOrIoError>,
+        /// The ID of the associated request, for disambiguation.
+        request_id: u64,
+    },
+    /// The result of the [metadata presentation request][req]
+    ///
+    /// [req]: BackendRequest::TuiPresentMetadata
+    #[cfg(feature = "tui")]
+    TuiPresentMetadata {
+        /// The metadata in presentable form.
+        metadata: TuiPresentableMeta,
         /// The ID of the associated request, for disambiguation.
         request_id: u64,
     },

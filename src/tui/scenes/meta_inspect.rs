@@ -1,14 +1,24 @@
-use core::time::Duration;
-use std::{io, path::PathBuf, time::Instant};
+use core::{cell::RefCell, time::Duration};
+use std::{
+    io,
+    path::{Path, PathBuf},
+    sync::mpsc,
+    time::Instant,
+};
 
 use libtechmino_replay::replay::GameReplayMetadata;
-use ratatui::{crossterm, prelude::Frame};
+use ratatui::{DefaultTerminal, crossterm, prelude::Frame, widgets::ScrollbarState};
 
 use crate::{
     ParseOrIoError,
-    backend::{BackendConnection, BackendRequest, BackendResponse},
+    backend::{
+        BackendConnection, BackendRequest, BackendResponse, presentation::tui::TuiPresentableMeta,
+    },
     consts::{backend::EMSG_BACKEND_CONNECTION_BROKE, tui::OP_METAINSP_LOADING_MSG},
-    tui::scenes::common_inspect::{render_error, render_loading},
+    tui::{
+        event::{VerticalListEvent, meta_inspect::MetaInspectEvent},
+        scenes::common_inspect::{InspectionTransition, render_error, render_loading},
+    },
 };
 
 /// The metadata inspection scene, where the user can inspect a selected
@@ -18,12 +28,7 @@ pub(in crate::tui) enum MetaInspectScene {
     /// Awaiting a reply from the backend.
     Loading(LoadingState),
     /// The backend has replied with the metadata.
-    Done {
-        /// The path of the replay being inspected.
-        path: PathBuf,
-        /// The retrieved metadata.
-        metadata: GameReplayMetadata,
-    },
+    Done(CompleteState),
     /// The backend has replied with an error.
     Failed {
         /// The path of the replay that tripped the backend.
@@ -46,6 +51,20 @@ pub(in crate::tui) struct LoadingState {
     start_time: Instant,
     /// The request ID for this invocation.
     request_id: u64,
+}
+
+/// The state used for the `Done` state in the scene.
+#[doc(hidden)]
+#[derive(Debug)]
+pub(in crate::tui) struct CompleteState {
+    /// The path of the replay being inspected.
+    path: PathBuf,
+    /// The retrieved metadata.
+    metadata: TuiPresentableMeta,
+    /// The currently-selected input.
+    selection_idx: usize,
+    /// The state of the scrollbar.
+    scrollbar_state: RefCell<ScrollbarState>,
 }
 
 impl MetaInspectScene {
@@ -82,8 +101,8 @@ impl MetaInspectScene {
             }) => {
                 render_loading(path, OP_METAINSP_LOADING_MSG, *start_time, frame);
             }
-            Self::Done { path: _, metadata } => {
-                todo!("Render metadata: {metadata:?}");
+            Self::Done(state) => {
+                todo!("Render completed state: {state:?}");
             }
             Self::Failed {
                 path,
@@ -95,41 +114,248 @@ impl MetaInspectScene {
         }
     }
 
-    pub(in crate::tui) fn handle_event(&self, ev: crossterm::event::Event) {
-        todo!("Handle event: {self:?} | {ev:?}");
+    pub(in crate::tui) fn handle_event(
+        &mut self,
+        ev: crossterm::event::Event,
+        terminal: &DefaultTerminal,
+    ) -> Option<InspectionTransition> {
+        let ev = MetaInspectEvent::process_ev(&ev)?;
+
+        match ev {
+            MetaInspectEvent::Back => Some(InspectionTransition::Back {
+                path: self.get_path().to_owned(),
+            }),
+            MetaInspectEvent::ListEvent(ev) => {
+                if let MetaInspectScene::Done(state) = self {
+                    state.handle_list_event(ev, terminal)
+                }
+                None
+            }
+            MetaInspectEvent::Rescroll(_, term_height) => {
+                if let MetaInspectScene::Done(state) = self {
+                    let page_height = term_height.saturating_sub(2);
+                    state.rescroll(page_height);
+                }
+                None
+            }
+            MetaInspectEvent::Quit => Some(InspectionTransition::Quit),
+        }
     }
 
-    pub(in crate::tui) fn handle_response(&mut self, response: BackendResponse) {
+    pub(in crate::tui) fn handle_response(
+        &mut self,
+        response: BackendResponse,
+        tx: &mpsc::Sender<BackendRequest>,
+    ) {
         let state = match self {
             Self::Loading(state) => state,
             _ => return,
         };
 
-        let result = match response {
+        let metadata = match response {
             BackendResponse::MetadataFetch { result, request_id }
                 if request_id == state.request_id =>
             {
-                result
+                self.handle_response_fetch(result, tx);
+                return;
             }
+            BackendResponse::TuiPresentMetadata {
+                metadata,
+                request_id,
+            } if request_id == state.request_id => metadata,
+            _ => return,
+        };
+
+        let meta_len = metadata.0.len();
+        let state = CompleteState {
+            path: self.take_path(),
+            metadata,
+            selection_idx: 0,
+            scrollbar_state: RefCell::new(ScrollbarState::new(meta_len)),
+        };
+
+        *self = Self::Done(state);
+    }
+
+    /// Handles a [`BackedResponse::MetadataFetch`] response.
+    fn handle_response_fetch(
+        &mut self,
+        result: Result<GameReplayMetadata, ParseOrIoError>,
+        tx: &mpsc::Sender<BackendRequest>,
+    ) {
+        let state = match self {
+            Self::Loading(state) => state,
             _ => return,
         };
 
         match result {
             Ok(metadata) => {
-                *self = Self::Done {
-                    path: core::mem::take(&mut state.path),
-                    metadata,
-                }
+                let request_id = state.request_id;
+                self.request_presentable(metadata, tx, request_id);
             }
             Err(error) => {
-                *self = Self::Failed {
-                    path: core::mem::take(&mut state.path),
-                    error,
-                    processed_for: Instant::now()
-                        .checked_duration_since(state.start_time)
-                        .unwrap_or(Duration::ZERO),
-                }
+                self.set_failed(error);
             }
+        }
+    }
+
+    /// Request the presentable form from the backend.
+    fn request_presentable(
+        &mut self,
+        metadata: GameReplayMetadata,
+        tx: &mpsc::Sender<BackendRequest>,
+        request_id: u64,
+    ) {
+        let request = BackendRequest::TuiPresentMetadata {
+            metadata,
+            request_id,
+        };
+
+        if tx.send(request).is_err() {
+            let err =
+                io::Error::new(io::ErrorKind::BrokenPipe, EMSG_BACKEND_CONNECTION_BROKE).into();
+            self.set_failed(err);
+        }
+    }
+
+    /// Go to the [`Self::Failed`] state.
+    fn set_failed(&mut self, error: ParseOrIoError) {
+        let processed_for = match self {
+            Self::Loading(state) => Instant::now()
+                .checked_duration_since(state.start_time)
+                .unwrap_or(Duration::ZERO),
+            Self::Done(..) => Duration::ZERO,
+            Self::Failed { processed_for, .. } => *processed_for,
+        };
+
+        let path = self.take_path();
+
+        *self = Self::Failed {
+            path,
+            error,
+            processed_for,
+        };
+    }
+
+    fn get_path(&self) -> &Path {
+        match self {
+            MetaInspectScene::Loading(state) => &state.path,
+            MetaInspectScene::Done(state) => &state.path,
+            MetaInspectScene::Failed { path, .. } => path,
+        }
+    }
+
+    fn take_path(&mut self) -> PathBuf {
+        match self {
+            Self::Loading(state) => core::mem::take(&mut state.path),
+            Self::Done(state) => core::mem::take(&mut state.path),
+            Self::Failed { path, .. } => core::mem::take(path),
+        }
+    }
+}
+
+impl CompleteState {
+    fn handle_list_event(&mut self, ev: VerticalListEvent, terminal: &DefaultTerminal) {
+        let term_height = terminal.size().map(|s| s.height).unwrap_or(0);
+        let page_height = term_height.saturating_sub(2);
+
+        match ev {
+            VerticalListEvent::Prev => self.prev(page_height),
+            VerticalListEvent::Next => self.next(page_height),
+            VerticalListEvent::Home => self.first(page_height),
+            VerticalListEvent::End => self.last(page_height),
+            VerticalListEvent::PageUp => self.prev_multi(page_height as usize, page_height),
+            VerticalListEvent::PageDown => self.next_multi(page_height as usize, page_height),
+            VerticalListEvent::Activate => (),
+        }
+    }
+
+    /// Move the cursor to the previous entry.
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn prev(&mut self, page_height: u16) {
+        self.prev_multi(1, page_height);
+    }
+
+    /// Move the cursor to the nth previous entry.
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn prev_multi(&mut self, amount: usize, page_height: u16) {
+        self.selection_idx = self.selection_idx.saturating_sub(amount);
+        self.rescroll(page_height);
+    }
+
+    /// Move the cursor to the next entry.
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn next(&mut self, page_height: u16) {
+        self.next_multi(1, page_height);
+    }
+
+    /// Move the cursor to the nth next entry.
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn next_multi(&mut self, amount: usize, page_height: u16) {
+        let upper_bound = self.metadata.0.len().saturating_sub(1);
+        self.selection_idx = self.selection_idx.saturating_add(amount).min(upper_bound);
+        self.rescroll(page_height);
+    }
+
+    /// Move the cursor to the first entry.
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn first(&mut self, page_height: u16) {
+        self.selection_idx = 0;
+        self.rescroll(page_height);
+    }
+
+    /// Move the cursor to the last entry.
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn last(&mut self, page_height: u16) {
+        self.selection_idx = self.metadata.0.len().saturating_sub(1);
+        self.rescroll(page_height);
+    }
+
+    /// Rescrolls the screen such that the currently-selected entry remains
+    /// on-screen.
+    ///
+    /// # Page Height
+    /// Page height is the height of the contents of the primary block. This is
+    /// currently equal to terminal height minus two.
+    fn rescroll(&mut self, page_height: u16) {
+        let Some(page_height_minus_one) = page_height.checked_sub(1) else {
+            // Terminal is too small to render anything!
+            return;
+        };
+
+        let page_height_minus_one = page_height_minus_one as usize;
+
+        let first_displayed = self.scrollbar_state.borrow().get_position();
+        let last_displayed = first_displayed.saturating_add(page_height_minus_one);
+
+        let selected_idx = self.selection_idx;
+
+        if selected_idx < first_displayed {
+            // Selected is above viewport
+            let mut state = self.scrollbar_state.borrow_mut();
+            *state = state.position(selected_idx);
+        } else if selected_idx > last_displayed {
+            // Selected is below viewport
+            let mut state = self.scrollbar_state.borrow_mut();
+            *state = state.position(selected_idx.saturating_sub(page_height_minus_one));
         }
     }
 }
