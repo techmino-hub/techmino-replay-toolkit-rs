@@ -6,6 +6,7 @@ use ratatui::{crossterm, prelude::Frame};
 use crate::{
     backend::{BackendConnection, BackendResponse},
     tui::scenes::{
+        common_inspect::InspectionTransition,
         event_inspect::EventInspectScene,
         explorer::{ExplorerScene, ExplorerTransition},
         meta_inspect::MetaInspectScene,
@@ -103,10 +104,14 @@ impl Scene {
                 scene.handle_event(event);
                 todo!("Handle event")
             }
-            Scene::EventDataInspect(scene) => {
-                scene.handle_event(event);
-                todo!("Handle event")
-            }
+            Scene::EventDataInspect(scene) => match scene.handle_event(event, terminal) {
+                Some(InspectionTransition::Back { path }) => {
+                    *self = Self::Operations(OperationsScene::new(path));
+                    ControlFlow::Continue(())
+                }
+                Some(InspectionTransition::Quit) => ControlFlow::Break(()),
+                None => ControlFlow::Continue(()),
+            },
         }
     }
 

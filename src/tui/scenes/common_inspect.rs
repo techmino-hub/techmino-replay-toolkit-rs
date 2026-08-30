@@ -1,7 +1,10 @@
 //! Common elements shared between event data and metadata inspection scenes.
 
 use core::time::Duration;
-use std::{path::Path, time::Instant};
+use std::{
+    path::{Path, PathBuf},
+    time::Instant,
+};
 
 use ratatui::{
     prelude::{Frame, Line, Rect, symbols::merge::MergeStrategy},
@@ -87,4 +90,13 @@ pub(in crate::tui::scenes) fn inspect_outer_block(path: &Path, rect: Rect) -> Bl
         .title_bottom(Line::from(OPS_HINT_BACK).left_aligned())
         .title_bottom(Line::from(OPS_HINT_QUIT).right_aligned())
         .merge_borders(MergeStrategy::Fuzzy)
+}
+
+/// Describes a scene transition away from an inspection scene.
+#[must_use = "use this to transition"]
+pub(in crate::tui) enum InspectionTransition {
+    /// Go back to the operation selection scene.
+    Back { path: PathBuf },
+    /// Quit the application.
+    Quit,
 }

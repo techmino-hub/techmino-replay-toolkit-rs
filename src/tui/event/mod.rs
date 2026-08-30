@@ -9,7 +9,9 @@ use crate::consts::tui::{
     KC_GEN_ACTIVATE, KC_GEN_DOWN, KC_GEN_END, KC_GEN_HOME, KC_GEN_PGDOWN, KC_GEN_PGUP, KC_GEN_UP,
 };
 
+pub(in crate::tui) mod event_inspect;
 pub(in crate::tui) mod explorer;
+pub(in crate::tui) mod meta_inspect;
 pub(in crate::tui) mod operations;
 
 /// A logical event in the context of a vertical UI list.
