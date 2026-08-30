@@ -20,7 +20,7 @@ pub(crate) struct TuiPresentableMetaEntry {
 }
 
 /// One of the possible JSON types to end up in a [`TuiPresentableMetaEntry`].
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TuiPresentableMetaEntryKind {
     Null,
     Bool,

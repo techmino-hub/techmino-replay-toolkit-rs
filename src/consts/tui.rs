@@ -154,3 +154,59 @@ pub(crate) const OP_EVEINSP_STYLE_KEY_UNSEL: Style =
 /// The style for the "key" section in the input event, when the entry is
 /// selected.
 pub(crate) const OP_EVEINSP_STYLE_KEY_SEL: Style = ENTRY_STYLE_LABEL_SEL.not_underlined().bold();
+
+/// The style for the key of the metadata entry, when the entry is
+/// selected.
+pub(crate) const OP_METINSP_STYLE_KEY_SEL: Style = ENTRY_STYLE_LABEL_SEL.italic();
+
+/// The style for the key of the metadata entry, when the entry is
+/// not selected.
+pub(crate) const OP_METINSP_STYLE_KEY_UNSEL: Style = ENTRY_STYLE_LABEL_UNSEL.italic();
+
+/// The generic style for the value of a metadata entry, when the entry is
+/// selected.
+pub(crate) const OP_METINSP_STYLE_ENTRY_SEL: Style = ENTRY_STYLE_LABEL_SEL.bold();
+
+/// The generic style for the value of a metadata entry, when the entry is
+/// not selected.
+pub(crate) const OP_METINSP_STYLE_ENTRY_UNSEL: Style = ENTRY_STYLE_LABEL_UNSEL.bold();
+
+/// The style for the null value of the metadata entry, when the entry is
+/// selected.
+pub(crate) const OP_METINSP_STYLE_NULL_SEL: Style = OP_METINSP_STYLE_ENTRY_SEL.dim();
+
+/// The style for the null value of the metadata entry, when the entry is
+/// not selected.
+pub(crate) const OP_METINSP_STYLE_NULL_UNSEL: Style = OP_METINSP_STYLE_ENTRY_UNSEL.dim();
+
+/// The style for the boolean value of the metadata entry, when the entry is
+/// selected.
+pub(crate) const OP_METINSP_STYLE_BOOL_SEL: Style = OP_METINSP_STYLE_ENTRY_SEL.light_blue();
+
+/// The style for the boolean value of the metadata entry, when the entry is
+/// not selected.
+pub(crate) const OP_METINSP_STYLE_BOOL_UNSEL: Style = OP_METINSP_STYLE_ENTRY_UNSEL.light_blue();
+
+/// The style for the number value of the metadata entry, when the entry is
+/// selected.
+pub(crate) const OP_METINSP_STYLE_NUM_SEL: Style = OP_METINSP_STYLE_ENTRY_SEL.light_cyan();
+
+/// The style for the number value of the metadata entry, when the entry is
+/// not selected.
+pub(crate) const OP_METINSP_STYLE_NUM_UNSEL: Style = OP_METINSP_STYLE_ENTRY_UNSEL.light_cyan();
+
+/// The style for the string value of the metadata entry, when the entry is
+/// selected.
+pub(crate) const OP_METINSP_STYLE_STR_SEL: Style = OP_METINSP_STYLE_ENTRY_SEL.light_green();
+
+/// The style for the string value of the metadata entry, when the entry is
+/// not selected.
+pub(crate) const OP_METINSP_STYLE_STR_UNSEL: Style = OP_METINSP_STYLE_ENTRY_UNSEL.light_green();
+
+/// The style for the array value of the metadata entry, when the entry is
+/// selected.
+pub(crate) const OP_METINSP_STYLE_ARR_SEL: Style = OP_METINSP_STYLE_ENTRY_SEL;
+
+/// The style for the array value of the metadata entry, when the entry is
+/// not selected.
+pub(crate) const OP_METINSP_STYLE_ARR_UNSEL: Style = OP_METINSP_STYLE_ENTRY_UNSEL;

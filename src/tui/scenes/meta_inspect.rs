@@ -7,17 +7,33 @@ use std::{
 };
 
 use libtechmino_replay::replay::GameReplayMetadata;
-use ratatui::{DefaultTerminal, crossterm, prelude::Frame, widgets::ScrollbarState};
+use ratatui::{
+    DefaultTerminal, crossterm,
+    prelude::{Frame, Line, Span, Style},
+    widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState},
+};
 
 use crate::{
     ParseOrIoError,
     backend::{
-        BackendConnection, BackendRequest, BackendResponse, presentation::tui::TuiPresentableMeta,
+        BackendConnection, BackendRequest, BackendResponse,
+        presentation::tui::{TuiPresentableMeta, TuiPresentableMetaEntry},
     },
-    consts::{backend::EMSG_BACKEND_CONNECTION_BROKE, tui::OP_METAINSP_LOADING_MSG},
+    consts::{
+        backend::EMSG_BACKEND_CONNECTION_BROKE,
+        tui::{
+            ENTRY_STYLE_LABEL_SEL, ENTRY_STYLE_LABEL_UNSEL, OP_METAINSP_LOADING_MSG,
+            OP_METINSP_STYLE_ARR_SEL, OP_METINSP_STYLE_ARR_UNSEL, OP_METINSP_STYLE_BOOL_SEL,
+            OP_METINSP_STYLE_BOOL_UNSEL, OP_METINSP_STYLE_KEY_SEL, OP_METINSP_STYLE_KEY_UNSEL,
+            OP_METINSP_STYLE_NULL_SEL, OP_METINSP_STYLE_NULL_UNSEL, OP_METINSP_STYLE_NUM_SEL,
+            OP_METINSP_STYLE_NUM_UNSEL, OP_METINSP_STYLE_STR_SEL, OP_METINSP_STYLE_STR_UNSEL,
+        },
+    },
     tui::{
         event::{VerticalListEvent, meta_inspect::MetaInspectEvent},
-        scenes::common_inspect::{InspectionTransition, render_error, render_loading},
+        scenes::common_inspect::{
+            InspectionTransition, inspect_outer_block, render_error, render_loading,
+        },
     },
 };
 
@@ -102,7 +118,7 @@ impl MetaInspectScene {
                 render_loading(path, OP_METAINSP_LOADING_MSG, *start_time, frame);
             }
             Self::Done(state) => {
-                todo!("Render completed state: {state:?}");
+                state.render(frame);
             }
             Self::Failed {
                 path,
@@ -356,6 +372,89 @@ impl CompleteState {
             // Selected is below viewport
             let mut state = self.scrollbar_state.borrow_mut();
             *state = state.position(selected_idx.saturating_sub(page_height_minus_one));
+        }
+    }
+
+    fn render(&self, frame: &mut Frame) {
+        let block = inspect_outer_block(&self.path, frame.area());
+        let inner_area = block.inner(frame.area());
+
+        frame.render_widget(block, frame.area());
+
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+
+        frame.render_stateful_widget(
+            scrollbar,
+            frame.area(),
+            &mut self.scrollbar_state.borrow_mut(),
+        );
+
+        let scroll_offset = self.scrollbar_state.borrow().get_position();
+
+        for (row_idx, row_rect) in inner_area.rows().enumerate() {
+            let idx = row_idx.saturating_add(scroll_offset);
+
+            let Some(entry) = self.metadata.0.get(idx) else {
+                break;
+            };
+
+            let selected = idx == self.selection_idx;
+
+            let line = entry.as_line(selected);
+            frame.render_widget(line, row_rect);
+        }
+    }
+}
+
+impl TuiPresentableMetaEntry {
+    fn style_key(selected: bool) -> Style {
+        if selected {
+            OP_METINSP_STYLE_KEY_SEL
+        } else {
+            OP_METINSP_STYLE_KEY_UNSEL
+        }
+    }
+
+    fn key_as_span(&self, selected: bool) -> Span<'static> {
+        let style = Self::style_key(selected);
+        let key = format!("{:<16}: ", self.key);
+
+        Span::raw(key).style(style)
+    }
+
+    fn style_value(&self, selected: bool) -> Style {
+        use crate::backend::presentation::tui::TuiPresentableMetaEntryKind as EntryKind;
+
+        match (self.json_type, selected) {
+            (EntryKind::Null, true) => OP_METINSP_STYLE_NULL_SEL,
+            (EntryKind::Null, false) => OP_METINSP_STYLE_NULL_UNSEL,
+            (EntryKind::Bool, true) => OP_METINSP_STYLE_BOOL_SEL,
+            (EntryKind::Bool, false) => OP_METINSP_STYLE_BOOL_UNSEL,
+            (EntryKind::Number, true) => OP_METINSP_STYLE_NUM_SEL,
+            (EntryKind::Number, false) => OP_METINSP_STYLE_NUM_UNSEL,
+            (EntryKind::String, true) => OP_METINSP_STYLE_STR_SEL,
+            (EntryKind::String, false) => OP_METINSP_STYLE_STR_UNSEL,
+            (EntryKind::Array, true) => OP_METINSP_STYLE_ARR_SEL,
+            (EntryKind::Array, false) => OP_METINSP_STYLE_ARR_UNSEL,
+        }
+    }
+
+    fn value_as_span(&self, selected: bool) -> Span<'_> {
+        let style = self.style_value(selected);
+        Span::raw(&*self.value).style(style)
+    }
+
+    fn as_line(&self, selected: bool) -> Line<'_> {
+        let style = if selected {
+            ENTRY_STYLE_LABEL_SEL
+        } else {
+            ENTRY_STYLE_LABEL_UNSEL
+        };
+
+        Line {
+            style,
+            alignment: None,
+            spans: vec![self.key_as_span(selected), self.value_as_span(selected)],
         }
     }
 }
