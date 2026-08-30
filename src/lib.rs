@@ -7,8 +7,6 @@
 //! with Techmino replays, **use the `libtechmino-replay` library instead:
 //! <https://crates.io/crates/libtechmino-replay>**
 
-use libtechmino_replay::errors::ReplayParseError;
-
 pub mod cli;
 #[cfg(feature = "gui")]
 pub mod gui;
@@ -22,10 +20,11 @@ mod consts;
 mod paths;
 
 /// Either a replay-parsing or I/O error.
+#[cfg(feature = "tui")]
 #[derive(Debug, thiserror::Error)]
 enum ParseOrIoError {
     #[error("Failed to parse replay file: {0}")]
-    Parse(#[from] ReplayParseError),
+    Parse(#[from] libtechmino_replay::errors::ReplayParseError),
     #[error("Failed to read from replay file: {0}")]
     Io(#[from] std::io::Error),
 }
