@@ -72,3 +72,4 @@ jobs:
         uses: houseabsolute/actions-rust-release/publish@v1
         with:
           executable-name: techmino-replay-toolkit
+          changes-file: ""
