@@ -18,8 +18,9 @@ fn assign_marker_value() {
     };
 
     let git_hash = String::from_utf8_lossy(&output.stdout);
+    let git_hash = git_hash.trim();
 
     let package_version = env!("CARGO_PKG_VERSION");
 
-    println!("cargo:rustc-env=MARKER_VALUE='TRT v{package_version} ({git_hash})'");
+    println!("cargo:rustc-env=MARKER_VALUE=TRT v{package_version} ({git_hash})");
 }
