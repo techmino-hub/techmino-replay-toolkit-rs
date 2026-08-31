@@ -15,7 +15,7 @@ unescaped_backticks = "deny"
 
 [package]
 name = "techmino-replay-toolkit"
-version = "0.1.0-rc1"
+version = "0.1.0"
 edition = "2024"
 description = "An all-in-one binary containing tools for Techmino replays"
 repository = "https://github.com/techmino-hub/techmino-replay-toolkit-rs"
