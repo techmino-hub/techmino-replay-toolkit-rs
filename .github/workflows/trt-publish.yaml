@@ -73,3 +73,4 @@ jobs:
         with:
           executable-name: techmino-replay-toolkit
           changes-file: ""
+          release-tag-regex: .*
