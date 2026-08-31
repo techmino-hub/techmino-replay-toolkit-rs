@@ -1,0 +1,74 @@
+name: Publish Techmino Replay Toolkit Release
+
+on:
+  push:
+    tags:
+      - "techmino-replay-toolkit-*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ matrix.platforms.runs-on }}
+
+    name: TRT Release — ${{ matrix.platforms.target }}
+
+    strategy:
+      matrix:
+        platforms:
+          - target: x86_64-unknown-linux-gnu
+            runs-on: ubuntu-latest
+          - target: x86_64-unknown-linux-musl
+            runs-on: ubuntu-latest
+          - target: x86_64-pc-windows-msvc
+            runs-on: windows-latest
+          - target: aarch64-pc-windows-msvc
+            runs-on: windows-latest
+          - target: aarch64-unknown-linux-gnu
+            runs-on: ubuntu-latest
+          - target: aarch64-unknown-linux-musl
+            runs-on: ubuntu-latest
+          - target: armv7-unknown-linux-gnueabihf
+            runs-on: ubuntu-latest
+          - target: armv7-unknown-linux-musleabihf
+            runs-on: ubuntu-latest
+          - target: i686-pc-windows-msvc
+            runs-on: windows-latest
+          - target: i686-unknown-linux-gnu
+            runs-on: ubuntu-latest
+          - target: i686-unknown-linux-musl
+            runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v1
+        with:
+          command: build
+          target: ${{ matrix.platforms.target }}
+          args: "--locked --release"
+      - name: Publish artifacts and release
+        uses: houseabsolute/actions-rust-release@v1
+        if: ${{ github.ref_type == 'tag' }}
+        with:
+          executable-name: techmino-replay-toolkit
+          target: ${{ matrix.platforms.target }}
+          changes-file: ""
+
+  publish:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Publish
+        uses: houseabsolute/actions-rust-release/publish@v1
+        with:
+          executable-name: techmino-replay-toolkit
